@@ -188,3 +188,9 @@ button.split svg { width: 14px; height: 14px; margin-inline-start: -2px; }
 }
 .audio-badge[hidden] { display: none; }
 .audio-badge svg { width: 40px; height: 40px; color: var(--accent); }
+
+/* "Update to x.y.z" in the header */
+button.update { background: #1f3b26; border-color: #2f6b3e; color: #b8f0c6; }
+button.update:hover { background: #26502f; }
+button.update[hidden] { display: none; }
+button.update:disabled { opacity: .85; cursor: default; }

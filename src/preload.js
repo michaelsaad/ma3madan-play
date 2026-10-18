@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('api', {
   onOpenFiles: fn => on('open-files', fn),
   outputSourceId: () => ipcRenderer.invoke('output-source-id'),
 
+  // app updates
+  onUpdateAvailable: fn => on('update-available', fn),
+  onUpdateProgress: fn => on('update-progress', fn),
+  installUpdate: () => ipcRenderer.invoke('update-install'),
+
   // window buttons
   winAction: action => ipcRenderer.send('win', action),
   winIsMaximized: () => ipcRenderer.invoke('win-is-maximized'),

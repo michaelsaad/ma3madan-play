@@ -69,6 +69,10 @@ Edge and Windows SmartScreen warn about any new program that isn't code-signed a
 
 The warnings fade as more people download the app. Signed releases (see [Code signing policy](#code-signing-policy)) build that trust faster and show a verified publisher.
 
+### Updates
+
+When a new version is out, an **Update to x.y.z** button appears in the top bar. Nothing changes until you click it, so it never interrupts a presentation. The app downloads the new installer, checks it against the SHA-256 that GitHub publishes for the file, installs it and restarts. The portable version's button opens the download page instead.
+
 ## Using it with a projector
 
 1. Connect the projector and press **`Win + P`**, then choose **Extend**. Don't choose Duplicate.

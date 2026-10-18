@@ -42,7 +42,7 @@ function setLang(lang) {
   $('langBtn').querySelector('span').textContent = t('otherLang');
   $('aspectSel').innerHTML = ASPECTS.map(a => `<option value="${a}">${escapeHtml(aspectLabel(a))}</option>`).join('');
   $('aspectSel').value = aspect;
-  renderDisplays(); loadSinks(); renderList(); renderState(); renderDownloads();
+  renderDisplays(); loadSinks(); renderList(); renderState(); renderDownloads(); renderUpdate();
 }
 $('langBtn').onclick = () => setLang(LANG === 'en' ? 'ar' : 'en');
 
@@ -55,6 +55,32 @@ function renderMaximized(max) {
   $('winMax').title = t(max ? 'tRestore' : 'tMaximize');
 }
 api.onWinMaximized(renderMaximized);
+
+// ---------- app update (optional: only when the operator clicks) ----------
+let update = null;      // { version, notes, canInstall }
+let updating = false;
+function renderUpdate(progress) {
+  const b = $('updateBtn');
+  b.hidden = !update;
+  if (!update) return;
+  b.disabled = updating;
+  b.querySelector('span').textContent = updating
+    ? (progress >= 1 ? t('updateInstalling') : t('updateDownloading', { n: Math.round((progress || 0) * 100) }))
+    : t(update.canInstall ? 'updateTo' : 'updateGet', { v: update.version });
+  b.title = t(update.canInstall ? 'updateTip' : 'updatePortableTip') + (update.notes ? '\n\n' + update.notes.slice(0, 400) : '');
+}
+api.onUpdateAvailable(info => { update = info; renderUpdate(); });
+api.onUpdateProgress(p => renderUpdate(p));
+$('updateBtn').onclick = async () => {
+  if (!update || updating) return;
+  updating = update.canInstall;
+  renderUpdate(0);
+  const r = await api.installUpdate();
+  if (!r.ok) toast(t('updateFailed', { e: r.error }));
+  if (r.result === 'verified') toast('Update verified (dry run)');
+  updating = false;
+  renderUpdate();
+};
 
 // ---------- playlist ----------
 const save = () => api.savePlaylist(items);

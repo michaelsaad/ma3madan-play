@@ -155,6 +155,23 @@ module.exports = async ({ getControl, getOutput }) => {
     log('item menu:', await js(`[...document.querySelectorAll('#menu button')].map(b => b.innerText).join(' | ')`));
     await shot('8-item-menu');
     await js('closeMenu()');
+    // Updater (VP_FAKE_VERSION=older version, VP_UPDATE_DRYRUN=1: download + verify, don't install)
+    if (process.env.VP_FAKE_VERSION) {
+      const t0 = Date.now();
+      while (Date.now() - t0 < 30000 && await js(`$('updateBtn').hidden`)) await wait(500);
+      log('update button:', await js(`$('updateBtn').hidden ? 'hidden' : $('updateBtn').innerText`));
+      await shot('9-update-available');
+      await js(`$('toast').textContent = ''; $('updateBtn').click()`);
+      const t1 = Date.now();
+      let seen = '';
+      while (Date.now() - t1 < 300000) {
+        await wait(1000);
+        const label = await js(`$('updateBtn').innerText`);
+        if (label !== seen && /%/.test(label) && /[05]0%/.test(label)) { log('  ', label); seen = label; }
+        const msg = await js(`$('toast').textContent`);
+        if (msg) { log('update result:', msg, `(${Math.round((Date.now() - t1) / 1000)} s)`); break; }
+      }
+    }
     log('DONE');
   } catch (e) {
     log('FAIL', e.stack);

@@ -5,6 +5,7 @@ const fs = require('fs');
 const { pathToFileURL } = require('url');
 const youtube = require('./youtube');
 const streamProxy = require('./stream-proxy');
+const updater = require('./updater');
 
 const APP_NAME = 'Ma3madan Video Presenter';
 
@@ -137,6 +138,14 @@ app.whenReady().then(async () => {
   await streamProxy.start();
   createControl();
   createOutput();
+  // Look for a newer release a little after startup, then every 6 hours.
+  if (!process.env.VP_SELFTEST || process.env.VP_FAKE_VERSION) {
+    const checkForUpdate = () => updater.check()
+      .then(info => info && controlWin?.webContents.send('update-available', info))
+      .catch(() => {}); // offline or rate-limited: try again later
+    setTimeout(checkForUpdate, process.env.VP_SELFTEST ? 1000 : 8000);
+    setInterval(checkForUpdate, 6 * 60 * 60 * 1000);
+  }
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
     screen.on(ev, placeOutput);
   }
@@ -242,4 +251,10 @@ ipcMain.handle('stream-resolve', async (_e, url, force) => {
   catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('ytdlp-update', () => youtube.updateYtdlp());
+
+// App updates
+ipcMain.handle('update-install', async () => {
+  try { return { ok: true, result: await updater.install(p => controlWin?.webContents.send('update-progress', p)) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
 youtube.setSetupListener((tool, progress) => controlWin?.webContents.send('tool-setup', { tool, progress }));
