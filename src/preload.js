@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('api', {
   onUpdateAvailable: fn => on('update-available', fn),
   onUpdateProgress: fn => on('update-progress', fn),
   installUpdate: () => ipcRenderer.invoke('update-install'),
+  checkForUpdate: () => ipcRenderer.invoke('update-check'),
+  appVersion: () => ipcRenderer.invoke('app-version'),
 
   // window buttons
   winAction: action => ipcRenderer.send('win', action),

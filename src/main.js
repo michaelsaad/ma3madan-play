@@ -288,6 +288,12 @@ ipcMain.handle('vocals-save-mix', async (_e, { music, vocals: voc, gains, title,
 });
 
 // App updates
+ipcMain.handle('app-version', () => app.getVersion());
+// Manual "Check for updates" from the About window: null when this is the latest.
+ipcMain.handle('update-check', async () => {
+  try { const info = await updater.check(); if (info) controlWin?.webContents.send('update-available', info); return { ok: true, info }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
 ipcMain.handle('update-install', async () => {
   try { return { ok: true, result: await updater.install(p => controlWin?.webContents.send('update-progress', p)) }; }
   catch (e) { return { ok: false, error: e.message }; }

@@ -207,6 +207,18 @@ module.exports = async ({ getControl, getOutput }) => {
       log('one press delivered twice:', before ? 'playing' : 'paused', '→', (await ojs('wantPlay')) ? 'playing' : 'paused');
     }
 
+    // About window from the ⓘ next to the name, with a real update check against GitHub.
+    {
+      log('ⓘ vs name:', await js(`(() => { const n = document.querySelector('.brand-name').getBoundingClientRect(), b = $('aboutBtn').getBoundingClientRect(); return JSON.stringify({ nameMidY: +(n.top + n.height / 2).toFixed(1), iconMidY: +(b.top + b.height / 2).toFixed(1), gapPx: Math.round(b.left - n.right) }); })()`));
+      await js(`$('aboutBtn').click()`); await wait(500);
+      log('about:', await js(`$('modal').hidden ? 'not shown' : $('modal').innerText.replace(/\\s+/g, ' ').slice(0, 200)`));
+      await js(`$('aboutCheck').click()`);
+      for (let i = 0; i < 20 && /Checking|^$/.test(await js(`$('aboutStatus').textContent`)); i++) await wait(500);
+      log('about update check:', await js(`$('aboutStatus').textContent`));
+      await shot('13-about');
+      await js(`$('aboutClose').click()`);
+    }
+
     // The ⋯ button opens its menu right next to it (real mouse click).
     {
       const more = JSON.parse(await js(`JSON.stringify((r => ({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }))(document.querySelector('.item .item-more').getBoundingClientRect()))`));

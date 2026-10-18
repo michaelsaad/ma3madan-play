@@ -70,6 +70,41 @@ function renderUpdate(progress) {
   b.title = t(update.canInstall ? 'updateTip' : 'updatePortableTip') + (update.notes ? '\n\n' + update.notes.slice(0, 400) : '');
 }
 api.onUpdateAvailable(info => { update = info; renderUpdate(); });
+
+// ---------- About (the ⓘ next to the name) ----------
+const REPO_URL = 'https://github.com/michaelsaad/ma3madan-video-presenter';
+async function showAbout() {
+  const version = await api.appVersion();
+  const box = $('modal');
+  box.innerHTML = `
+    <div class="modal-box about" role="dialog" aria-modal="true">
+      <img src="assets/app-128.png" alt="" class="about-icon">
+      <h2>${escapeHtml(t('appName'))}</h2>
+      <div class="muted" dir="ltr">${escapeHtml(t('versionN', { v: version }))}</div>
+      <p>${escapeHtml(t('aboutText'))}</p>
+      <p class="muted small">${escapeHtml(t('aboutName'))}</p>
+      <div class="about-actions">
+        <button id="aboutGithub" class="primary"><svg><use href="#i-github"/></svg><span>${escapeHtml(t('aboutGithub'))}</span></button>
+        <button id="aboutCheck"><svg><use href="#i-download"/></svg><span>${escapeHtml(t('checkUpdates'))}</span></button>
+      </div>
+      <div id="aboutStatus" class="muted small" aria-live="polite"></div>
+      <div class="modal-actions"><button id="aboutClose" class="ghost">${escapeHtml(t('close'))}</button></div>
+    </div>`;
+  box.hidden = false;
+  const close = () => { box.hidden = true; box.innerHTML = ''; };
+  box.onmousedown = e => { if (e.target === box) close(); };
+  $('aboutClose').onclick = close;
+  $('aboutGithub').onclick = () => api.openExternal(REPO_URL);
+  $('aboutCheck').onclick = async () => {
+    const b = $('aboutCheck'), status = $('aboutStatus');
+    b.disabled = true; status.textContent = t('checking');
+    const r = await api.checkForUpdate();
+    b.disabled = false;
+    status.textContent = !r.ok ? t('checkFailed') : r.info ? t('updateFound', { v: r.info.version }) : t('upToDate');
+  };
+  $('aboutClose').focus();
+}
+$('aboutBtn').onclick = showAbout;
 api.onUpdateProgress(p => renderUpdate(p));
 $('updateBtn').onclick = async () => {
   if (!update || updating) return;
