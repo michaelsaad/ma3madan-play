@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld('api', {
   onOpenFiles: fn => on('open-files', fn),
   outputSourceId: () => ipcRenderer.invoke('output-source-id'),
 
+  // vocal remover
+  vocalsStart: job => ipcRenderer.send('vocals-start', job),
+  vocalsCancel: id => ipcRenderer.send('vocals-cancel', id),
+  onVocalsEvent: fn => on('vocals-event', fn),
+  saveMix: opts => ipcRenderer.invoke('vocals-save-mix', opts),
+
   // app updates
   onUpdateAvailable: fn => on('update-available', fn),
   onUpdateProgress: fn => on('update-progress', fn),

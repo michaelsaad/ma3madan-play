@@ -42,7 +42,7 @@ function setLang(lang) {
   $('langBtn').querySelector('span').textContent = t('otherLang');
   $('aspectSel').innerHTML = ASPECTS.map(a => `<option value="${a}">${escapeHtml(aspectLabel(a))}</option>`).join('');
   $('aspectSel').value = aspect;
-  renderDisplays(); loadSinks(); renderList(); renderState(); renderDownloads(); renderUpdate();
+  renderDisplays(); loadSinks(); renderList(); renderState(); renderDownloads(); renderUpdate(); renderVocalJobs?.();
 }
 $('langBtn').onclick = () => setLang(LANG === 'en' ? 'ar' : 'en');
 
@@ -107,7 +107,7 @@ function renderList() {
     const idx = it.id === playingId ? '<svg><use href="#i-play"/></svg>' : (i + 1);
     const kind = it.source === 'stream' ? t('streamOnline') : it.source === 'youtube' ? t('youtube') : '';
     const sub = it.loading ? t('loading') : it.missing ? t('fileMissing')
-      : [kind, isAudio(it) ? t('audioLabel') : ''].filter(Boolean).join(' · ');
+      : [kind, isAudio(it) ? t('audioLabel') : '', it.stems && it.stemsOn ? t('karaokeLabel') : ''].filter(Boolean).join(' · ');
     li.innerHTML = `
       <span class="item-idx">${idx}</span>
       <span style="min-width:0"><div class="item-title" dir="auto" title="${escapeHtml(it.path)}">${escapeHtml(it.title)}</div>${sub ? `<div class="item-sub">${sub}</div>` : ''}</span>
@@ -191,6 +191,7 @@ function showItemMenu(it, x, y) {
       entries.push({ label: t('menuOpenLink'), icon: 'i-yt', action: () => api.openExternal(it.url) });
     }
   }
+  entries.push(...vocalMenuEntries(it)); // vocals-ui.js
   entries.push('-', { label: t('removeFromList'), icon: 'i-x', danger: true, action: () => removeItem(it.id) });
   showMenu(x, y, entries);
 }
@@ -242,6 +243,11 @@ async function playItem(it, { autoplay = true, force = false, startAt = 0 } = {}
     src = { path: it.path, ladder: r.ladder, quality: settings.streamQuality || 'auto' };
   } else {
     src = { path: it.path, url: await api.fileUrl(it.path), audioUrl: it.audioPath ? await api.fileUrl(it.audioPath) : null };
+    if (it.stems && it.stemsOn) {
+      // Vocal remover on: the separated music and vocals replace the original sound, mixed live.
+      src.stems = { music: await api.fileUrl(it.stems.music), vocals: await api.fileUrl(it.stems.vocals) };
+      src.mix = it.mix || { music: 1, vocals: 0 };
+    }
   }
   cmd('load', { ...src, audio: isAudio(it), autoplay, startAt, volume: settings.volume ?? 1, muted: !!settings.muted });
   cmd('rate', { r: parseFloat($('rateSel').value) });
@@ -332,6 +338,7 @@ function renderState() {
 
   document.querySelector('.preview').classList.toggle('live', out.loaded && !out.paused && (out.audioOnly || !out.black));
   $('audioBadge').hidden = !(out.loaded && out.audioOnly);
+  renderMixer(); // vocals-ui.js
   renderNow();
 }
 
@@ -553,9 +560,8 @@ api.onDownload(d => {
 // yt-dlp (~17 MB, first YouTube use) and FFmpeg (~28 MB, first MP3) download on demand; show it.
 api.onToolSetup(({ tool, progress }) => {
   const done = progress >= 1;
-  toast(tool === 'ffmpeg'
-    ? (done ? t('mp3SetupDone') : t('mp3Setup', { n: Math.round(progress * 100) }))
-    : (done ? t('ytSetupDone') : t('ytSetup', { n: Math.round(progress * 100) })));
+  const keys = { ffmpeg: ['mp3Setup', 'mp3SetupDone'], engine: ['engineSetup', 'engineSetupDone'], model: ['modelSetup', 'modelSetupDone'] }[tool] || ['ytSetup', 'ytSetupDone'];
+  toast(done ? t(keys[1]) : t(keys[0], { n: Math.round(progress * 100) }));
 });
 
 function renderDownloads() {

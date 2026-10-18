@@ -30,6 +30,8 @@
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 19h14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="17.5" cy="16" r="2.5" fill="currentColor"/></symbol>
   <symbol id="i-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
 </svg>
 
@@ -114,6 +116,17 @@
         <select id="sinkSel"></select>
       </label>
     </div>
+    <div id="mixer" class="mixer" hidden>
+      <span class="mixer-title"><svg><use href="#i-mic"/></svg><span data-i18n="vocalRemover"></span></span>
+      <label class="mix-ch"><span data-i18n="vocalsLabel"></span><input id="mixVocals" class="range" type="range" min="0" max="100" dir="ltr"><b id="mixVocalsPct" dir="ltr"></b></label>
+      <label class="mix-ch"><span data-i18n="musicLabel"></span><input id="mixMusic" class="range" type="range" min="0" max="100" dir="ltr"><b id="mixMusicPct" dir="ltr"></b></label>
+      <div class="mix-presets">
+        <button data-preset="karaoke" data-i18n="presetKaraoke"></button>
+        <button data-preset="original" data-i18n="presetOriginal"></button>
+        <button data-preset="vocals" data-i18n="presetVocals"></button>
+      </div>
+      <button id="mixSave" class="ghost"><svg><use href="#i-download"/></svg><span data-i18n="saveMix"></span></button>
+    </div>
   </section>
 
   <aside class="side">
@@ -130,6 +143,7 @@
     </div>
 
     <div id="downloads" class="downloads"></div>
+    <div id="vocalJobs" class="downloads"></div>
 
     <div class="list-head">
       <span data-i18n="playlist"></span>
@@ -142,10 +156,12 @@
 
 
 <div id="toast" class="toast"></div>
+<div id="modal" class="modal" hidden></div>
 <div id="dropZone" class="drop-zone" data-i18n="dropHere"></div>
 <video id="probe" preload="metadata" muted hidden></video>
 
 <script src="i18n.js"></script>
 <script src="control.js"></script>
+<script src="vocals-ui.js"></script>
 </body>
 </html>

@@ -9,7 +9,7 @@ module.exports = async ({ getControl, getOutput }) => {
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const js = code => getControl().webContents.executeJavaScript(code);
   const ojs = code => getOutput().webContents.executeJavaScript(code);
-  const outState = async () => log('  output:', await ojs(`JSON.stringify({t:+v.currentTime.toFixed(2),split,at:+a.currentTime.toFixed(2),paused:v.paused,vol:v.volume,muted:v.muted,black:blackOn,src:decodeURI(v.src).split('/').pop()})`));
+  const outState = async () => log('  output:', await ojs(`JSON.stringify({t:+v.currentTime.toFixed(2),split:followers.length>0,at:+a.currentTime.toFixed(2),paused:v.paused,vol:v.volume,muted:v.muted,black:blackOn,src:decodeURI(v.src).split('/').pop()})`));
   const shot = async name => {
     for (const [w, n] of [[getControl(), 'control'], [getOutput(), 'output']]) {
       const img = await w.capturePage();
@@ -155,6 +155,50 @@ module.exports = async ({ getControl, getOutput }) => {
     log('item menu:', await js(`[...document.querySelectorAll('#menu button')].map(b => b.innerText).join(' | ')`));
     await shot('8-item-menu');
     await js('closeMenu()');
+    // Vocal remover on this PC (VP_VOCALS=<a song with vocals>): first use downloads engine + model.
+    if (process.env.VP_VOCALS) {
+      const song = process.env.VP_VOCALS;
+      await js(`settings.vocalEngine = 'local'; addPaths([${JSON.stringify(song)}])`);
+      await wait(800);
+      const t0 = Date.now();
+      await js(`removeVocals(items.find(x => x.path === ${JSON.stringify(song)}))`);
+      let lastStage = '';
+      while (Date.now() - t0 < 600000) {
+        await wait(1000);
+        const s = await js(`JSON.stringify({ jobs: [...vocalJobs.values()].map(j => [j.stage, j.progress == null ? null : Math.round(j.progress * 100), j.error]), stems: !!items.find(x => x.path === ${JSON.stringify(song)}).stems })`);
+        const st = JSON.parse(s);
+        const stage = st.jobs[0]?.[0] || (st.stems ? 'done' : '?');
+        if (stage !== lastStage) { log(`  vocals ${stage} at ${Math.round((Date.now() - t0) / 1000)} s`, s); lastStage = stage; }
+        if (st.stems || st.jobs.some(j => j[0] === 'error')) break;
+      }
+      log('vocal removal took', Math.round((Date.now() - t0) / 1000), 's');
+      await js(`playItem(items.find(x => x.path === ${JSON.stringify(song)}), { startAt: 60 })`);
+      await wait(2500);
+      const mixState = () => ojs(`JSON.stringify({ stems: stemsMode, followers: followers.length, mix, t: +v.currentTime.toFixed(1), drift: +(a2.currentTime - a.currentTime).toFixed(3) })`);
+      for (const preset of ['karaoke', 'vocals', 'original']) {
+        await js(`setMix(PRESETS.${preset})`); await wait(700);
+        log(`  ${preset}:`, await mixState(), '| rms', await rms(), '| mixer shown:', await js(`!$('mixer').hidden`));
+      }
+      await js(`setMix({ music: 1, vocals: 0.5 })`); await wait(400);
+      await shot('10-vocal-mixer');
+      const it = JSON.parse(await js(`JSON.stringify(items.find(x => x.path === ${JSON.stringify(song)}))`));
+      const dest = path.join(dir, 'mix-test.mp3');
+      await require(path.join(__dirname, '..', 'src', 'vocals')).saveMix({ music: it.stems.music, vocals: it.stems.vocals, gains: { music: 1, vocals: 0.5 }, dest });
+      log('saved mix:', fs.existsSync(dest) ? Math.round(fs.statSync(dest).size / 1024) + ' KB' : 'missing');
+    }
+    // Online path with a bad key: should fail with MVSEP's message and reopen the key window.
+    if (process.env.VP_VOCALS || process.env.VP_BADKEY) {
+      await js(`for (const [k, v] of [['vocalEngine', 'online'], ['mvsepToken', 'not-a-real-key']]) { settings[k] = v; api.setSetting(k, v); }
+        removeVocals(items.find(x => x.path.endsWith('tone.mp3')))`);
+      const t1 = Date.now();
+      while (Date.now() - t1 < 60000) {
+        await wait(1500);
+        const s = await js(`JSON.stringify([...vocalJobs.values()].map(j => [j.stage, j.error]))`);
+        if (/error/.test(s)) { log('online with a bad key:', s, '| key window open:', await js(`!$('modal').hidden`)); break; }
+      }
+      await shot('11-vocal-bad-key');
+    }
+
     // Updater (VP_FAKE_VERSION=older version, VP_UPDATE_DRYRUN=1: download + verify, don't install)
     if (process.env.VP_FAKE_VERSION) {
       const t0 = Date.now();

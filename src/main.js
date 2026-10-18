@@ -6,6 +6,7 @@ const { pathToFileURL } = require('url');
 const youtube = require('./youtube');
 const streamProxy = require('./stream-proxy');
 const updater = require('./updater');
+const vocals = require('./vocals');
 
 const APP_NAME = 'Ma3madan Video Presenter';
 
@@ -216,8 +217,10 @@ ipcMain.handle('get-settings', () => settings);
 ipcMain.on('set-setting', (_e, key, value) => { settings[key] = value; saveSettings(); });
 
 ipcMain.handle('playlist-load', () =>
-  readJson(playlistFile(), []).map(it => ({
+  readJson(playlistFile(), []).map(({ stems, ...it }) => ({
     ...it,
+    // Separated tracks that were deleted outside the app are simply forgotten.
+    ...(stems && fs.existsSync(stems.music) && fs.existsSync(stems.vocals) ? { stems } : {}),
     missing: it.source !== 'stream' && (!fs.existsSync(it.path) || (it.audioPath && !fs.existsSync(it.audioPath))),
   })));
 ipcMain.on('playlist-save', (_e, items) => writeJson(playlistFile(), items.map(({ missing, ...rest }) => rest)));
@@ -251,6 +254,26 @@ ipcMain.handle('stream-resolve', async (_e, url, force) => {
   catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('ytdlp-update', () => youtube.updateYtdlp());
+
+// Vocal remover
+vocals.setSetupListener((tool, progress) => controlWin?.webContents.send('tool-setup', { tool, progress }));
+ipcMain.on('vocals-start', (_e, job) =>
+  vocals.start({ ...job, outDir: videosDir() },
+    ev => controlWin?.webContents.send('vocals-event', { id: job.id, ...ev }),
+    settings, (k, v) => { settings[k] = v; saveSettings(); }));
+ipcMain.on('vocals-cancel', (_e, id) => vocals.cancel(id));
+ipcMain.handle('vocals-save-mix', async (_e, { music, vocals: voc, gains, title, dialogTitle }) => {
+  const safe = (title || 'mix').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 120);
+  fs.mkdirSync(videosDir(), { recursive: true });
+  const r = await dialog.showSaveDialog(controlWin, {
+    title: dialogTitle,
+    defaultPath: path.join(videosDir(), `${safe}.mp3`),
+    filters: [{ name: 'MP3', extensions: ['mp3'] }],
+  });
+  if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+  try { return { ok: true, path: await vocals.saveMix({ music, vocals: voc, gains, dest: r.filePath }) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
 
 // App updates
 ipcMain.handle('update-install', async () => {

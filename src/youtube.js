@@ -241,4 +241,4 @@ async function updateYtdlp() {
   });
 }
 
-module.exports = { download, cancelDownload, resolveStream, updateYtdlp, setSetupListener };
+module.exports = { download, cancelDownload, resolveStream, updateYtdlp, setSetupListener, ensureFfmpeg };

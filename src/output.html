@@ -14,15 +14,20 @@
 <body>
 <video id="v" preload="auto"></video>
 <audio id="a" preload="auto"></audio>
+<audio id="a2" preload="auto"></audio>
 <div id="black"></div>
 <script>
   const v = document.getElementById('v');
-  // YouTube streams come as separate video and audio files; `a` carries the audio and follows `v`.
+  // Audio that follows the video's clock: `a` is a separate sound track (YouTube video and audio
+  // come apart) or the "music" track of a separated song; `a2` is the "vocals" track.
   const a = document.getElementById('a');
+  const a2 = document.getElementById('a2');
   const black = document.getElementById('black');
 
   let current = null;      // { path }
-  let split = false;       // true while a separate audio track is in use
+  let followers = [];      // audio elements kept in sync with v
+  let stemsMode = false;   // playing separated music + vocals instead of the original sound
+  let mix = { music: 1, vocals: 1 };
   let wantPlay = false;    // what the operator asked for; the elements may be held while buffering
   let stalled = false;
   let stallSince = 0;
@@ -49,10 +54,17 @@
   // Element volume stays at 1; loudness comes from the gain node so it can go past 100%.
   const ctx = new AudioContext({ latencyHint: 'playback' });
   const gain = ctx.createGain();
-  ctx.createMediaElementSource(v).connect(gain);
-  ctx.createMediaElementSource(a).connect(gain);
+  // Each element gets its own gain so the vocals and music can be mixed live.
+  const trackGain = el => { const g = ctx.createGain(); ctx.createMediaElementSource(el).connect(g).connect(gain); el.volume = 1; return g; };
+  const vGain = trackGain(v), aGain = trackGain(a), a2Gain = trackGain(a2);
   gain.connect(ctx.destination);
-  v.volume = a.volume = 1;
+  const allEls = [v, a, a2];
+  function applyMix(smooth) {
+    const set = (g, x) => (smooth ? g.gain.setTargetAtTime(x, ctx.currentTime, 0.05) : (g.gain.value = x));
+    set(vGain, stemsMode ? 0 : 1);            // the original sound is replaced by the two tracks
+    set(aGain, stemsMode ? mix.music : 1);
+    set(a2Gain, stemsMode ? mix.vocals : 0);
+  }
   const resumeAudio = () => { if (ctx.state !== 'running') ctx.resume().catch(() => {}); };
   function setLevel(x) { level = Math.max(0, Math.min(2, x)); gain.gain.value = level; }
 
@@ -68,7 +80,7 @@
     if (left <= need + 0.25) return el.readyState >= 2;
     return el.readyState >= 3 && bufferedAhead(el) >= need;
   }
-  const tracks = () => (split ? [v, a] : [v]);
+  const tracks = () => [v, ...followers];
   function holdAll() { for (const el of tracks()) if (!el.paused) el.pause(); }
 
   function tick() {
@@ -92,13 +104,13 @@
 
     resumeAudio();
     if (v.paused) v.play().catch(() => {});
-    if (split) {
-      if (a.paused && !a.ended) a.play().catch(() => {});
+    for (const el of followers) {
+      if (el.paused && !el.ended) el.play().catch(() => {});
       // Nudge the audio speed to close small drift instead of seeking (seeking is what repeats words).
-      const drift = a.currentTime - v.currentTime;
-      if (Math.abs(drift) > 1) a.currentTime = v.currentTime;
-      else if (Math.abs(drift) > 0.06) a.playbackRate = rate * (drift > 0 ? 0.97 : 1.03);
-      else if (a.playbackRate !== rate) a.playbackRate = rate;
+      const drift = el.currentTime - v.currentTime;
+      if (Math.abs(drift) > 1) el.currentTime = v.currentTime;
+      else if (Math.abs(drift) > 0.06) el.playbackRate = rate * (drift > 0 ? 0.97 : 1.03);
+      else if (el.playbackRate !== rate) el.playbackRate = rate;
     }
   }
   setInterval(tick, 150);
@@ -107,18 +119,18 @@
   const canStepDown = () => autoQuality && ladder && qIndex < ladder.length - 1;
   function stepDown() { setQuality(qIndex + 1, true); }
 
-  function setSources(videoUrl, audioUrl, at) {
-    split = !!audioUrl;
+  function setSources(videoUrl, audioUrl, at, vocalsUrl) {
     holdAll();
+    followers = audioUrl ? (vocalsUrl ? [a, a2] : [a]) : [];
     v.src = videoUrl;
-    if (split) a.src = audioUrl; else { a.removeAttribute('src'); }
-    v.load(); a.load();
-    if (at) {
-      v.addEventListener('loadedmetadata', () => { v.currentTime = at; }, { once: true });
-      if (split) a.addEventListener('loadedmetadata', () => { a.currentTime = at; }, { once: true });
+    for (const [el, src] of [[a, audioUrl], [a2, vocalsUrl]]) { if (src) el.src = src; else el.removeAttribute('src'); el.load(); }
+    v.load();
+    for (const el of [v, ...followers]) {
+      if (at) el.addEventListener('loadedmetadata', () => { el.currentTime = at; }, { once: true });
+      el.playbackRate = rate;
+      el.loop = loopOn;
     }
-    v.playbackRate = a.playbackRate = rate;
-    v.loop = a.loop = loopOn;
+    applyMix(false);
     beginLoading();
     stallLog = [];
   }
@@ -172,15 +184,19 @@
       quality: ladder ? ladder[qIndex].label : null,
       qualities: ladder ? ladder.map(q => q.label) : null,
       autoQuality,
-      error: v.error ? (v.error.message || String(v.error.code)) : (split && a.error ? 'audio: ' + (a.error.message || a.error.code) : null),
+      stems: stemsMode,
+      mix,
+      error: v.error ? (v.error.message || String(v.error.code)) : (followers.find(el => el.error) ? 'audio: ' + (followers.find(el => el.error).error.message || 'error') : null),
       ...extra,
     });
   }
 
   const handlers = {
-    load({ path, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt, audio }) {
+    load({ path, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt, audio, stems, mix: m }) {
       audioOnly = !!audio;
       current = { path };
+      stemsMode = !!stems;
+      if (m) mix = { music: m.music ?? 1, vocals: m.vocals ?? 1 };
       ladder = lad && lad.length ? lad : null;
       if (ladder) {
         autoQuality = quality == null || quality === 'auto';
@@ -188,33 +204,36 @@
         const pick = autoQuality ? '720p' : quality;
         qIndex = Math.max(0, ladder.findIndex(q => q.label === pick));
         setSources(ladder[qIndex].video, ladder[qIndex].audio, startAt);
+      } else if (stems) {
+        setSources(url, stems.music, startAt, stems.vocals);
       } else {
         setSources(url, audioUrl, startAt);
       }
       if (volume != null) setLevel(volume);
-      if (muted != null) v.muted = a.muted = muted;
+      if (muted != null) for (const el of allEls) el.muted = muted;
       wantPlay = !!autoplay;
       setBlack(audioOnly);
       resumeAudio();
       push();
     },
-    play() { if (!current) return; if (v.ended) { v.currentTime = 0; if (split) a.currentTime = 0; } wantPlay = true; setBlack(audioOnly); tick(); push(); },
+    play() { if (!current) return; if (v.ended) for (const el of tracks()) el.currentTime = 0; wantPlay = true; setBlack(audioOnly); tick(); push(); },
     pause() { wantPlay = false; holdAll(); push(); },
     toggle() { if (current) (wantPlay ? handlers.pause : handlers.play)(); },
-    stop() { wantPlay = false; holdAll(); v.currentTime = 0; if (split) a.currentTime = 0; setBlack(true); },
+    stop() { wantPlay = false; holdAll(); for (const el of tracks()) el.currentTime = 0; setBlack(true); },
     seek({ t }) {
       if (!current) return;
       t = Math.max(0, Math.min(t, v.duration || t));
-      v.currentTime = t; if (split) a.currentTime = t;
+      for (const el of tracks()) el.currentTime = t;
       if (bufferedAhead(v) < START_AHEAD) { beginLoading(); holdAll(); }
       push();
     },
     seekBy({ d }) { if (current) handlers.seek({ t: v.currentTime + d }); },
-    volume({ v: vol }) { setLevel(vol); if (vol > 0) v.muted = a.muted = false; push(); },
-    mute({ m }) { v.muted = a.muted = m ?? !v.muted; push(); },
+    volume({ v: vol }) { setLevel(vol); if (vol > 0) for (const el of allEls) el.muted = false; push(); },
+    mute({ m }) { const on = m ?? !v.muted; for (const el of allEls) el.muted = on; push(); },
+    mix({ music, vocals }) { mix = { music: music ?? mix.music, vocals: vocals ?? mix.vocals }; applyMix(true); push(); },
     black({ on }) { setBlack(audioOnly || (on ?? !blackOn)); },
-    rate({ r }) { rate = r; v.playbackRate = a.playbackRate = r; push(); },
-    loop({ on }) { loopOn = on; v.loop = a.loop = on; push(); },
+    rate({ r }) { rate = r; for (const el of allEls) el.playbackRate = r; push(); },
+    loop({ on }) { loopOn = on; for (const el of allEls) el.loop = on; push(); },
     aspect({ mode }) { aspect = mode; layout(); push(); },
     quality({ q }) {
       if (!ladder) return;
@@ -231,6 +250,7 @@
 
   for (const ev of ['seeked', 'loadedmetadata', 'error', 'emptied']) v.addEventListener(ev, () => push());
   a.addEventListener('error', () => push());
+  a2.addEventListener('error', () => push());
   v.addEventListener('ended', () => {
     wantPlay = false; holdAll();
     if (blackOnEnd) setBlack(true); else push();

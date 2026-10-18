@@ -38,6 +38,7 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 - **Two screens.** The projector shows a clean, full-screen video: no controls, no mouse cursor, no pop-ups. Your laptop shows the controls and a live preview of the projector.
 - **Local files.** MP4, MKV, WebM and MOV video. Drag files in or use **Add videos**.
 - **Audio too.** MP3, WAV, M4A/AAC, FLAC, and WhatsApp voice notes (`.opus`/`.ogg`). Audio plays with sound only: the projector stays black, and with a single screen the output window steps aside.
+- **Vocal remover (karaoke).** Split any song or video into music and vocals, then mix them live while it plays: karaoke, vocals only, or anything in between. Save any mix as an MP3.
 - **YouTube.**
   - **Stream** plays a link right away without downloading it. Quality drops automatically when the internet is slow, like on YouTube.
   - **Download** saves the video to your PC (up to 1080p) so it plays offline, or just the sound as an **MP3**.
@@ -96,6 +97,27 @@ Downloads are saved to `Videos\Ma3madan Video Presenter`. YouTube keeps picture 
 You can change a stream's quality from the **Quality** menu while it plays. **Auto** lowers it on its own when the connection can't keep up.
 
 If YouTube links stop working one day, click **Update yt-dlp**. YouTube changes things from time to time and yt-dlp keeps up with them. Live streams aren't supported.
+
+## Vocal remover
+
+Open a video's or song's **⋯** menu (or right-click it) → **Remove vocals (karaoke)**. The sound is split once into two tracks, music and vocals, saved under `Videos\Ma3madan Video Presenter\Separated`. From then on, that item plays with a **mixer**:
+
+- **Vocals** and **Music** sliders, 0–100%, that you can move live while it plays
+- Presets: **Karaoke** (music only), **Original**, **Vocals only**
+- **Save as MP3** saves exactly what the sliders are set to, for example vocals at 50% with the music at 100%
+
+The same menu turns karaoke on or off for that item and saves a mix without playing it.
+
+There are two ways to do the separation (choose under **Vocal remover settings…**):
+
+| | Online (recommended) | On this PC |
+|---|---|---|
+| Works on | any PC, even old ones: your PC does nothing | best with a graphics card |
+| Quality | best (BS Roformer model) | very good (MDX-Net model) |
+| Needs | a free [MVSEP](https://mvsep.com) account and its [API key](https://mvsep.com/user-api) | about 95 MB downloaded the first time |
+| Time for a 4-minute song | usually a few minutes, depending on MVSEP's queue | ~30 s with a graphics card, a few minutes on a laptop CPU |
+
+Online, the song's sound is uploaded to MVSEP, separated on their servers, downloaded back, and deleted from their server. On this PC, nothing leaves your computer. The app picks the fastest graphics card by itself.
 
 ## Keyboard shortcuts
 
@@ -176,13 +198,16 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 Only files built by this repository's GitHub Actions workflow from its public source code are signed. Each signing request is approved by hand.
 
-**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link, and GitHub when it sets up or updates yt-dlp for YouTube support. Settings and the playlist stay on your computer.
+**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. Settings and the playlist stay on your computer.
 
 ## Third-party software
 
 - [Electron](https://www.electronjs.org/) (MIT), bundled
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (Unlicense), downloaded from its official release on first YouTube use
-- [FFmpeg](https://ffmpeg.org/) (GPL), the [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) b6.1.1 build, downloaded only for MP3 conversion. Its source is available from ffmpeg.org.
+- [FFmpeg](https://ffmpeg.org/) (GPL), the [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) b6.1.1 build, downloaded for MP3 conversion and the vocal remover. Its source is available from ffmpeg.org.
+- [ONNX Runtime](https://onnxruntime.ai/) 1.22 (MIT) with DirectML, downloaded for the on-PC vocal remover
+- The UVR-MDX-NET Inst HQ 3 model from [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui), downloaded from its official model repository
+- [MVSEP](https://mvsep.com), an online service used only if you choose it, under its own terms
 
 Only use YouTube content you have the right to show, and follow YouTube's Terms of Service.
 
