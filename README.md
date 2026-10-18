@@ -5,8 +5,8 @@
 <h1 align="center">Ma3madan Video Presenter</h1>
 
 <p align="center">
-  <b>PowerPoint's Presenter View, for videos.</b><br>
-  The audience sees only the video. You see everything else.
+  <b>The audience sees the video. You see everything else.</b><br>
+  A two-screen video player built for presenting.
 </p>
 
 <p align="center">
@@ -17,9 +17,7 @@
 
 ## Why this app?
 
-When you present slides, PowerPoint gives you **Presenter View**. The projector shows the slide; your laptop shows the notes, the next slide and the timer. Nobody in the room sees you working.
-
-Videos never got that. Playing a video for an audience usually goes like this:
+Playing a video for an audience usually goes like this:
 
 - 🖱️ You drag a player window onto the projector and everyone watches your mouse hunt for the full-screen button.
 - ⏸️ You pause, and a giant pause icon and progress bar sit on the big screen.
@@ -27,7 +25,7 @@ Videos never got that. Playing a video for an audience usually goes like this:
 - 📺 You play from YouTube, and the room gets the title bar, the controls, an ad, and a wall of suggested videos when it ends.
 - ⏳ You download first, then hunt for the file in a folder… on the projector.
 
-**Ma3madan Video Presenter is Presenter View for video.** The projector only ever shows the video, or a clean black screen. Everything else stays on your laptop: the playlist, the controls, the volume, YouTube links, and a live preview of exactly what the audience sees. Pause, seek, boost the volume, line up the next clip, swap a YouTube link: none of it ever reaches the big screen.
+**Ma3madan Video Presenter splits the job across two screens.** The projector is the stage: it only ever shows the video, or a clean black screen. Your laptop is backstage. Everything else stays on your laptop: the playlist, the controls, the volume, YouTube links, and a live preview of exactly what the audience sees. Pause, seek, boost the volume, line up the next clip, swap a YouTube link: none of it ever reaches the big screen.
 
 What the audience gets is a smooth, distraction-free flow from one video to the next, the way a professional production feels.
 
