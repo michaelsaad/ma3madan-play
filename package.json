@@ -21,8 +21,7 @@
     "youtube",
     "yt-dlp"
   ],
-  "author": "Michael Saad",
-  "license": "MIT",
+  "license": "Unlicense",
   "devDependencies": {
     "electron": "^38.8.6",
     "electron-builder": "^26.15.3",
@@ -76,7 +75,8 @@
         "description": "Video",
         "role": "Viewer"
       }
-    ]
+    ],
+    "copyright": "Public domain"
   },
   "homepage": "https://github.com/michaelsaad/ma3madan-video-presenter",
   "repository": {

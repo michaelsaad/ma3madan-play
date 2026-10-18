@@ -16,7 +16,7 @@ html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg); color: var(--text);
   font: 14px/1.45 "Segoe UI", Tahoma, sans-serif;
-  display: grid; grid-template-rows: auto 1fr auto; overflow: hidden;
+  display: grid; grid-template-rows: auto 1fr; overflow: hidden;
   user-select: none;
 }
 svg { width: 20px; height: 20px; flex: none; }
@@ -140,12 +140,6 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px;
 .item-del svg { width: 15px; height: 15px; }
 .empty-list { color: var(--muted); text-align: center; padding: 30px 10px; border: 1px dashed var(--line); border-radius: var(--radius); }
 
-footer {
-  display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 6px 16px; font-size: 12px;
-  color: var(--muted); background: var(--panel); border-top: 1px solid var(--line);
-}
-.credit { margin-right: auto; font-size: 9px; opacity: .45; white-space: nowrap; letter-spacing: .2px; }
-.credit b { color: var(--live); font-weight: 400; }
 
 .toast {
   position: fixed; bottom: 54px; left: 50%; transform: translateX(-50%) translateY(20px);

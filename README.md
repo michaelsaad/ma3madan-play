@@ -141,4 +141,4 @@ Only use YouTube content you have the right to show, and follow YouTube's Terms 
 
 ## License
 
-[MIT](LICENSE) © Michael Saad
+Public domain ([The Unlicense](LICENSE)). Use it, copy it, change it, share it with other churches. No credit needed.
