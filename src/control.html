@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: mediastream:; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>Ma3madan Video Presenter</title>
+<link rel="stylesheet" href="control.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z" fill="currentColor"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5v14l10-7zM16 5h3v14h-3z" fill="currentColor"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M19 5v14L9 12zM5 5h3v14H5z" fill="currentColor"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z" fill="currentColor"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M12 5V2l5 4-5 4V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z" fill="currentColor"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
+  <symbol id="i-yt" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4" fill="currentColor"/><path d="M10 9v6l5-3z" fill="#0f1115"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
+</svg>
+
+<header>
+  <div class="brand">
+    <img src="assets/app-64.png" srcset="assets/app-64.png 1x, assets/app-128.png 2x" alt="" class="app-icon">
+    <div class="brand-name" data-i18n="appName"></div>
+  </div>
+  <div class="spacer"></div>
+  <label class="field"><span data-i18n="outputScreen"></span>
+    <select id="displaySel"></select>
+  </label>
+  <button id="fullBtn" class="ghost" data-i18n-title="fullTitle"><svg><use href="#i-full"/></svg><span></span></button>
+  <button id="langBtn" class="ghost"><svg><use href="#i-globe"/></svg><span></span></button>
+</header>
+
+<main>
+  <section class="stage">
+    <div class="preview-wrap">
+      <div class="preview">
+        <video id="preview" muted autoplay playsinline></video>
+      </div>
+    </div>
+
+    <div class="now">
+      <div id="nowTitle" class="now-title" dir="auto"></div>
+      <div id="nextTitle" class="now-next" dir="auto"></div>
+    </div>
+
+    <div class="seek" dir="ltr">
+      <span id="tCur">0:00</span>
+      <input id="seek" class="range" type="range" min="0" max="1000" value="0" step="1">
+      <span id="tDur">0:00</span>
+    </div>
+
+    <div class="transport">
+      <div class="group" dir="ltr">
+        <button id="prevBtn" data-i18n-title="tPrev"><svg><use href="#i-prev"/></svg></button>
+        <button id="backBtn" data-i18n-title="tBack"><svg><use href="#i-back"/></svg></button>
+        <button id="playBtn" class="primary big" data-i18n-title="tPlay"><svg><use href="#i-play"/></svg></button>
+        <button id="fwdBtn" data-i18n-title="tFwd"><svg><use href="#i-fwd"/></svg></button>
+        <button id="nextBtn" data-i18n-title="tNext"><svg><use href="#i-next"/></svg></button>
+        <button id="stopBtn" data-i18n-title="tStop"><svg><use href="#i-stop"/></svg></button>
+      </div>
+      <div class="group">
+        <button id="blackBtn" class="toggle" data-i18n-title="tBlack"><span data-i18n="blackScreen"></span></button>
+      </div>
+      <div class="group vol" dir="ltr">
+        <button id="muteBtn" data-i18n-title="tMute"><svg><use href="#i-vol"/></svg></button>
+        <div class="vol-track">
+          <input id="vol" class="range" type="range" min="0" max="200" value="100">
+          <i class="vol-mark" title="100%"></i>
+        </div>
+        <span id="volPct">100%</span>
+      </div>
+    </div>
+
+    <div class="options">
+      <label class="check"><input type="checkbox" id="autoNext"> <span data-i18n="autoNext"></span></label>
+      <label class="check"><input type="checkbox" id="blackOnEnd" checked> <span data-i18n="blackOnEnd"></span></label>
+      <label class="check"><input type="checkbox" id="loopChk"> <span data-i18n="loop"></span></label>
+      <label class="field"><span data-i18n="speed"></span>
+        <select id="rateSel" dir="ltr">
+          <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+        </select>
+      </label>
+      <label class="field"><span data-i18n="aspect"></span>
+        <select id="aspectSel" data-i18n-title="tAspect"></select>
+      </label>
+      <label class="field" id="qualityField" style="display:none"><span data-i18n="quality"></span>
+        <select id="qualitySel" dir="ltr"></select>
+      </label>
+      <label class="field"><span data-i18n="audioOut"></span>
+        <select id="sinkSel"></select>
+      </label>
+    </div>
+  </section>
+
+  <aside class="side">
+    <form id="ytForm" class="yt">
+      <svg class="yt-ico"><use href="#i-yt"/></svg>
+      <input id="ytUrl" type="text" dir="ltr" data-i18n-ph="ytPlaceholder" autocomplete="off" spellcheck="false">
+      <button type="submit" id="streamBtn" class="primary" data-i18n="stream" data-i18n-title="tStream"></button>
+      <button type="submit" id="downloadBtn" data-i18n="download" data-i18n-title="tDownload"></button>
+    </form>
+    <div class="side-actions">
+      <button id="addFilesBtn" class="ghost"><svg><use href="#i-add"/></svg><span data-i18n="addVideos"></span></button>
+      <button id="folderBtn" class="ghost"><svg><use href="#i-folder"/></svg><span data-i18n="downloadsFolder"></span></button>
+      <button id="ytUpdateBtn" class="ghost small" data-i18n="updateYtdlp"></button>
+    </div>
+
+    <div id="downloads" class="downloads"></div>
+
+    <div class="list-head">
+      <span data-i18n="playlist"></span>
+      <span id="listCount" class="muted"></span>
+    </div>
+    <ol id="playlist" class="playlist"></ol>
+    <div id="emptyList" class="empty-list" data-i18n="emptyList"></div>
+  </aside>
+</main>
+
+<footer>
+  <span class="credit" dir="ltr">Made with <b>♥</b> by m1kllz</span>
+</footer>
+
+<div id="toast" class="toast"></div>
+<div id="dropZone" class="drop-zone" data-i18n="dropHere"></div>
+<video id="probe" preload="metadata" muted hidden></video>
+
+<script src="i18n.js"></script>
+<script src="control.js"></script>
+</body>
+</html>

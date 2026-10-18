@@ -1,0 +1,86 @@
+{
+  "name": "ma3madan-video-presenter",
+  "version": "1.0.0",
+  "description": "Video player for churches and events: controls on your screen, clean full-screen video on the projector. Plays local files and YouTube.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "fetch-tools": "node scripts/fetch-yt-dlp.js",
+    "predist": "node scripts/fetch-yt-dlp.js",
+    "dist": "electron-builder --win portable nsis",
+    "icon": "electron build/make-icon.js",
+    "test:media": "node test/make-media.js",
+    "test": "node test/run-selftest.js"
+  },
+  "keywords": [
+    "electron",
+    "video-player",
+    "presenter",
+    "projector",
+    "church",
+    "youtube",
+    "yt-dlp"
+  ],
+  "author": "Michael Saad",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^38.8.6",
+    "electron-builder": "^26.15.3",
+    "ffmpeg-static": "^5.3.0"
+  },
+  "productName": "Ma3madan Video Presenter",
+  "build": {
+    "appId": "com.michaelsaad.ma3madan",
+    "productName": "Ma3madan Video Presenter",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/yt-dlp.exe",
+        "to": "bin/yt-dlp.exe"
+      },
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "bin/ffmpeg.exe"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Ma3madan-Video-Presenter-Setup-${version}.${ext}",
+      "include": "build/installer.nsh",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ma3madan Video Presenter"
+    },
+    "portable": {
+      "artifactName": "Ma3madan-Video-Presenter-Portable-${version}.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "mp4",
+          "m4v",
+          "mkv",
+          "webm",
+          "mov"
+        ],
+        "name": "Ma3madan.Video",
+        "description": "Video",
+        "role": "Viewer"
+      }
+    ]
+  },
+  "homepage": "https://github.com/michaelsaad/ma3madan-video-presenter",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michaelsaad/ma3madan-video-presenter.git"
+  }
+}

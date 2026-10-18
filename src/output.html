@@ -1,0 +1,246 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: https: http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<title>Output</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; -webkit-app-region: drag; }
+  video { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  #black { position: absolute; inset: 0; background: #000; opacity: 1; transition: opacity .35s ease; pointer-events: none; }
+  #black.off { opacity: 0; }
+</style>
+</head>
+<body>
+<video id="v" preload="auto"></video>
+<audio id="a" preload="auto"></audio>
+<div id="black"></div>
+<script>
+  const v = document.getElementById('v');
+  // YouTube streams come as separate video and audio files; `a` carries the audio and follows `v`.
+  const a = document.getElementById('a');
+  const black = document.getElementById('black');
+
+  let current = null;      // { path }
+  let split = false;       // true while a separate audio track is in use
+  let wantPlay = false;    // what the operator asked for; the elements may be held while buffering
+  let stalled = false;
+  let stallSince = 0;
+  let stallLog = [];       // start times of recent stalls
+  let loadingPhase = false; // first fill after a load, seek or quality switch — not a connection problem yet
+  let ladder = null;       // stream qualities, best first
+  let qIndex = 0;
+  let autoQuality = true;
+  let blackOn = true;      // nothing loaded yet → black
+  let blackOnEnd = true;
+  let level = 1;           // 0–2; above 1 is boosted through Web Audio, like VLC's 200%
+  let aspect = 'default';
+  let rate = 1;
+
+  // Resume only once this much is buffered ahead, so a slow connection gets fewer, shorter pauses.
+  const RESUME_AHEAD = 4;
+  const LOW_AHEAD = 0.4;
+  const START_AHEAD = 2;
+  const STEP_DOWN_AFTER_MS = 3000;   // one stall this long → lower quality
+  const STEP_DOWN_LOADING_MS = 10000; // after a load/seek, allow longer before blaming the connection
+  const STALLS_PER_MINUTE = 3;       // or this many short ones
+
+  // Element volume stays at 1; loudness comes from the gain node so it can go past 100%.
+  const ctx = new AudioContext({ latencyHint: 'playback' });
+  const gain = ctx.createGain();
+  ctx.createMediaElementSource(v).connect(gain);
+  ctx.createMediaElementSource(a).connect(gain);
+  gain.connect(ctx.destination);
+  v.volume = a.volume = 1;
+  const resumeAudio = () => { if (ctx.state !== 'running') ctx.resume().catch(() => {}); };
+  function setLevel(x) { level = Math.max(0, Math.min(2, x)); gain.gain.value = level; }
+
+  // ---------- buffering ----------
+  function bufferedAhead(el) {
+    const t = el.currentTime, b = el.buffered;
+    for (let i = 0; i < b.length; i++) if (b.start(i) <= t + 0.2 && b.end(i) >= t) return b.end(i) - t;
+    return 0;
+  }
+  function hasAhead(el, need) {
+    if (!el.src) return true;
+    const left = (isFinite(el.duration) ? el.duration : Infinity) - el.currentTime;
+    if (left <= need + 0.25) return el.readyState >= 2;
+    return el.readyState >= 3 && bufferedAhead(el) >= need;
+  }
+  const tracks = () => (split ? [v, a] : [v]);
+  function holdAll() { for (const el of tracks()) if (!el.paused) el.pause(); }
+
+  function tick() {
+    if (!current) return;
+    if (!wantPlay) { holdAll(); if (stalled) { stalled = false; push(); } return; }
+    if (v.ended) return;
+    const now = performance.now();
+    const need = !stalled ? LOW_AHEAD : loadingPhase ? START_AHEAD : RESUME_AHEAD;
+    if (!tracks().every(el => hasAhead(el, need))) {
+      if (!stalled) {
+        stalled = true; stallSince = now; stallLog.push(now);
+        holdAll(); push();
+      } else if (canStepDown() && now - stallSince > (loadingPhase ? STEP_DOWN_LOADING_MS : STEP_DOWN_AFTER_MS)) {
+        stepDown();
+      }
+      return;
+    }
+    if (stalled) { stalled = false; loadingPhase = false; push(); }
+    stallLog = stallLog.filter(t => now - t < 60000);
+    if (canStepDown() && stallLog.length >= STALLS_PER_MINUTE) { stepDown(); return; }
+
+    resumeAudio();
+    if (v.paused) v.play().catch(() => {});
+    if (split) {
+      if (a.paused && !a.ended) a.play().catch(() => {});
+      // Nudge the audio speed to close small drift instead of seeking (seeking is what repeats words).
+      const drift = a.currentTime - v.currentTime;
+      if (Math.abs(drift) > 1) a.currentTime = v.currentTime;
+      else if (Math.abs(drift) > 0.06) a.playbackRate = rate * (drift > 0 ? 0.97 : 1.03);
+      else if (a.playbackRate !== rate) a.playbackRate = rate;
+    }
+  }
+  setInterval(tick, 150);
+
+  // ---------- quality ----------
+  const canStepDown = () => autoQuality && ladder && qIndex < ladder.length - 1;
+  function stepDown() { setQuality(qIndex + 1, true); }
+
+  function setSources(videoUrl, audioUrl, at) {
+    split = !!audioUrl;
+    holdAll();
+    v.src = videoUrl;
+    if (split) a.src = audioUrl; else { a.removeAttribute('src'); }
+    v.load(); a.load();
+    if (at) {
+      v.addEventListener('loadedmetadata', () => { v.currentTime = at; }, { once: true });
+      if (split) a.addEventListener('loadedmetadata', () => { a.currentTime = at; }, { once: true });
+    }
+    v.playbackRate = a.playbackRate = rate;
+    v.loop = a.loop = loopOn;
+    beginLoading();
+    stallLog = [];
+  }
+  function beginLoading() { stalled = true; loadingPhase = true; stallSince = performance.now(); }
+
+  function setQuality(i, automatic) {
+    if (!ladder || !ladder[i]) return;
+    const at = v.currentTime;
+    qIndex = i;
+    setSources(ladder[i].video, ladder[i].audio, at);
+    push({ qualityChanged: automatic ? 'auto' : 'manual' });
+  }
+
+  // ---------- layout: VLC-style forced aspect ratio ----------
+  function layout() {
+    const W = innerWidth, H = innerHeight;
+    const s = v.style;
+    if (aspect === 'default' || aspect === 'fill' || aspect === 'crop') {
+      Object.assign(s, { left: '0', top: '0', width: W + 'px', height: H + 'px' });
+      s.objectFit = aspect === 'fill' ? 'fill' : aspect === 'crop' ? 'cover' : 'contain';
+      return;
+    }
+    const [x, y] = aspect.split(':').map(Number);
+    const r = x / y;
+    let w = W, h = W / r;
+    if (h > H) { h = H; w = H * r; }
+    Object.assign(s, { left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px', width: w + 'px', height: h + 'px', objectFit: 'fill' });
+  }
+  addEventListener('resize', layout);
+
+  // ---------- state ----------
+  function setBlack(on) { blackOn = on; black.classList.toggle('off', !on); push(); }
+
+  let loopOn = false;
+  function push(extra) {
+    api.sendState({
+      loaded: !!current,
+      path: current?.path ?? null,
+      paused: !wantPlay,
+      ended: v.ended,
+      time: v.currentTime || 0,
+      duration: isFinite(v.duration) ? v.duration : 0,
+      volume: level,
+      muted: v.muted,
+      rate,
+      loop: loopOn,
+      black: blackOn,
+      aspect,
+      buffering: wantPlay && stalled,
+      quality: ladder ? ladder[qIndex].label : null,
+      qualities: ladder ? ladder.map(q => q.label) : null,
+      autoQuality,
+      error: v.error ? (v.error.message || String(v.error.code)) : (split && a.error ? 'audio: ' + (a.error.message || a.error.code) : null),
+      ...extra,
+    });
+  }
+
+  const handlers = {
+    load({ path, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt }) {
+      current = { path };
+      ladder = lad && lad.length ? lad : null;
+      if (ladder) {
+        autoQuality = quality == null || quality === 'auto';
+        // Auto starts at 720p: sharp on a projector and much easier on the connection than 1080p.
+        const pick = autoQuality ? '720p' : quality;
+        qIndex = Math.max(0, ladder.findIndex(q => q.label === pick));
+        setSources(ladder[qIndex].video, ladder[qIndex].audio, startAt);
+      } else {
+        setSources(url, audioUrl, startAt);
+      }
+      if (volume != null) setLevel(volume);
+      if (muted != null) v.muted = a.muted = muted;
+      wantPlay = !!autoplay;
+      setBlack(false);
+      resumeAudio();
+      push();
+    },
+    play() { if (!current) return; if (v.ended) { v.currentTime = 0; if (split) a.currentTime = 0; } wantPlay = true; setBlack(false); tick(); push(); },
+    pause() { wantPlay = false; holdAll(); push(); },
+    toggle() { if (current) (wantPlay ? handlers.pause : handlers.play)(); },
+    stop() { wantPlay = false; holdAll(); v.currentTime = 0; if (split) a.currentTime = 0; setBlack(true); },
+    seek({ t }) {
+      if (!current) return;
+      t = Math.max(0, Math.min(t, v.duration || t));
+      v.currentTime = t; if (split) a.currentTime = t;
+      if (bufferedAhead(v) < START_AHEAD) { beginLoading(); holdAll(); }
+      push();
+    },
+    seekBy({ d }) { if (current) handlers.seek({ t: v.currentTime + d }); },
+    volume({ v: vol }) { setLevel(vol); if (vol > 0) v.muted = a.muted = false; push(); },
+    mute({ m }) { v.muted = a.muted = m ?? !v.muted; push(); },
+    black({ on }) { setBlack(on ?? !blackOn); },
+    rate({ r }) { rate = r; v.playbackRate = a.playbackRate = r; push(); },
+    loop({ on }) { loopOn = on; v.loop = a.loop = on; push(); },
+    aspect({ mode }) { aspect = mode; layout(); push(); },
+    quality({ q }) {
+      if (!ladder) return;
+      if (q === 'auto') { autoQuality = true; push(); return; }
+      autoQuality = false;
+      const i = ladder.findIndex(x => x.label === q);
+      if (i >= 0 && i !== qIndex) setQuality(i, false); else push();
+    },
+    blackOnEnd({ on }) { blackOnEnd = on; },
+    async sink({ id }) { try { await ctx.setSinkId(id || ''); } catch (e) { console.error(e); } },
+  };
+
+  api.onCmd(cmd => handlers[cmd.type]?.(cmd));
+
+  for (const ev of ['seeked', 'loadedmetadata', 'error', 'emptied']) v.addEventListener(ev, () => push());
+  a.addEventListener('error', () => push());
+  v.addEventListener('ended', () => {
+    wantPlay = false; holdAll();
+    if (blackOnEnd) setBlack(true); else push();
+  });
+  setInterval(() => { if (wantPlay) push(); }, 250);
+
+  // Keys pressed while the projector window has focus go to the control window.
+  window.addEventListener('keydown', e => {
+    e.preventDefault();
+    api.sendOutputKey({ key: e.key, code: e.code, shift: e.shiftKey, ctrl: e.ctrlKey });
+  });
+  layout();
+  push();
+</script>
+</body>
+</html>
