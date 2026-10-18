@@ -5,7 +5,7 @@
 <h1 align="center">Ma3madan Video Presenter</h1>
 
 <p align="center">
-  A video player for church services, youth meetings and events.<br>
+  A two-screen video player for services, meetings, classes and events.<br>
   The controls stay on your laptop and the projector shows only the video, like PowerPoint's Presenter View.
 </p>
 
@@ -15,7 +15,19 @@
 
 ![Screenshot](docs/screenshot.png)
 
-*Ma3madan* (المعمدان) means "the Baptist". The app was made for a church named after St. John the Baptist, and it's free for any church or group to use.
+## Why this app?
+
+Showing a video to an audience usually looks like this:
+
+- You download the YouTube video first, or play it straight from YouTube in a browser.
+- The audience sees everything on your screen: the pause icon, the progress bar, the mouse cursor, YouTube's title bar, suggested videos at the end, sometimes ads.
+- To pause, skip or change the volume, you have to click on the same screen everyone is watching.
+
+Ma3madan Video Presenter keeps those two things apart. The projector only ever shows the video (or a clean black screen). Every control stays on your laptop, together with a live preview of exactly what the audience sees. You can pause, seek, fix the volume or get the next video ready, and none of it shows up on the big screen. The result is a smooth, professional flow from one video to the next.
+
+It plays your own video files, and YouTube links either streamed directly or downloaded first. In both cases YouTube's page, ads and suggestions never reach the projector.
+
+*Ma3madan* (المعمدان) means "the Baptist". The app was originally made for **St. John the Baptist Church in Qalyub, Al-Qalyubia, Egypt**. It's free for anyone to use, for anything.
 
 ## Features
 
@@ -141,4 +153,10 @@ Only use YouTube content you have the right to show, and follow YouTube's Terms 
 
 ## License
 
-Public domain ([The Unlicense](LICENSE)). Use it, copy it, change it, share it with other churches. No credit needed.
+Free to use for any person or organization, for any purpose: use it, copy it, change it and share it ([MIT License](LICENSE)).
+
+The app is provided as is, without warranty of any kind, and may contain bugs. Please try it before relying on it at an important event. If you find a problem, [open an issue](https://github.com/michaelsaad/ma3madan-video-presenter/issues).
+
+---
+
+<p align="center">Developed by Michael Saad · © 2026</p>

@@ -24,7 +24,7 @@
   "author": {
     "name": "Ma3madan Video Presenter"
   },
-  "license": "Unlicense",
+  "license": "MIT",
   "devDependencies": {
     "electron": "^38.8.6",
     "electron-builder": "^26.15.3",
