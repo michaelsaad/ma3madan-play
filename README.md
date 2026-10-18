@@ -5,8 +5,8 @@
 <h1 align="center">Ma3madan Video Presenter</h1>
 
 <p align="center">
-  A two-screen video player for services, meetings, classes and events.<br>
-  The controls stay on your laptop and the projector shows only the video, like PowerPoint's Presenter View.
+  <b>PowerPoint's Presenter View, for videos.</b><br>
+  The audience sees only the video. You see everything else.
 </p>
 
 <p align="center">
@@ -17,15 +17,21 @@
 
 ## Why this app?
 
-Showing a video to an audience usually looks like this:
+When you present slides, PowerPoint gives you **Presenter View**. The projector shows the slide; your laptop shows the notes, the next slide and the timer. Nobody in the room sees you working.
 
-- You download the YouTube video first, or play it straight from YouTube in a browser.
-- The audience sees everything on your screen: the pause icon, the progress bar, the mouse cursor, YouTube's title bar, suggested videos at the end, sometimes ads.
-- To pause, skip or change the volume, you have to click on the same screen everyone is watching.
+Videos never got that. Playing a video for an audience usually goes like this:
 
-Ma3madan Video Presenter keeps those two things apart. The projector only ever shows the video (or a clean black screen). Every control stays on your laptop, together with a live preview of exactly what the audience sees. You can pause, seek, fix the volume or get the next video ready, and none of it shows up on the big screen. The result is a smooth, professional flow from one video to the next.
+- 🖱️ You drag a player window onto the projector and everyone watches your mouse hunt for the full-screen button.
+- ⏸️ You pause, and a giant pause icon and progress bar sit on the big screen.
+- 🔊 You turn the volume up, and a volume overlay pops up for everyone.
+- 📺 You play from YouTube, and the room gets the title bar, the controls, an ad, and a wall of suggested videos when it ends.
+- ⏳ You download first, then hunt for the file in a folder… on the projector.
 
-It plays your own video files, and YouTube links either streamed directly or downloaded first. In both cases YouTube's page, ads and suggestions never reach the projector.
+**Ma3madan Video Presenter is Presenter View for video.** The projector only ever shows the video, or a clean black screen. Everything else stays on your laptop: the playlist, the controls, the volume, YouTube links, and a live preview of exactly what the audience sees. Pause, seek, boost the volume, line up the next clip, swap a YouTube link: none of it ever reaches the big screen.
+
+What the audience gets is a smooth, distraction-free flow from one video to the next, the way a professional production feels.
+
+It plays your own video files and YouTube links, streamed directly or downloaded first. Either way, YouTube's page, ads and suggestions never reach the projector.
 
 *Ma3madan* (المعمدان) means "the Baptist". The app was originally made for **St. John the Baptist Church in Qalyub, Al-Qalyubia, Egypt**. It's free for anyone to use, for anything.
 
