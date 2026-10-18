@@ -22,6 +22,14 @@
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
   <symbol id="i-yt" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4" fill="currentColor"/><path d="M10 9v6l5-3z" fill="#0f1115"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-win-min" viewBox="0 0 24 24"><path d="M6 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-win-max" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></symbol>
+  <symbol id="i-win-restore" viewBox="0 0 24 24"><rect x="5.5" y="8.5" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8.5 8.5V7a1.5 1.5 0 0 1 1.5-1.5h7A1.5 1.5 0 0 1 18.5 7v7a1.5 1.5 0 0 1-1.5 1.5h-1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></symbol>
+  <symbol id="i-win-close" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 19h14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="17.5" cy="16" r="2.5" fill="currentColor"/></symbol>
+  <symbol id="i-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
 </svg>
 
@@ -36,12 +44,18 @@
   </label>
   <button id="fullBtn" class="ghost" data-i18n-title="fullTitle"><svg><use href="#i-full"/></svg><span></span></button>
   <button id="langBtn" class="ghost"><svg><use href="#i-globe"/></svg><span></span></button>
+  <div class="win-controls">
+    <button id="winMin" data-i18n-title="tMinimize"><svg><use href="#i-win-min"/></svg></button>
+    <button id="winMax" data-i18n-title="tMaximize"><svg><use href="#i-win-max"/></svg></button>
+    <button id="winClose" class="close" data-i18n-title="tClose"><svg><use href="#i-win-close"/></svg></button>
+  </div>
 </header>
 
 <main>
   <section class="stage">
     <div class="preview-wrap">
       <div class="preview">
+        <div id="audioBadge" class="audio-badge" hidden><svg><use href="#i-music"/></svg><span data-i18n="audioOnly"></span></div>
         <video id="preview" muted autoplay playsinline></video>
       </div>
     </div>
@@ -106,7 +120,7 @@
       <svg class="yt-ico"><use href="#i-yt"/></svg>
       <input id="ytUrl" type="text" dir="ltr" data-i18n-ph="ytPlaceholder" autocomplete="off" spellcheck="false">
       <button type="submit" id="streamBtn" class="primary" data-i18n="stream" data-i18n-title="tStream"></button>
-      <button type="submit" id="downloadBtn" data-i18n="download" data-i18n-title="tDownload"></button>
+      <button type="button" id="downloadBtn" class="split" data-i18n-title="tDownload"><span data-i18n="download"></span><svg><use href="#i-caret"/></svg></button>
     </form>
     <div class="side-actions">
       <button id="addFilesBtn" class="ghost"><svg><use href="#i-add"/></svg><span data-i18n="addVideos"></span></button>

@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('api', {
   onOpenFiles: fn => on('open-files', fn),
   outputSourceId: () => ipcRenderer.invoke('output-source-id'),
 
+  // window buttons
+  winAction: action => ipcRenderer.send('win', action),
+  winIsMaximized: () => ipcRenderer.invoke('win-is-maximized'),
+  onWinMaximized: fn => on('win-maximized', fn),
+
   // displays
   getDisplays: () => ipcRenderer.invoke('get-displays'),
   onDisplays: fn => on('displays', fn),
@@ -34,11 +39,11 @@ contextBridge.exposeInMainWorld('api', {
   showInFolder: p => ipcRenderer.send('show-in-folder', p),
 
   // youtube
-  downloadStart: (id, url) => ipcRenderer.send('download-start', { id, url }),
+  downloadStart: (id, url, kind) => ipcRenderer.send('download-start', { id, url, kind }),
   downloadCancel: id => ipcRenderer.send('download-cancel', id),
   onDownload: fn => on('download', fn),
   updateYtdlp: () => ipcRenderer.invoke('ytdlp-update'),
-  onYtdlpSetup: fn => on('ytdlp-setup', fn),
+  onToolSetup: fn => on('tool-setup', fn),
   resolveStream: (url, force) => ipcRenderer.invoke('stream-resolve', url, force),
   openExternal: url => ipcRenderer.send('open-external', url),
 });

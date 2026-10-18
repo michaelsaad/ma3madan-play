@@ -1,56 +1,86 @@
 // YouTube support through yt-dlp: downloading to disk, and resolving stream URLs.
 //
-// yt-dlp isn't bundled with the installer. It's fetched from its official GitHub release the first
-// time YouTube is used, checked against the release's SHA-256 list, and kept in userData so
-// `yt-dlp -U` can update it in place.
+// Neither tool is bundled with the installer; each is fetched the first time it's needed, checked
+// against a SHA-256 hash, and kept in userData/bin:
+// - yt-dlp, on first YouTube use, from its official release (hash from the release's SHA2-256SUMS).
+//   Keeping it in userData lets `yt-dlp -U` update it in place.
+// - FFmpeg, only for "Download as MP3", from a pinned ffmpeg-static build (hashes pinned below).
 const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { proxyUrl } = require('./stream-proxy');
 
-const RELEASE = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/';
-const ytdlpPath = () => path.join(app.getPath('userData'), 'bin', 'yt-dlp.exe');
+const binPath = name => path.join(app.getPath('userData'), 'bin', name);
 
+const YTDLP_RELEASE = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/';
+const FFMPEG = {
+  url: 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64.gz',
+  gzSha256: '8883a3dffbd0a16cf4ef95206ea05283f78908dbfb118f73c83f4951dcc06d77',
+  exeSha256: '04e1307997530f9cf2fe35cba2ca7e8875ca91da02f89d6c7243df819c94ad00',
+};
+
+// onSetupProgress(tool, fraction) drives the "Setting up…" toast in the control window.
 let onSetupProgress = () => {};
 function setSetupListener(fn) { onSetupProgress = fn; }
 
-let installing = null;
-function ensureYtdlp() {
-  if (fs.existsSync(ytdlpPath())) return Promise.resolve(ytdlpPath());
-  installing ??= installYtdlp().finally(() => { installing = null; });
-  return installing;
-}
+const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
 
-async function installYtdlp() {
-  onSetupProgress(0);
-  const sums = await fetch(RELEASE + 'SHA2-256SUMS').then(r => (r.ok ? r.text() : ''));
-  const expected = sums.split('\n').map(l => l.trim().split(/\s+/)).find(([, name]) => name === 'yt-dlp.exe')?.[0];
-  if (!expected) throw new Error("Couldn't reach GitHub to set up YouTube support");
-
-  const res = await fetch(RELEASE + 'yt-dlp.exe');
-  if (!res.ok) throw new Error(`yt-dlp download failed (${res.status})`);
+async function fetchWithProgress(url, tool) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${tool} download failed (${res.status})`);
   const total = Number(res.headers.get('content-length')) || 0;
-  const hash = crypto.createHash('sha256');
   const chunks = [];
   let received = 0, lastPct = -1;
   for await (const chunk of res.body) {
     chunks.push(chunk);
-    hash.update(chunk);
     received += chunk.length;
     const pct = total ? Math.floor((received / total) * 100) : 0;
-    if (pct !== lastPct && pct < 100) { lastPct = pct; onSetupProgress(pct / 100); }
+    if (pct !== lastPct && pct < 100) { lastPct = pct; onSetupProgress(tool, pct / 100); }
   }
-  if (hash.digest('hex') !== expected.toLowerCase()) throw new Error('yt-dlp failed its checksum check');
+  return Buffer.concat(chunks);
+}
 
-  const target = ytdlpPath();
+function install(name, data) {
+  const target = binPath(name);
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target + '.part', Buffer.concat(chunks));
+  fs.writeFileSync(target + '.part', data);
   fs.renameSync(target + '.part', target);
-  onSetupProgress(1);
   return target;
 }
+
+const installing = new Map(); // tool -> pending install
+function ensureTool(tool, name, installer) {
+  if (fs.existsSync(binPath(name))) return Promise.resolve(binPath(name));
+  if (!installing.has(tool)) {
+    installing.set(tool, (async () => {
+      onSetupProgress(tool, 0);
+      const target = await installer();
+      onSetupProgress(tool, 1);
+      return target;
+    })().finally(() => installing.delete(tool)));
+  }
+  return installing.get(tool);
+}
+
+const ensureYtdlp = () => ensureTool('ytdlp', 'yt-dlp.exe', async () => {
+  const sums = await fetch(YTDLP_RELEASE + 'SHA2-256SUMS').then(r => (r.ok ? r.text() : ''));
+  const expected = sums.split('\n').map(l => l.trim().split(/\s+/)).find(([, name]) => name === 'yt-dlp.exe')?.[0];
+  if (!expected) throw new Error("Couldn't reach GitHub to set up YouTube support");
+  const exe = await fetchWithProgress(YTDLP_RELEASE + 'yt-dlp.exe', 'ytdlp');
+  if (sha256(exe) !== expected.toLowerCase()) throw new Error('yt-dlp failed its checksum check');
+  return install('yt-dlp.exe', exe);
+});
+
+const ensureFfmpeg = () => ensureTool('ffmpeg', 'ffmpeg.exe', async () => {
+  const gz = await fetchWithProgress(FFMPEG.url, 'ffmpeg');
+  if (sha256(gz) !== FFMPEG.gzSha256) throw new Error('FFmpeg failed its checksum check');
+  const exe = zlib.gunzipSync(gz);
+  if (sha256(exe) !== FFMPEG.exeSha256) throw new Error('FFmpeg failed its checksum check');
+  return install('ffmpeg.exe', exe);
+});
 
 // YouTube needs a JavaScript runtime to solve its player challenges; Electron itself can act as Node.
 const baseArgs = () => [
@@ -68,20 +98,25 @@ function lastError(stderr, code) {
 }
 
 // ---------- downloads ----------
-// Video and audio are saved as two files (Title.mp4 + Title.m4a) and played together, which avoids
-// shipping FFmpeg just to merge them.
+// kind 'video': picture and sound are saved as two files (Title.mp4 + Title.m4a) and played together,
+// which avoids shipping FFmpeg just to merge them.
+// kind 'mp3': the sound only, converted to MP3 with FFmpeg (fetched on first use).
 const downloads = new Map(); // id -> child process
 const canceled = new Set();
 
 // onUpdate receives { status, title?, percent?, speed?, eta?, path?, audioPath?, error? }
-async function download(id, url, outDir, onUpdate) {
+async function download(id, url, outDir, kind, onUpdate) {
   fs.mkdirSync(outDir, { recursive: true });
   onUpdate({ status: 'starting' });
+  const mp3 = kind === 'mp3';
   let proc;
   try {
+    const format = mp3
+      ? ['-f', 'ba', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '--ffmpeg-location', await ensureFfmpeg()]
+      : ['-f', 'bv,ba'];
     proc = await runYtdlp([
       url, ...baseArgs(),
-      '-f', 'bv,ba',
+      ...format,
       '-o', path.join(outDir, '%(title).120B [%(id)s].%(ext)s'),
       '--newline', '--progress', '--no-simulate',
       '--progress-template', 'download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s',
@@ -108,8 +143,10 @@ async function download(id, url, outDir, onUpdate) {
       } else if (line.startsWith('PROG|')) {
         const [, pct, speed, eta] = line.split('|');
         const p = parseFloat(pct);
-        // The video comes first and is most of the size; the audio fills the last 15%.
-        if (!isNaN(p)) onUpdate({ status: 'downloading', percent: video ? 85 + p * 0.15 : p * 0.85, speed: speed?.trim(), eta: eta?.trim() });
+        // For video, the picture comes first and is most of the size; the sound fills the last 15%.
+        // For MP3, the last 10% is left for the conversion.
+        const percent = mp3 ? p * 0.9 : video ? 85 + p * 0.15 : p * 0.85;
+        if (!isNaN(p)) onUpdate({ status: 'downloading', percent, speed: speed?.trim(), eta: eta?.trim() });
       }
     }
   });
@@ -119,7 +156,9 @@ async function download(id, url, outDir, onUpdate) {
   proc.on('close', code => {
     downloads.delete(id);
     if (proc.canceled) onUpdate({ status: 'canceled' });
-    else if (code === 0 && video && fs.existsSync(video)) {
+    else if (code === 0 && mp3 && audio && fs.existsSync(audio)) {
+      onUpdate({ status: 'done', path: audio, audioPath: null, title: title || path.basename(audio) });
+    } else if (code === 0 && video && fs.existsSync(video)) {
       onUpdate({ status: 'done', path: video, audioPath: audio && fs.existsSync(audio) ? audio : null, title: title || path.basename(video) });
     } else onUpdate({ status: 'error', error: lastError(stderr, code) });
   });

@@ -9,6 +9,13 @@
   WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".mkv" "Ma3madan.Video"
   WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".webm" "Ma3madan.Video"
   WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".mov" "Ma3madan.Video"
+  WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".mp3" "Ma3madan.Audio"
+  WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".m4a" "Ma3madan.Audio"
+  WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".wav" "Ma3madan.Audio"
+  WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".aac" "Ma3madan.Audio"
+  WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".ogg" "Ma3madan.Audio"
+  WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".opus" "Ma3madan.Audio"
+  WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".flac" "Ma3madan.Audio"
   WriteRegStr SHCTX "Software\RegisteredApplications" "Ma3madan Video Presenter" "${VP_CAPS}"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 !macroend

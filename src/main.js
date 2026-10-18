@@ -111,6 +111,7 @@ function createControl() {
     ...screen.getPrimaryDisplay().workArea,
     minWidth: 1000,
     minHeight: 640,
+    frame: false, // the header in control.html is the title bar, with its own window buttons
     backgroundColor: '#0f1115',
     title: APP_NAME,
     icon: path.join(__dirname, 'assets', 'app-256.png'),
@@ -122,6 +123,9 @@ function createControl() {
   controlWin.setMenu(null);
   controlWin.maximize();
   controlWin.loadFile(path.join(__dirname, 'control.html'));
+  for (const ev of ['maximize', 'unmaximize']) {
+    controlWin.on(ev, () => controlWin.webContents.send('win-maximized', controlWin.isMaximized()));
+  }
   controlWin.on('closed', () => {
     controlWin = null;
     outputWin?.destroy();
@@ -142,7 +146,7 @@ app.whenReady().then(async () => {
 });
 
 // ---------- files opened from Explorer ("Open with", or as the default video player) ----------
-const MEDIA_RE = /\.(mp4|m4v|mkv|webm|mov|mp3|m4a|wav)$/i;
+const MEDIA_RE = /\.(mp4|m4v|mkv|webm|mov|mp3|m4a|wav|aac|ogg|oga|opus|flac|weba)$/i;
 function filesFromArgv(argv) {
   return argv.slice(1)
     .filter(a => !a.startsWith('-') && MEDIA_RE.test(a))
@@ -162,7 +166,18 @@ app.on('second-instance', (_e, argv) => {
 // ---------- IPC ----------
 // The control window drives the output window by sending commands; the output reports its state back.
 ipcMain.on('cmd', (_e, cmd) => outputWin?.webContents.send('cmd', cmd));
-ipcMain.on('state', (_e, state) => controlWin?.webContents.send('state', state));
+let outputHiddenForAudio = false;
+ipcMain.on('state', (_e, state) => {
+  controlWin?.webContents.send('state', state);
+  // Audio needs no picture. On a single screen the output is a small window in the corner, so
+  // tuck it away while audio plays. On a projector it stays up (black) so the desktop never shows.
+  const singleScreen = pickOutputDisplay().id === screen.getPrimaryDisplay().id && !settings.fullscreenOnPrimary;
+  const hide = !!(state.loaded && state.audioOnly) && singleScreen;
+  if (outputWin && hide !== outputHiddenForAudio) {
+    outputHiddenForAudio = hide;
+    if (hide) outputWin.hide(); else { outputWin.showInactive(); controlWin?.focus(); }
+  }
+});
 ipcMain.on('output-key', (_e, key) => controlWin?.webContents.send('output-key', key));
 ipcMain.handle('output-is-ready', () => outputReady);
 ipcMain.handle('output-source-id', () => outputWin?.getMediaSourceId() ?? null);
@@ -180,6 +195,14 @@ ipcMain.on('toggle-output-fullscreen', () => {
   controlWin?.focus();
 });
 
+ipcMain.on('win', (_e, action) => {
+  if (!controlWin) return;
+  if (action === 'minimize') controlWin.minimize();
+  else if (action === 'maximize') controlWin.isMaximized() ? controlWin.unmaximize() : controlWin.maximize();
+  else if (action === 'close') controlWin.close();
+});
+ipcMain.handle('win-is-maximized', () => controlWin?.isMaximized() ?? false);
+
 ipcMain.handle('get-settings', () => settings);
 ipcMain.on('set-setting', (_e, key, value) => { settings[key] = value; saveSettings(); });
 
@@ -196,7 +219,7 @@ ipcMain.handle('pick-files', async (_e, title) => {
     title,
     properties: ['openFile', 'multiSelections'],
     filters: [
-      { name: 'Video', extensions: ['mp4', 'mkv', 'webm', 'mov', 'm4v', 'mp3', 'm4a', 'wav'] },
+      { name: 'Video and audio', extensions: ['mp4', 'mkv', 'webm', 'mov', 'm4v', 'mp3', 'm4a', 'wav', 'aac', 'ogg', 'oga', 'opus', 'flac', 'weba'] },
       { name: 'All files', extensions: ['*'] },
     ],
   });
@@ -211,12 +234,12 @@ ipcMain.on('show-in-folder', (_e, p) => shell.showItemInFolder(p));
 ipcMain.on('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 
 // YouTube
-ipcMain.on('download-start', (_e, { id, url }) =>
-  youtube.download(id, url, videosDir(), data => controlWin?.webContents.send('download', { id, ...data })));
+ipcMain.on('download-start', (_e, { id, url, kind }) =>
+  youtube.download(id, url, videosDir(), kind, data => controlWin?.webContents.send('download', { id, ...data })));
 ipcMain.on('download-cancel', (_e, id) => youtube.cancelDownload(id));
 ipcMain.handle('stream-resolve', async (_e, url, force) => {
   try { return { ok: true, ...(await youtube.resolveStream(url, force)) }; }
   catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('ytdlp-update', () => youtube.updateYtdlp());
-youtube.setSetupListener(progress => controlWin?.webContents.send('ytdlp-setup', progress));
+youtube.setSetupListener((tool, progress) => controlWin?.webContents.send('tool-setup', { tool, progress }));

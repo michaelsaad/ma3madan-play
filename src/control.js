@@ -46,6 +46,16 @@ function setLang(lang) {
 }
 $('langBtn').onclick = () => setLang(LANG === 'en' ? 'ar' : 'en');
 
+// ---------- window buttons (the window has no system title bar) ----------
+$('winMin').onclick = () => api.winAction('minimize');
+$('winMax').onclick = () => api.winAction('maximize');
+$('winClose').onclick = () => api.winAction('close');
+function renderMaximized(max) {
+  setIcon($('winMax'), max ? 'i-win-restore' : 'i-win-max');
+  $('winMax').title = t(max ? 'tRestore' : 'tMaximize');
+}
+api.onWinMaximized(renderMaximized);
+
 // ---------- playlist ----------
 const save = () => api.savePlaylist(items);
 
@@ -69,19 +79,25 @@ function renderList() {
     li.draggable = true;
     li.dataset.id = it.id;
     const idx = it.id === playingId ? '<svg><use href="#i-play"/></svg>' : (i + 1);
+    const kind = it.source === 'stream' ? t('streamOnline') : it.source === 'youtube' ? t('youtube') : '';
     const sub = it.loading ? t('loading') : it.missing ? t('fileMissing')
-      : it.source === 'stream' ? t('streamOnline') : it.source === 'youtube' ? t('youtube') : '';
+      : [kind, isAudio(it) ? t('audioLabel') : ''].filter(Boolean).join(' · ');
     li.innerHTML = `
       <span class="item-idx">${idx}</span>
       <span style="min-width:0"><div class="item-title" dir="auto" title="${escapeHtml(it.path)}">${escapeHtml(it.title)}</div>${sub ? `<div class="item-sub">${sub}</div>` : ''}</span>
       <span class="item-dur" dir="ltr">${it.duration ? fmt(it.duration) : ''}</span>
-      <button class="item-del" title="${escapeHtml(t('removeFromList'))}"><svg><use href="#i-x"/></svg></button>`;
+      <button class="item-more" title="${escapeHtml(t('more'))}"><svg><use href="#i-more"/></svg></button>`;
     li.addEventListener('click', e => {
-      if (e.target.closest('.item-del')) { removeItem(it.id); return; }
       selectedId = it.id; renderList();
+      const more = e.target.closest('.item-more');
+      if (more) { const r = more.getBoundingClientRect(); showItemMenu(it, r.left, r.bottom + 4); }
     });
-    li.addEventListener('dblclick', e => { if (!e.target.closest('.item-del')) playItem(it); });
-    li.addEventListener('contextmenu', () => it.source === 'stream' ? api.openExternal(it.url) : api.showInFolder(it.path));
+    li.addEventListener('dblclick', e => { if (!e.target.closest('.item-more')) playItem(it); });
+    li.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      selectedId = it.id; renderList();
+      showItemMenu(it, e.clientX, e.clientY);
+    });
 
     li.addEventListener('dragstart', e => { e.dataTransfer.setData('text/x-item', it.id); e.dataTransfer.effectAllowed = 'move'; });
     li.addEventListener('dragover', e => {
@@ -104,6 +120,53 @@ function renderList() {
   $('emptyList').style.display = items.length ? 'none' : 'block';
   $('listCount').textContent = items.length ? (items.length === 1 ? t('videoOne') : t('videosCount', { n: items.length })) : '';
   renderNow();
+}
+
+const AUDIO_RE = /\.(mp3|m4a|wav|aac|ogg|oga|opus|flac|weba)$/i;
+const isAudio = it => it.source !== 'stream' && AUDIO_RE.test(it.path);
+
+// ---------- pop-up menu (playlist items, Download button) ----------
+// entries: [{ label, icon?, action, danger? }] with '-' for a divider.
+function showMenu(x, y, entries) {
+  closeMenu();
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.id = 'menu';
+  for (const e of entries) {
+    if (e === '-') { menu.appendChild(Object.assign(document.createElement('hr'), {})); continue; }
+    const b = document.createElement('button');
+    b.className = e.danger ? 'danger' : '';
+    b.innerHTML = `${e.icon ? `<svg><use href="#${e.icon}"/></svg>` : '<i></i>'}<span>${escapeHtml(e.label)}</span>`;
+    b.onclick = () => { closeMenu(); e.action(); };
+    menu.appendChild(b);
+  }
+  document.body.appendChild(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
+  menu.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+  menu.querySelector('button')?.focus();
+}
+function closeMenu() { document.getElementById('menu')?.remove(); }
+document.addEventListener('mousedown', e => { if (!e.target.closest('#menu')) closeMenu(); });
+window.addEventListener('blur', closeMenu);
+window.addEventListener('resize', closeMenu);
+
+function showItemMenu(it, x, y) {
+  const entries = [{ label: t('menuPlay'), icon: 'i-play', action: () => playItem(it) }, '-'];
+  if (it.source === 'stream') {
+    entries.push(
+      { label: t('menuDownloadVideo'), icon: 'i-download', action: () => startDownload(it.url, 'video', { replaceId: it.id, title: it.title }) },
+      { label: t('menuDownloadMp3'), icon: 'i-music', action: () => startDownload(it.url, 'mp3', { afterId: it.id, title: it.title }) },
+      { label: t('menuOpenLink'), icon: 'i-yt', action: () => api.openExternal(it.url) });
+  } else {
+    entries.push({ label: t('menuShowFile'), icon: 'i-folder', action: () => api.showInFolder(it.path) });
+    if (it.url) {
+      if (!isAudio(it)) entries.push({ label: t('menuDownloadMp3'), icon: 'i-music', action: () => startDownload(it.url, 'mp3', { afterId: it.id, title: it.title }) });
+      entries.push({ label: t('menuOpenLink'), icon: 'i-yt', action: () => api.openExternal(it.url) });
+    }
+  }
+  entries.push('-', { label: t('removeFromList'), icon: 'i-x', danger: true, action: () => removeItem(it.id) });
+  showMenu(x, y, entries);
 }
 
 function removeItem(id) {
@@ -154,7 +217,7 @@ async function playItem(it, { autoplay = true, force = false, startAt = 0 } = {}
   } else {
     src = { path: it.path, url: await api.fileUrl(it.path), audioUrl: it.audioPath ? await api.fileUrl(it.audioPath) : null };
   }
-  cmd('load', { ...src, autoplay, startAt, volume: settings.volume ?? 1, muted: !!settings.muted });
+  cmd('load', { ...src, audio: isAudio(it), autoplay, startAt, volume: settings.volume ?? 1, muted: !!settings.muted });
   cmd('rate', { r: parseFloat($('rateSel').value) });
   cmd('loop', { on: $('loopChk').checked });
   renderList();
@@ -199,6 +262,13 @@ function setAspect(a, announce) {
   if (announce) toast(t('aspectToast', { a: aspectLabel(a) }));
 }
 
+// Swap a button's icon in place. Rebuilding the button's contents on every state update (4× a second
+// while playing) dropped clicks that landed mid-swap.
+function setIcon(btn, id) {
+  const use = btn.querySelector('use');
+  if (use.getAttribute('href') !== '#' + id) use.setAttribute('href', '#' + id);
+}
+
 // Range inputs draw their filled part from --p (0–100).
 function setFill(input) {
   input.style.setProperty('--p', ((input.value - input.min) / (input.max - input.min)) * 100 + '%');
@@ -211,7 +281,7 @@ function renderVolume(v, muted) {
   vol.classList.toggle('boost', v > 1);
   $('volPct').textContent = muted ? t('muted') : Math.round(v * 100) + '%';
   $('volPct').classList.toggle('boost', !muted && v > 1);
-  $('muteBtn').innerHTML = `<svg><use href="#${muted || v === 0 ? 'i-mute' : 'i-vol'}"/></svg>`;
+  setIcon($('muteBtn'), muted || v === 0 ? 'i-mute' : 'i-vol');
 }
 
 function renderNow() {
@@ -223,7 +293,7 @@ function renderNow() {
 }
 
 function renderState() {
-  $('playBtn').innerHTML = `<svg><use href="#${out.paused ? 'i-play' : 'i-pause'}"/></svg>`;
+  setIcon($('playBtn'), out.paused ? 'i-play' : 'i-pause');
   if (!seeking) {
     $('seek').value = out.duration ? Math.round((out.time / out.duration) * 1000) : 0;
     $('tCur').textContent = fmt(out.time);
@@ -234,7 +304,8 @@ function renderState() {
   renderQuality();
   $('blackBtn').classList.toggle('on', out.black);
 
-  document.querySelector('.preview').classList.toggle('live', out.loaded && !out.black && !out.paused);
+  document.querySelector('.preview').classList.toggle('live', out.loaded && !out.paused && (out.audioOnly || !out.black));
+  $('audioBadge').hidden = !(out.loaded && out.audioOnly);
   renderNow();
 }
 
@@ -400,17 +471,37 @@ async function addStream(url) {
   toast(t('streamAdded', { t: r.title }));
 }
 
-$('ytForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const url = $('ytUrl').value.trim();
-  if (!/^https?:\/\//i.test(url)) { toast(t('invalidLink')); return; }
-  if (e.submitter?.id === 'streamBtn') { $('ytUrl').value = ''; $('ytUrl').blur(); addStream(url); return; }
+// kind: 'video' or 'mp3'. replaceId turns a stream item into the downloaded file in place;
+// afterId puts the new file right after an item (an MP3 next to its video).
+function startDownload(url, kind, { replaceId, afterId, title } = {}) {
   const id = uid();
-  downloads.set(id, { url, title: url, status: 'starting', percent: 0 });
-  api.downloadStart(id, url);
+  downloads.set(id, { url, kind, replaceId, afterId, title: title || url, status: 'starting', percent: 0 });
+  api.downloadStart(id, url, kind);
+  renderDownloads();
+}
+
+function takeLink() {
+  const url = $('ytUrl').value.trim();
+  if (!/^https?:\/\//i.test(url)) { toast(t('invalidLink')); return null; }
   $('ytUrl').value = '';
   $('ytUrl').blur();
-  renderDownloads();
+  return url;
+}
+
+$('ytForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.submitter?.id === 'downloadBtn') return; // opens its menu instead
+  const url = takeLink();
+  if (url) addStream(url);
+});
+$('downloadBtn').addEventListener('click', e => {
+  e.preventDefault();
+  if (!/^https?:\/\//i.test($('ytUrl').value.trim())) { toast(t('invalidLink')); return; }
+  const r = e.currentTarget.getBoundingClientRect();
+  showMenu(r.left, r.bottom + 4, [
+    { label: t('downloadVideoOpt'), icon: 'i-download', action: () => { const url = takeLink(); if (url) startDownload(url, 'video'); } },
+    { label: t('downloadMp3Opt'), icon: 'i-music', action: () => { const url = takeLink(); if (url) startDownload(url, 'mp3'); } },
+  ]);
 });
 
 api.onDownload(d => {
@@ -419,18 +510,27 @@ api.onDownload(d => {
   Object.assign(cur, d);
   if (d.status === 'done') {
     downloads.delete(d.id);
-    if (!items.some(x => x.path.toLowerCase() === d.path.toLowerCase())) {
-      items.push({ id: uid(), title: d.title, path: d.path, audioPath: d.audioPath, source: 'youtube', url: cur.url });
-      save(); renderList(); probeDurations();
+    const file = { title: d.title, path: d.path, audioPath: d.audioPath, source: 'youtube', url: cur.url };
+    const at = items.findIndex(x => x.id === (cur.replaceId || cur.afterId));
+    if (cur.replaceId && at >= 0) {
+      items[at] = { ...file, id: items[at].id };
+    } else if (!items.some(x => x.path.toLowerCase() === d.path.toLowerCase())) {
+      items.splice(at >= 0 ? at + 1 : items.length, 0, { ...file, id: uid() });
     }
+    save(); renderList(); probeDurations();
     toast(t('downloaded', { t: d.title }));
   }
   if (d.status === 'canceled') downloads.delete(d.id);
   renderDownloads();
 });
 
-// First YouTube use downloads yt-dlp (~17 MB); show it so the wait makes sense.
-api.onYtdlpSetup(p => toast(p >= 1 ? t('ytSetupDone') : t('ytSetup', { n: Math.round(p * 100) })));
+// yt-dlp (~17 MB, first YouTube use) and FFmpeg (~28 MB, first MP3) download on demand; show it.
+api.onToolSetup(({ tool, progress }) => {
+  const done = progress >= 1;
+  toast(tool === 'ffmpeg'
+    ? (done ? t('mp3SetupDone') : t('mp3Setup', { n: Math.round(progress * 100) }))
+    : (done ? t('ytSetupDone') : t('ytSetup', { n: Math.round(progress * 100) })));
+});
 
 function renderDownloads() {
   const box = $('downloads');
@@ -493,6 +593,16 @@ function moveSelection(delta) {
 }
 
 window.addEventListener('keydown', e => {
+  const menu = document.getElementById('menu');
+  if (menu) {
+    const buttons = [...menu.querySelectorAll('button')];
+    const i = buttons.indexOf(document.activeElement);
+    if (e.key === 'Escape') closeMenu();
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') buttons[(i + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length].focus();
+    else if (e.key === 'Enter' && i >= 0) buttons[i].click();
+    e.preventDefault();
+    return;
+  }
   const tag = e.target.tagName;
   if (tag === 'INPUT' && e.target.type === 'text') { if (e.key === 'Escape') e.target.blur(); return; }
   if (tag === 'SELECT') return;
@@ -505,6 +615,10 @@ window.addEventListener('keydown', e => {
   if (handleKey({ code: e.code, shift: e.shiftKey })) e.preventDefault();
 });
 api.onOutputKey(k => handleKey(k));
+// A focused button would also "click" on Space/Enter, toggling twice. Shortcuts own those keys.
+window.addEventListener('keyup', e => { if (e.target.tagName === 'BUTTON' && (e.code === 'Space' || e.code === 'Enter')) e.preventDefault(); });
+// Mouse clicks shouldn't leave buttons focused.
+document.addEventListener('click', e => { if (e.detail > 0) e.target.closest('button')?.blur(); });
 
 // ---------- drag & drop files ----------
 let dragDepth = 0;
@@ -532,6 +646,7 @@ window.addEventListener('drop', e => {
   renderVolume(settings.volume ?? 1, !!settings.muted);
   probeDurations();
   api.getDisplays();
+  renderMaximized(await api.winIsMaximized());
   outputReady = await api.outputIsReady();
   startPreview();
   applyOutputSettings();

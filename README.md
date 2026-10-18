@@ -36,10 +36,12 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 ## Features
 
 - **Two screens.** The projector shows a clean, full-screen video: no controls, no mouse cursor, no pop-ups. Your laptop shows the controls and a live preview of the projector.
-- **Local files.** MP4, MKV, WebM, MOV, plus MP3, M4A and WAV audio. Drag files in or use **Add videos**.
+- **Local files.** MP4, MKV, WebM and MOV video. Drag files in or use **Add videos**.
+- **Audio too.** MP3, WAV, M4A/AAC, FLAC, and WhatsApp voice notes (`.opus`/`.ogg`). Audio plays with sound only: the projector stays black, and with a single screen the output window steps aside.
 - **YouTube.**
   - **Stream** plays a link right away without downloading it. Quality drops automatically when the internet is slow, like on YouTube.
-  - **Download** saves the video to your PC (up to 1080p) so it plays offline.
+  - **Download** saves the video to your PC (up to 1080p) so it plays offline, or just the sound as an **MP3**.
+  - Streamed something and want to keep it? Use the item's **⋯** menu (or right-click) → **Download video** or **Download as MP3**. The same menu opens the file's folder or the YouTube link.
 - **Black screen** (`B`) fades the projector to black at any moment.
 - **Volume up to 200%**, like VLC, for quiet videos in a big hall.
 - **Aspect ratio** (`A`): 16:9, 4:3, 2.35:1, stretch, zoom and more.
@@ -56,7 +58,7 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 
 Prefer not to install? Download **`Ma3madan-Video-Presenter-Portable-x.y.z.exe`** and run it from anywhere, even a USB stick. The portable version can't register itself as a video player.
 
-Requirements: Windows 10 or 11 (64-bit). The installer is about 75 MB and there's nothing else to install. The first time you use a YouTube link, the app sets up [yt-dlp](https://github.com/yt-dlp/yt-dlp) by itself: about 17 MB, downloaded from its official GitHub release and checked against its published SHA-256 checksum.
+Requirements: Windows 10 or 11 (64-bit). The installer is about 75 MB and there's nothing else to install. The first time you use a YouTube link, the app sets up [yt-dlp](https://github.com/yt-dlp/yt-dlp) by itself: about 17 MB, downloaded from its official GitHub release and checked against its published SHA-256 checksum. The first MP3 download sets up [FFmpeg](https://ffmpeg.org/) the same way (about 28 MB, a pinned build checked against a fixed SHA-256).
 
 ### Windows says the file is unsafe
 
@@ -176,6 +178,7 @@ Only files built by this repository's GitHub Actions workflow from its public so
 
 - [Electron](https://www.electronjs.org/) (MIT), bundled
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (Unlicense), downloaded from its official release on first YouTube use
+- [FFmpeg](https://ffmpeg.org/) (GPL), the [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) b6.1.1 build, downloaded only for MP3 conversion. Its source is available from ffmpeg.org.
 
 Only use YouTube content you have the right to show, and follow YouTube's Terms of Service.
 

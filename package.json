@@ -1,6 +1,6 @@
 {
   "name": "ma3madan-video-presenter",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Video player for churches and events: controls on your screen, clean full-screen video on the projector. Plays local files and YouTube.",
   "main": "src/main.js",
   "scripts": {
@@ -65,6 +65,20 @@
         ],
         "name": "Ma3madan.Video",
         "description": "Video",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "mp3",
+          "m4a",
+          "wav",
+          "aac",
+          "ogg",
+          "opus",
+          "flac"
+        ],
+        "name": "Ma3madan.Audio",
+        "description": "Audio",
         "role": "Viewer"
       }
     ],

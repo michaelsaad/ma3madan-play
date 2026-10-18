@@ -33,6 +33,7 @@
   let autoQuality = true;
   let blackOn = true;      // nothing loaded yet → black
   let blackOnEnd = true;
+  let audioOnly = false;   // MP3, voice notes…: sound only, the projector stays black
   let level = 1;           // 0–2; above 1 is boosted through Web Audio, like VLC's 200%
   let aspect = 'default';
   let rate = 1;
@@ -166,6 +167,7 @@
       loop: loopOn,
       black: blackOn,
       aspect,
+      audioOnly,
       buffering: wantPlay && stalled,
       quality: ladder ? ladder[qIndex].label : null,
       qualities: ladder ? ladder.map(q => q.label) : null,
@@ -176,7 +178,8 @@
   }
 
   const handlers = {
-    load({ path, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt }) {
+    load({ path, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt, audio }) {
+      audioOnly = !!audio;
       current = { path };
       ladder = lad && lad.length ? lad : null;
       if (ladder) {
@@ -191,11 +194,11 @@
       if (volume != null) setLevel(volume);
       if (muted != null) v.muted = a.muted = muted;
       wantPlay = !!autoplay;
-      setBlack(false);
+      setBlack(audioOnly);
       resumeAudio();
       push();
     },
-    play() { if (!current) return; if (v.ended) { v.currentTime = 0; if (split) a.currentTime = 0; } wantPlay = true; setBlack(false); tick(); push(); },
+    play() { if (!current) return; if (v.ended) { v.currentTime = 0; if (split) a.currentTime = 0; } wantPlay = true; setBlack(audioOnly); tick(); push(); },
     pause() { wantPlay = false; holdAll(); push(); },
     toggle() { if (current) (wantPlay ? handlers.pause : handlers.play)(); },
     stop() { wantPlay = false; holdAll(); v.currentTime = 0; if (split) a.currentTime = 0; setBlack(true); },
@@ -209,7 +212,7 @@
     seekBy({ d }) { if (current) handlers.seek({ t: v.currentTime + d }); },
     volume({ v: vol }) { setLevel(vol); if (vol > 0) v.muted = a.muted = false; push(); },
     mute({ m }) { v.muted = a.muted = m ?? !v.muted; push(); },
-    black({ on }) { setBlack(on ?? !blackOn); },
+    black({ on }) { setBlack(audioOnly || (on ?? !blackOn)); },
     rate({ r }) { rate = r; v.playbackRate = a.playbackRate = r; push(); },
     loop({ on }) { loopOn = on; v.loop = a.loop = on; push(); },
     aspect({ mode }) { aspect = mode; layout(); push(); },

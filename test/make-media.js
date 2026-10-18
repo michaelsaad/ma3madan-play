@@ -15,4 +15,9 @@ const clip = (name, video, seconds, freq) => execFileSync(ffmpeg, [
 ]);
 clip('sample-1.mp4', 'testsrc2', 20, 440);
 clip('عينة 2.mp4', 'smptebars', 8, 660); // non-Latin name on purpose
+const audio = (name, freq, codec) => execFileSync(ffmpeg, [
+  '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `sine=frequency=${freq}:duration=6`, ...codec, path.join(dir, name),
+]);
+audio('tone.mp3', 520, ['-c:a', 'libmp3lame', '-b:a', '128k']);
+audio('voice-note.opus', 330, ['-c:a', 'libopus', '-b:a', '32k']); // like a WhatsApp voice note
 console.log('test clips written to', dir);

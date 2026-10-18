@@ -83,6 +83,17 @@ module.exports = async ({ getControl, getOutput }) => {
       await wait(4000);
       log('youtube play:'); await outState();
       await shot('4-youtube-playing');
+
+      // Same link as MP3 (fetches FFmpeg on first use)
+      const before = await js('items.length');
+      await js(`startDownload(${JSON.stringify(process.env.VP_YT)}, 'mp3')`);
+      const t0 = Date.now();
+      while (Date.now() - t0 < 240000) {
+        await wait(2000);
+        const s = await js(`JSON.stringify({ n: items.length, dl: [...downloads.values()].map(d => [d.status, d.error]) })`);
+        if (JSON.parse(s).n > before || JSON.parse(s).dl.some(d => d[0] === 'error')) { log('mp3 dl:', s); break; }
+      }
+      log('mp3 item:', await js(`JSON.stringify(items.filter(x => /\\.mp3$/.test(x.path) && x.url).map(x => [x.title, x.path.split(/[\\\\/]/).pop()]))`));
     }
     if (process.env.VP_STREAM) {
       const t0 = Date.now();
@@ -111,6 +122,39 @@ module.exports = async ({ getControl, getOutput }) => {
       await shot('6-throttled');
       dbg.detach();
     }
+    // Real mouse clicks on play/pause while a video plays (each press held ~150 ms, like a person).
+    await js('playItem(items[0])'); await wait(1500);
+    const { x, y } = JSON.parse(await js(`JSON.stringify((b => ({ x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) }))($('playBtn').getBoundingClientRect()))`));
+    let clicksOk = 0;
+    for (let i = 0; i < 10; i++) {
+      const before = await ojs('wantPlay');
+      const wc = getControl().webContents;
+      wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+      await wait(150);
+      wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+      await wait(700);
+      if ((await ojs('wantPlay')) !== before) clicksOk++;
+    }
+    log('play/pause mouse clicks that worked:', clicksOk, '/ 10');
+
+    // Audio files play with sound only; the projector stays black.
+    for (const name of ['tone.mp3', 'voice-note.opus']) {
+      await js(`playItem(items.find(x => x.path.endsWith(${JSON.stringify(name)})))`);
+      await wait(1500);
+      await js(`cmd('black', { on: false })`); await wait(300); // even B must not uncover the projector
+      log(`audio ${name}:`, await ojs(`JSON.stringify({ t: +v.currentTime.toFixed(1), playing: wantPlay, audioOnly, black: blackOn })`),
+        '| rms', await rms(), '| badge shown:', await js(`!$('audioBadge').hidden`), '| output window visible:', getOutput().isVisible());
+    }
+    await shot('7-audio-only');
+    await js('playItem(items[0])'); await wait(1500);
+    log('back to video, output window visible:', getOutput().isVisible());
+
+    // Item menu (⋯ / right-click)
+    await js(`(() => { const li = document.querySelector('.item'); const r = li.getBoundingClientRect(); li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 60, clientY: r.top + 20 })); })()`);
+    await wait(300);
+    log('item menu:', await js(`[...document.querySelectorAll('#menu button')].map(b => b.innerText).join(' | ')`));
+    await shot('8-item-menu');
+    await js('closeMenu()');
     log('DONE');
   } catch (e) {
     log('FAIL', e.stack);
