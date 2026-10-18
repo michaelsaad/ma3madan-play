@@ -21,6 +21,9 @@
     "youtube",
     "yt-dlp"
   ],
+  "author": {
+    "name": "Ma3madan Video Presenter"
+  },
   "license": "Unlicense",
   "devDependencies": {
     "electron": "^38.8.6",
