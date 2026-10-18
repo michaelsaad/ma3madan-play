@@ -1,0 +1,125 @@
+# Builds the Windows installer and portable .exe, signs them through SignPath when it's set up,
+# and attaches them to a draft GitHub release.
+#
+# Release: bump "version" in package.json, commit, then push a matching tag:
+#   git tag v1.2.0 && git push origin v1.2.0
+# Running it by hand (Actions → Release → Run workflow) builds the files as a workflow artifact only.
+#
+# Signing turns on once the SIGNPATH_API_TOKEN secret and the SIGNPATH_ORGANIZATION_ID variable
+# exist (see "Code signing" in README.md). Until then the files are built unsigned.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      SIGNING: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
+      SIGNPATH_PROJECT: ${{ vars.SIGNPATH_PROJECT_SLUG || 'ma3madan-video-presenter' }}
+      SIGNPATH_POLICY: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} doesn't match package.json version $version" }
+
+      # Step 1: the app folder. Its main .exe is signed before the installers are built around it,
+      # so the installed app is signed too.
+      - name: Package the app
+        run: npx electron-builder --win --dir --publish never
+
+      - name: Upload the app for signing
+        if: env.SIGNING == 'true'
+        id: app-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-unsigned
+          path: dist/win-unpacked/
+          if-no-files-found: error
+
+      - name: Sign the app
+        if: env.SIGNING == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT }}
+          signing-policy-slug: ${{ env.SIGNPATH_POLICY }}
+          artifact-configuration-slug: app
+          github-artifact-id: ${{ steps.app-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: dist/win-unpacked-signed
+
+      - name: Use the signed app
+        if: env.SIGNING == 'true'
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force dist/win-unpacked
+          Move-Item dist/win-unpacked-signed dist/win-unpacked
+
+      # Step 2: the installer and the portable .exe, built from the (signed) app folder.
+      - name: Build the installers
+        shell: pwsh
+        run: |
+          npx electron-builder --win nsis portable --prepackaged dist/win-unpacked --publish never
+          New-Item -ItemType Directory release | Out-Null
+          Move-Item dist/*.exe release/
+
+      - name: Upload the installers
+        id: installers-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers${{ env.SIGNING == 'true' && '-unsigned' || '' }}
+          path: release/
+          if-no-files-found: error
+
+      - name: Sign the installers
+        if: env.SIGNING == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT }}
+          signing-policy-slug: ${{ env.SIGNPATH_POLICY }}
+          artifact-configuration-slug: installers
+          github-artifact-id: ${{ steps.installers-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: release-signed
+
+      - name: Use the signed installers
+        if: env.SIGNING == 'true'
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force release
+          Move-Item release-signed release
+
+      - name: Create a draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $signed = if ($env:SIGNING -eq 'true') { 'Signed' } else { 'Unsigned' }
+          gh release create "${{ github.ref_name }}" (Get-ChildItem release/*.exe).FullName `
+            --draft --title "Ma3madan Video Presenter ${{ github.ref_name }}" `
+            --notes "$signed build of ${{ github.ref_name }}. Edit these notes, then publish."

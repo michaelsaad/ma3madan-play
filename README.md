@@ -65,7 +65,7 @@ Edge and Windows SmartScreen warn about any new program that isn't code-signed a
 - **Edge** ("isn't commonly downloaded" / "could harm your device"): open Downloads (`Ctrl + J`), hover over the file, click **⋯** → **Keep** → **Show more** → **Keep anyway**.
 - **Windows SmartScreen** ("Windows protected your PC"): click **More info** → **Run anyway**.
 
-The warnings fade as more people download the app, and go away once releases are code-signed.
+The warnings fade as more people download the app. Signed releases (see [Code signing policy](#code-signing-policy)) build that trust faster and show a verified publisher.
 
 ## Using it with a projector
 
@@ -152,6 +152,25 @@ Other scripts:
 | `build/installer.nsh` | Registers the app under Windows Default apps |
 
 The preview in the control window is a live capture of the projector window, so it always shows exactly what the audience sees.
+
+### Releasing
+
+Releases are built by GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
+
+1. Bump `version` in `package.json` and commit.
+2. Push a matching tag: `git tag v1.2.0 && git push origin v1.2.0`.
+3. The workflow builds the installer and the portable `.exe`, signs them when signing is set up, and creates a **draft** release with both files. Check it, edit the notes, and publish.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [Michael Saad](https://github.com/michaelsaad)
+- Approvers: [Michael Saad](https://github.com/michaelsaad)
+
+Only files built by this repository's GitHub Actions workflow from its public source code are signed. Each signing request is approved by hand.
+
+**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link, and GitHub when it sets up or updates yt-dlp for YouTube support. Settings and the playlist stay on your computer.
 
 ## Third-party software
 

@@ -48,7 +48,8 @@
       "include": "build/installer.nsh",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Ma3madan Video Presenter"
+      "shortcutName": "Ma3madan Video Presenter",
+      "differentialPackage": false
     },
     "portable": {
       "artifactName": "Ma3madan-Video-Presenter-Portable-${version}.${ext}"
