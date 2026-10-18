@@ -242,6 +242,49 @@ module.exports = async ({ getControl, getOutput }) => {
       log('online video → karaoke:', await ojs(`JSON.stringify({ stems: stemsMode, followers: followers.length, mix, w: v.videoWidth })`), '| mixer shown:', await js(`!$('mixer').hidden`));
     }
 
+    // Play given stems and watch each track (VP_STEMS="<source>|<music>|<vocals>").
+    if (process.env.VP_STEMS) {
+      const [source, music, vocals] = process.env.VP_STEMS.split('|');
+      await js(`items.push({ id: 'stemtest', title: 'stem test', path: ${JSON.stringify(source)}, source: 'file', stems: { music: ${JSON.stringify(music)}, vocals: ${JSON.stringify(vocals)} }, stemsOn: true, mix: { music: 0, vocals: 1 } }); renderList(); playItem(items.find(x => x.id === 'stemtest'))`);
+      await wait(1500);
+      for (let i = 0; i < 6; i++) {
+        log('  audio engine:', await ojs(`(() => { if (!window._an2) { window._an2 = ctx.createAnalyser(); a2Gain.connect(window._an2); } const d = new Float32Array(2048); _an2.getFloatTimeDomainData(d); return JSON.stringify({ state: ctx.state, clock: +ctx.currentTime.toFixed(2), vocalsRms: +Math.sqrt(d.reduce((s, x) => s + x * x, 0) / d.length).toFixed(4), visible: document.visibilityState }); })()`));
+        log('  stems:', await ojs(`JSON.stringify({ t: +v.currentTime.toFixed(2), music: [+a.currentTime.toFixed(2), a.paused, a.readyState, aGain.gain.value], vocals: [+a2.currentTime.toFixed(2), a2.paused, a2.readyState, a2Gain.gain.value, a2.error && a2.error.message] })`), '| rms', await rms());
+        await wait(700);
+      }
+    }
+
+    // Online separation with the real key saved by the installed app (VP_ONLINE_REAL=<youtube url>).
+    // The key is copied into this test's settings and never logged.
+    if (process.env.VP_ONLINE_REAL) {
+      const url = process.env.VP_ONLINE_REAL;
+      const real = JSON.parse(fs.readFileSync(path.join(app.getPath('appData'), 'Ma3madan Video Presenter', 'settings.json'), 'utf8'));
+      await js(`for (const [k, v] of [['vocalEngine', 'online'], ['mvsepToken', ${JSON.stringify(real.mvsepToken || '')}]]) { settings[k] = v; api.setSetting(k, v); } addStream(${JSON.stringify(url)})`);
+      const t0 = Date.now();
+      while (Date.now() - t0 < 60000 && await js(`items.some(x => x.loading)`)) await wait(500);
+      await js(`removeVocalsFromStream(items.find(x => x.url === ${JSON.stringify(url)}))`);
+      let last = '';
+      while (Date.now() - t0 < 1200000) {
+        await wait(2000);
+        const s = await js(`JSON.stringify({ item: (it => it && [it.source, !!it.stems])(items.find(x => x.url === ${JSON.stringify(url)})), dl: [...downloads.values()].map(d => d.status), vj: [...vocalJobs.values()].map(j => [j.stage, j.position ?? null, j.progress == null ? null : Math.round(j.progress * 100), j.error]) })`);
+        const st = JSON.parse(s);
+        const key = JSON.stringify([st.item, st.dl, st.vj.map(j => j[0])]);
+        if (key !== last) { log(`  online ${Math.round((Date.now() - t0) / 1000)} s:`, s); last = key; }
+        if (st.item?.[1] || st.vj.some(j => j[0] === 'error')) break;
+      }
+      const it = JSON.parse(await js(`JSON.stringify(items.find(x => x.url === ${JSON.stringify(url)}))`));
+      if (it.stems) {
+        log('online stems:', ['music', 'vocals'].map(k => `${k} ${Math.round(fs.statSync(it.stems[k]).size / 1024)} KB`).join(', '));
+        await js(`playItem(items.find(x => x.url === ${JSON.stringify(url)}), { startAt: 2 })`);
+        await wait(2500);
+        for (const preset of ['karaoke', 'vocals']) {
+          await js(`setMix(PRESETS.${preset})`); await wait(800);
+          log(`  online ${preset}: rms`, await rms());
+        }
+        await shot('12-online-karaoke');
+      }
+    }
+
     // Online path with a bad key: should fail with MVSEP's message and reopen the key window.
     if (process.env.VP_VOCALS || process.env.VP_BADKEY) {
       await js(`for (const [k, v] of [['vocalEngine', 'online'], ['mvsepToken', 'not-a-real-key']]) { settings[k] = v; api.setSetting(k, v); }

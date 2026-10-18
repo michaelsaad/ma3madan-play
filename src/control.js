@@ -322,7 +322,8 @@ function renderNow() {
   $('nowTitle').textContent = out.loaded && it ? it.title : t('nothingPlaying');
   const i = indexOfPlaying();
   const n = i >= 0 ? items.slice(i + 1).find(x => !x.missing) : null;
-  $('nextTitle').textContent = (out.buffering || it?.loading) ? t('loading') : (n ? t('next') + n.title : '');
+  // <bdi> keeps an Arabic (or mixed) title from flipping the "Next:" label around it.
+  $('nextTitle').innerHTML = (out.buffering || it?.loading) ? escapeHtml(t('loading')) : (n ? `<span>${escapeHtml(t('next'))}</span><bdi>${escapeHtml(n.title)}</bdi>` : '');
 }
 
 function renderState() {
