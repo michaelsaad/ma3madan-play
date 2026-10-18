@@ -352,9 +352,36 @@ function renderVolume(v, muted) {
   setIcon($('muteBtn'), muted || v === 0 ? 'i-mute' : 'i-vol');
 }
 
+// The current title fills its own line. A title too long for it fades out at the edge and,
+// on hover, scrolls to show the rest. Only rewritten when it changes, so a hover isn't reset.
+function setNowTitle(text) {
+  const box = $('nowTitle'), span = box.firstElementChild;
+  if (span.textContent === text) return;
+  span.textContent = text;
+  span.style.transition = 'none';
+  span.style.transform = '';
+  requestAnimationFrame(() => box.classList.toggle('overflowing', span.scrollWidth > box.clientWidth + 1));
+}
+$('nowTitle').addEventListener('mouseenter', () => {
+  const box = $('nowTitle'), span = box.firstElementChild;
+  const extra = span.scrollWidth - box.clientWidth;
+  if (extra <= 1) return;
+  const rtl = getComputedStyle(span).direction === 'rtl';
+  span.style.transition = `transform ${Math.max(1.5, extra / 60)}s linear .3s`;
+  span.style.transform = `translateX(${rtl ? extra : -extra}px)`;
+  box.classList.add('scrolled');
+});
+$('nowTitle').addEventListener('mouseleave', () => {
+  const box = $('nowTitle'), span = box.firstElementChild;
+  span.style.transition = 'transform .4s ease';
+  span.style.transform = '';
+  box.classList.remove('scrolled');
+});
+window.addEventListener('resize', () => { const box = $('nowTitle'), s = box.firstElementChild; box.classList.toggle('overflowing', s.scrollWidth > box.clientWidth + 1); });
+
 function renderNow() {
   const it = items.find(x => x.id === playingId);
-  $('nowTitle').textContent = out.loaded && it ? it.title : t('nothingPlaying');
+  setNowTitle(out.loaded && it ? it.title : t('nothingPlaying'));
   const i = indexOfPlaying();
   const n = i >= 0 ? items.slice(i + 1).find(x => !x.missing) : null;
   // <bdi> keeps an Arabic (or mixed) title from flipping the "Next:" label around it.

@@ -207,6 +207,22 @@ module.exports = async ({ getControl, getOutput }) => {
       log('one press delivered twice:', before ? 'playing' : 'paused', '→', (await ojs('wantPlay')) ? 'playing' : 'paused');
     }
 
+    // Now playing: a long title fades at its edge and scrolls on hover (English and Arabic).
+    for (const title of ['A very long English title that certainly does not fit on one line of the now playing area at all, really', 'من قال فكان دون امرك … من امر فصار دون علمك #ترنيمة فريق الحياة الافضل مع المعلم بولا منير وخورس القداس الالهي لعيد الغطاس المجيد 2025 لحن اوران انشوشو']) {
+      await js(`items[0].title = ${JSON.stringify(title)}; playItem(items[0])`); await wait(1200);
+      const box = await js(`(() => { const b = $('nowTitle'), s = b.firstElementChild, r = b.getBoundingClientRect(); return JSON.stringify({ overflowing: b.classList.contains('overflowing'), dir: getComputedStyle(b).direction, box: Math.round(r.width), text: s.scrollWidth, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }); })()`);
+      const b = JSON.parse(box);
+      await shot(`14-title-${/[a-z]/i.test(title[0]) ? 'en' : 'ar'}`);
+      getControl().webContents.sendInputEvent({ type: 'mouseMove', x: b.x, y: b.y });
+      await wait(3500);
+      const moved = await js(`$('nowTitle').firstElementChild.style.transform`);
+      log(`title ${/[a-z]/i.test(title[0]) ? 'en' : 'ar'}:`, box, '| on hover:', moved || 'no move');
+      await shot(`15-title-hover-${/[a-z]/i.test(title[0]) ? 'en' : 'ar'}`);
+      getControl().webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 500 });
+      await wait(600);
+    }
+    log('next line:', await js(`(n => JSON.stringify({ text: n.innerText, size: getComputedStyle(n).fontSize, opacity: getComputedStyle(n).opacity }))($('nextTitle'))`));
+
     // About window from the ⓘ next to the name, with a real update check against GitHub.
     {
       log('ⓘ vs name:', await js(`(() => { const n = document.querySelector('.brand-name').getBoundingClientRect(), b = $('aboutBtn').getBoundingClientRect(); return JSON.stringify({ nameMidY: +(n.top + n.height / 2).toFixed(1), iconMidY: +(b.top + b.height / 2).toFixed(1), gapPx: Math.round(b.left - n.right) }); })()`));

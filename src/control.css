@@ -84,9 +84,14 @@ main { display: grid; grid-template-columns: 1fr 400px; min-height: 0; }
 .preview.live { border-color: var(--live); }
 .preview video { width: 100%; height: 100%; object-fit: contain; display: block; }
 
-.now { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
-.now-title { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.now-next { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Now playing: the title on its own line, "Next" small and faded underneath. */
+.now { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.now-title { font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; cursor: default; }
+.now-title .marquee { display: inline-block; white-space: nowrap; }
+/* A long title fades at its trailing edge until hovered. */
+.now-title.overflowing:not(.scrolled) { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
+.now-title.overflowing:not(.scrolled):has(.marquee:dir(rtl)) { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 48px), transparent); }
+.now-next { font-size: 12.5px; color: var(--muted); opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.3em; }
 
 /* seek */
 .seek { display: flex; align-items: center; gap: 12px; font: 600 14px Consolas, monospace; color: var(--muted); }
