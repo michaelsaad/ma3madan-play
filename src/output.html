@@ -257,9 +257,21 @@
   });
   setInterval(() => { if (wantPlay) push(); }, 250);
 
+  // Keyboard media keys (and Windows' media overlay) talk to this window's media session, not to
+  // our controls; left alone they would pause the <video> behind our back and playback would carry
+  // straight on. Route them to the control window like any other shortcut.
+  const mediaKeys = { play: 'MediaPlay', pause: 'MediaPause', stop: 'MediaStop', nexttrack: 'MediaTrackNext', previoustrack: 'MediaTrackPrevious' };
+  window.mediaKeyHandlers = {};
+  for (const [action, code] of Object.entries(mediaKeys)) {
+    window.mediaKeyHandlers[action] = () => api.sendOutputKey({ code });
+    try { navigator.mediaSession.setActionHandler(action, window.mediaKeyHandlers[action]); } catch {}
+  }
+  setInterval(() => { navigator.mediaSession.playbackState = !current ? 'none' : wantPlay ? 'playing' : 'paused'; }, 250);
+
   // Keys pressed while the projector window has focus go to the control window.
   window.addEventListener('keydown', e => {
     e.preventDefault();
+    if (e.code.startsWith('Media')) return; // already handled through the media session above
     api.sendOutputKey({ key: e.key, code: e.code, shift: e.shiftKey, ctrl: e.ctrlKey });
   });
   layout();

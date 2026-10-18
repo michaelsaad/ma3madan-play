@@ -186,6 +186,62 @@ module.exports = async ({ getControl, getOutput }) => {
       await require(path.join(__dirname, '..', 'src', 'vocals')).saveMix({ music: it.stems.music, vocals: it.stems.vocals, gains: { music: 1, vocals: 0.5 }, dest });
       log('saved mix:', fs.existsSync(dest) ? Math.round(fs.statSync(dest).size / 1024) + ' KB' : 'missing');
     }
+    // Keyboard media keys arrive through the projector window's media session.
+    {
+      await js('playItem(items[0])'); await wait(1500);
+      const states = [];
+      for (const action of ['pause', 'play', 'pause', 'play']) {
+        await ojs(`window.mediaKeyHandlers.${action}()`); await wait(700);
+        states.push(`${action}→${(await ojs('wantPlay')) ? 'playing' : 'paused'}(${await ojs('v.paused') ? 'video paused' : 'video playing'})`);
+      }
+      log('media keys:', states.join(', '), '| OS sees:', await ojs('navigator.mediaSession.playbackState'));
+      await ojs(`window.mediaKeyHandlers.nexttrack()`); await wait(1200);
+      log('media next →', await js(`$('nowTitle').textContent`));
+      const { globalShortcut } = require('electron');
+      log('media keys reserved system-wide:', ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'MediaStop'].map(k => `${k}=${globalShortcut.isRegistered(k)}`).join(' '));
+      // The same press arriving twice (shortcut + media session) must act once.
+      const before = await ojs('wantPlay');
+      getControl().webContents.send('output-key', { code: 'MediaPlayPause' });
+      await ojs(`window.mediaKeyHandlers.${before ? 'pause' : 'play'}()`);
+      await wait(800);
+      log('one press delivered twice:', before ? 'playing' : 'paused', '→', (await ojs('wantPlay')) ? 'playing' : 'paused');
+    }
+
+    // The ⋯ button opens its menu right next to it (real mouse click).
+    {
+      const more = JSON.parse(await js(`JSON.stringify((r => ({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }))(document.querySelector('.item .item-more').getBoundingClientRect()))`));
+      const wc = getControl().webContents;
+      wc.sendInputEvent({ type: 'mouseMove', x: more.x, y: more.y });
+      wc.sendInputEvent({ type: 'mouseDown', x: more.x, y: more.y, button: 'left', clickCount: 1 });
+      wc.sendInputEvent({ type: 'mouseUp', x: more.x, y: more.y, button: 'left', clickCount: 1 });
+      await wait(400);
+      const menu = JSON.parse(await js(`JSON.stringify((m => m ? (r => ({ left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right) }))(m.getBoundingClientRect()) : null)(document.getElementById('menu')))`));
+      log('⋯ at', JSON.stringify(more), '→ menu at', JSON.stringify(menu), menu && Math.abs(menu.top - more.y) < 60 && menu.right > more.x - 260 ? 'OK (next to the button)' : 'WRONG PLACE');
+      await js('closeMenu()');
+    }
+
+    // "Remove vocals" on an online video: download it, then separate on this PC (VP_STREAM_VOCALS=<youtube url>).
+    if (process.env.VP_STREAM_VOCALS) {
+      const url = process.env.VP_STREAM_VOCALS;
+      await js(`for (const [k, v] of [['vocalEngine', 'local']]) { settings[k] = v; api.setSetting(k, v); } addStream(${JSON.stringify(url)})`);
+      const t0 = Date.now();
+      while (Date.now() - t0 < 60000 && await js(`items.some(x => x.loading)`)) await wait(500);
+      log('stream item menu:', await js(`(() => { const it = items.find(x => x.url === ${JSON.stringify(url)}); showItemMenu(it, 100, 100); const s = [...document.querySelectorAll('#menu button')].map(b => b.innerText).join(' | '); closeMenu(); return s; })()`));
+      await js(`removeVocalsFromStream(items.find(x => x.url === ${JSON.stringify(url)}))`);
+      let last = '';
+      while (Date.now() - t0 < 900000) {
+        await wait(2000);
+        const s = await js(`JSON.stringify({ item: (it => it && [it.source, !!it.stems, it.stemsOn])(items.find(x => x.url === ${JSON.stringify(url)})), dl: [...downloads.values()].map(d => d.status), vj: [...vocalJobs.values()].map(j => j.stage) })`);
+        const st = JSON.parse(s);
+        const stage = `${st.item?.[0]} dl=${st.dl.join(',')} vj=${st.vj.join(',')}`;
+        if (stage !== last) { log(`  ${Math.round((Date.now() - t0) / 1000)} s:`, s); last = stage; }
+        if (st.item?.[1] || st.vj.includes('error')) break;
+      }
+      await js(`playItem(items.find(x => x.url === ${JSON.stringify(url)}), { startAt: 3 })`);
+      await wait(2500);
+      log('online video → karaoke:', await ojs(`JSON.stringify({ stems: stemsMode, followers: followers.length, mix, w: v.videoWidth })`), '| mixer shown:', await js(`!$('mixer').hidden`));
+    }
+
     // Online path with a bad key: should fail with MVSEP's message and reopen the key window.
     if (process.env.VP_VOCALS || process.env.VP_BADKEY) {
       await js(`for (const [k, v] of [['vocalEngine', 'online'], ['mvsepToken', 'not-a-real-key']]) { settings[k] = v; api.setSetting(k, v); }

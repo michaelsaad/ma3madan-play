@@ -1,5 +1,5 @@
 // Main process: the control window (operator screen), the output window (projector), and the IPC between them.
-const { app, BrowserWindow, ipcMain, screen, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, dialog, shell, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -139,6 +139,7 @@ app.whenReady().then(async () => {
   await streamProxy.start();
   createControl();
   createOutput();
+  registerMediaKeys();
   // Look for a newer release a little after startup, then every 6 hours.
   if (!process.env.VP_SELFTEST || process.env.VP_FAKE_VERSION) {
     const checkForUpdate = () => updater.check()
@@ -164,6 +165,17 @@ function filesFromArgv(argv) {
     .filter(a => fs.existsSync(a));
 }
 let pendingOpen = filesFromArgv(process.argv);
+
+// Keyboard media keys belong to the presenter while it's open, even when another window is in
+// front or a browser is playing. (The projector window's media session also routes them; the
+// control window's handlers are written so a press arriving both ways still acts once.)
+const MEDIA_KEYS = { MediaPlayPause: 'MediaPlayPause', MediaNextTrack: 'MediaTrackNext', MediaPreviousTrack: 'MediaTrackPrevious', MediaStop: 'MediaStop' };
+function registerMediaKeys() {
+  for (const [accelerator, code] of Object.entries(MEDIA_KEYS)) {
+    globalShortcut.register(accelerator, () => controlWin?.webContents.send('output-key', { code }));
+  }
+}
+app.on('will-quit', () => globalShortcut.unregisterAll());
 
 app.on('second-instance', (_e, argv) => {
   if (!controlWin) return;

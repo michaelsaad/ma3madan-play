@@ -54,8 +54,7 @@ $('modal').addEventListener('keydown', e => {
 // ---------- jobs ----------
 function removeVocals(it) {
   if (jobFor(it)) return;
-  const ready = settings.vocalEngine === 'local' || (settings.vocalEngine === 'online' && settings.mvsepToken);
-  if (!ready) { showVocalSettings(() => removeVocals(it)); return; }
+  if (!vocalEngineReady()) { showVocalSettings(() => removeVocals(it)); return; }
   const id = uid();
   vocalJobs.set(id, { itemId: it.id, title: it.title, stage: 'waiting' });
   // A YouTube download keeps its sound in a separate .m4a; separate that rather than the video.
@@ -123,8 +122,22 @@ function renderVocalJobs() {
 }
 
 // ---------- playlist menu ----------
+const vocalEngineReady = () => settings.vocalEngine === 'local' || (settings.vocalEngine === 'online' && !!settings.mvsepToken);
+
+// An online video is downloaded first (it becomes a saved file in place), then separated.
+function removeVocalsFromStream(it) {
+  if (!vocalEngineReady()) { showVocalSettings(() => removeVocalsFromStream(it)); return; }
+  startDownload(it.url, 'video', { replaceId: it.id, title: it.title, then: 'vocals' });
+  toast(t('vocalsAfterDownload'));
+}
+
 function vocalMenuEntries(it) {
-  if (it.source === 'stream' || it.missing) return [];
+  if (it.missing) return [];
+  if (it.source === 'stream') {
+    return ['-',
+      { label: t('menuRemoveVocals'), icon: 'i-mic', action: () => removeVocalsFromStream(it) },
+      { label: t('menuVocalSettings'), icon: 'i-gear', action: () => showVocalSettings() }];
+  }
   const entries = ['-'];
   const job = jobFor(it);
   if (job) {

@@ -114,9 +114,10 @@ function renderList() {
       <span class="item-dur" dir="ltr">${it.duration ? fmt(it.duration) : ''}</span>
       <button class="item-more" title="${escapeHtml(t('more'))}"><svg><use href="#i-more"/></svg></button>`;
     li.addEventListener('click', e => {
+      // Measure the ⋯ button before the list is redrawn: afterwards it's a detached element at 0,0.
+      const r = e.target.closest('.item-more')?.getBoundingClientRect();
       selectedId = it.id; renderList();
-      const more = e.target.closest('.item-more');
-      if (more) { const r = more.getBoundingClientRect(); showItemMenu(it, r.left, r.bottom + 4); }
+      if (r) showItemMenu(it, r.left, r.bottom + 4);
     });
     li.addEventListener('dblclick', e => { if (!e.target.closest('.item-more')) playItem(it); });
     li.addEventListener('contextmenu', e => {
@@ -506,9 +507,9 @@ async function addStream(url) {
 
 // kind: 'video' or 'mp3'. replaceId turns a stream item into the downloaded file in place;
 // afterId puts the new file right after an item (an MP3 next to its video).
-function startDownload(url, kind, { replaceId, afterId, title } = {}) {
+function startDownload(url, kind, { replaceId, afterId, title, then } = {}) {
   const id = uid();
-  downloads.set(id, { url, kind, replaceId, afterId, title: title || url, status: 'starting', percent: 0 });
+  downloads.set(id, { url, kind, replaceId, afterId, then, title: title || url, status: 'starting', percent: 0 });
   api.downloadStart(id, url, kind);
   renderDownloads();
 }
@@ -552,6 +553,8 @@ api.onDownload(d => {
     }
     save(); renderList(); probeDurations();
     toast(t('downloaded', { t: d.title }));
+    // "Remove vocals" on an online video downloads it first, then carries on here.
+    if (cur.then === 'vocals') { const it = items.find(x => x.id === cur.replaceId) || items.find(x => x.path === d.path); if (it) removeVocals(it); }
   }
   if (d.status === 'canceled') downloads.delete(d.id);
   renderDownloads();
@@ -588,10 +591,24 @@ function renderDownloads() {
 }
 
 // ---------- keyboard ----------
+// One media-key press can arrive twice (system-wide shortcut + the projector's media session); act once.
+let lastMediaKeyAt = 0;
 function handleKey(k) {
+  if (k.code.startsWith('Media')) {
+    const now = performance.now();
+    if (now - lastMediaKeyAt < 400) return true;
+    lastMediaKeyAt = now;
+  }
   const vol = out.muted ? 0 : out.volume;
   switch (k.code) {
     case 'Space': case 'KeyK': togglePlay(); break;
+    // Keyboard media keys, routed here by the projector window's media session.
+    case 'MediaPlayPause': togglePlay(); break;
+    case 'MediaPlay': if (!out.loaded || out.paused) togglePlay(); break;
+    case 'MediaPause': if (out.loaded && !out.paused) cmd('pause'); break;
+    case 'MediaStop': cmd('stop'); break;
+    case 'MediaTrackNext': nextItem(); break;
+    case 'MediaTrackPrevious': prevItem(); break;
     case 'ArrowRight': cmd('seekBy', { d: k.shift ? 30 : 5 }); break;
     case 'ArrowLeft': cmd('seekBy', { d: k.shift ? -30 : -5 }); break;
     case 'KeyL': cmd('seekBy', { d: 10 }); break;
@@ -636,6 +653,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   const tag = e.target.tagName;
+  if (e.code.startsWith('Media')) return; // handled once, through the media session (see output.html)
   if (tag === 'INPUT' && e.target.type === 'text') { if (e.key === 'Escape') e.target.blur(); return; }
   if (tag === 'SELECT') return;
   if (e.ctrlKey || e.altKey || e.metaKey) {
