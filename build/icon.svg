@@ -22,10 +22,10 @@
   <!-- presenter screen (behind) -->
   <rect x="84" y="118" width="236" height="148" rx="20" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="16"/>
 
-  <!-- cross rising above the screens -->
-  <g fill="#fff">
-    <rect x="286" y="46" width="28" height="150" rx="8"/>
-    <rect x="256" y="78" width="88" height="28" rx="8"/>
+  <!-- the dove of the Theophany, descending above the screens (head down, wings up) -->
+  <g fill="#fff" transform="translate(300 74) scale(1.36)">
+    <path d="M0 12 C -8 2 -28 -2 -46 -20 C -26 -18 -14 -13 -6 -7 C -4 -16 -2 -22 0 -28 C 2 -22 4 -16 6 -7 C 14 -13 26 -18 46 -20 C 28 -2 8 2 0 12 Z"/>
+    <circle cx="0" cy="17" r="6"/>
   </g>
 
   <!-- projector screen (front) with the Jordan flowing under the play button -->
@@ -36,6 +36,17 @@
       <path d="M168 326 C 202 312, 234 312, 266 326 S 334 340, 366 326 S 410 314, 432 322 V 354 H 168 Z" fill="#1d4ed8" opacity=".55"/>
     </g>
     <path d="M280 216 L280 278 L334 247 Z" fill="url(#play)" stroke="url(#play)" stroke-width="10" stroke-linejoin="round"/>
+    <!-- hidden in the play button, only noticeable up close: John baptising Christ in the Jordan -->
+    <g fill="#fff" fill-opacity=".72">
+      <circle cx="296" cy="238" r="2.6"/>
+      <rect x="293.8" y="242" width="4.4" height="10" rx="2.2"/>
+      <circle cx="311" cy="238.5" r="2.5"/>
+      <rect x="308.8" y="242.5" width="4.4" height="14" rx="2.2"/>
+    </g>
+    <g fill="none" stroke="#fff" stroke-opacity=".72" stroke-linecap="round">
+      <path d="M309.5 245 C 306 240 302 236.5 299 235.2" stroke-width="1.8"/>
+      <path d="M287.5 254 q 2.2 -1.8 4.4 0 t 4.4 0 t 4.4 0 t 4.4 0" stroke-width="1.5"/>
+    </g>
     <rect x="284" y="354" width="32" height="30" fill="#fff"/>
     <rect x="240" y="378" width="120" height="18" rx="9" fill="#fff"/>
   </g>
