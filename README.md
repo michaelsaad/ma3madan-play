@@ -51,12 +51,21 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 ## Install
 
 1. Download **`Ma3madan-Video-Presenter-Setup-x.y.z.exe`** from the [latest release](https://github.com/michaelsaad/ma3madan-video-presenter/releases/latest).
-2. Run it. Windows SmartScreen may warn you because the app isn't code-signed. Click **More info** → **Run anyway**.
+2. Run it. Because the app is new and not code-signed yet, Edge or Windows may warn you first. See [Windows says the file is unsafe](#windows-says-the-file-is-unsafe) below.
 3. Pick where to install it. No admin rights are needed. You'll get a desktop shortcut and a Start-menu entry.
 
 Prefer not to install? Download **`Ma3madan-Video-Presenter-Portable-x.y.z.exe`** and run it from anywhere, even a USB stick. The portable version can't register itself as a video player.
 
-Requirements: Windows 10 or 11 (64-bit). yt-dlp and FFmpeg are bundled, so there's nothing else to install.
+Requirements: Windows 10 or 11 (64-bit). The installer is about 75 MB and there's nothing else to install. The first time you use a YouTube link, the app sets up [yt-dlp](https://github.com/yt-dlp/yt-dlp) by itself: about 17 MB, downloaded from its official GitHub release and checked against its published SHA-256 checksum.
+
+### Windows says the file is unsafe
+
+Edge and Windows SmartScreen warn about any new program that isn't code-signed and hasn't been downloaded by many people yet. The warning is about reputation, not about anything found in the file. All the source code is in this repository, and every release is built from it.
+
+- **Edge** ("isn't commonly downloaded" / "could harm your device"): open Downloads (`Ctrl + J`), hover over the file, click **⋯** → **Keep** → **Show more** → **Keep anyway**.
+- **Windows SmartScreen** ("Windows protected your PC"): click **More info** → **Run anyway**.
+
+The warnings fade as more people download the app, and go away once releases are code-signed.
 
 ## Using it with a projector
 
@@ -76,7 +85,7 @@ With only one screen (for example, rehearsing on a laptop), the output opens as 
 | Quality | adapts to your connection (starts at 720p) | up to 1080p |
 | Best for | a good, steady connection | anything important, or weak Wi-Fi |
 
-Downloads are saved to `Videos\Ma3madan Video Presenter`.
+Downloads are saved to `Videos\Ma3madan Video Presenter`. YouTube keeps picture and sound separate, so each download is two files: `Title.mp4` (picture) and `Title.m4a` (sound). The app plays them together, so keep both in the same folder.
 
 You can change a stream's quality from the **Quality** menu while it plays. **Auto** lowers it on its own when the connection can't keep up.
 
@@ -121,7 +130,6 @@ You'll need [Node.js](https://nodejs.org) 20 or newer.
 git clone https://github.com/michaelsaad/ma3madan-video-presenter.git
 cd ma3madan-video-presenter
 npm install
-npm run fetch-tools   # downloads yt-dlp.exe into bin/
 npm start             # run the app
 npm run dist          # build the installer and the portable .exe into dist/
 ```
@@ -147,11 +155,8 @@ The preview in the control window is a live capture of the projector window, so 
 
 ## Third-party software
 
-The Windows builds include:
-
-- [Electron](https://www.electronjs.org/) (MIT)
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (Unlicense)
-- [FFmpeg](https://ffmpeg.org/) (GPL), via [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static). The source code is available from ffmpeg.org.
+- [Electron](https://www.electronjs.org/) (MIT), bundled
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (Unlicense), downloaded from its official release on first YouTube use
 
 Only use YouTube content you have the right to show, and follow YouTube's Terms of Service.
 

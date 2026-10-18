@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('api', {
   downloadCancel: id => ipcRenderer.send('download-cancel', id),
   onDownload: fn => on('download', fn),
   updateYtdlp: () => ipcRenderer.invoke('ytdlp-update'),
+  onYtdlpSetup: fn => on('ytdlp-setup', fn),
   resolveStream: (url, force) => ipcRenderer.invoke('stream-resolve', url, force),
   openExternal: url => ipcRenderer.send('open-external', url),
 });

@@ -1,28 +1,55 @@
-// YouTube support through the bundled yt-dlp: downloading to disk, and resolving stream URLs.
+// YouTube support through yt-dlp: downloading to disk, and resolving stream URLs.
+//
+// yt-dlp isn't bundled with the installer. It's fetched from its official GitHub release the first
+// time YouTube is used, checked against the release's SHA-256 list, and kept in userData so
+// `yt-dlp -U` can update it in place.
 const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { proxyUrl } = require('./stream-proxy');
 
-function bundledBin(name) {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'bin', name)
-    : path.join(__dirname, '..', 'bin', name);
+const RELEASE = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/';
+const ytdlpPath = () => path.join(app.getPath('userData'), 'bin', 'yt-dlp.exe');
+
+let onSetupProgress = () => {};
+function setSetupListener(fn) { onSetupProgress = fn; }
+
+let installing = null;
+function ensureYtdlp() {
+  if (fs.existsSync(ytdlpPath())) return Promise.resolve(ytdlpPath());
+  installing ??= installYtdlp().finally(() => { installing = null; });
+  return installing;
 }
 
-// yt-dlp is copied into userData so `yt-dlp -U` can update it in place.
-function ytdlpPath() {
-  const target = path.join(app.getPath('userData'), 'bin', 'yt-dlp.exe');
-  if (!fs.existsSync(target)) {
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.copyFileSync(bundledBin('yt-dlp.exe'), target);
+async function installYtdlp() {
+  onSetupProgress(0);
+  const sums = await fetch(RELEASE + 'SHA2-256SUMS').then(r => (r.ok ? r.text() : ''));
+  const expected = sums.split('\n').map(l => l.trim().split(/\s+/)).find(([, name]) => name === 'yt-dlp.exe')?.[0];
+  if (!expected) throw new Error("Couldn't reach GitHub to set up YouTube support");
+
+  const res = await fetch(RELEASE + 'yt-dlp.exe');
+  if (!res.ok) throw new Error(`yt-dlp download failed (${res.status})`);
+  const total = Number(res.headers.get('content-length')) || 0;
+  const hash = crypto.createHash('sha256');
+  const chunks = [];
+  let received = 0, lastPct = -1;
+  for await (const chunk of res.body) {
+    chunks.push(chunk);
+    hash.update(chunk);
+    received += chunk.length;
+    const pct = total ? Math.floor((received / total) * 100) : 0;
+    if (pct !== lastPct && pct < 100) { lastPct = pct; onSetupProgress(pct / 100); }
   }
-  return target;
-}
+  if (hash.digest('hex') !== expected.toLowerCase()) throw new Error('yt-dlp failed its checksum check');
 
-function ffmpegPath() {
-  return app.isPackaged ? bundledBin('ffmpeg.exe') : require('ffmpeg-static');
+  const target = ytdlpPath();
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target + '.part', Buffer.concat(chunks));
+  fs.renameSync(target + '.part', target);
+  onSetupProgress(1);
+  return target;
 }
 
 // YouTube needs a JavaScript runtime to solve its player challenges; Electron itself can act as Node.
@@ -32,7 +59,7 @@ const baseArgs = () => [
   '-S', 'res:1080,vcodec:h264,ext:mp4:m4a',
 ];
 const env = () => ({ ...process.env, ELECTRON_RUN_AS_NODE: '1', PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' });
-const runYtdlp = args => spawn(ytdlpPath(), args, { windowsHide: true, env: env() });
+const runYtdlp = async args => spawn(await ensureYtdlp(), args, { windowsHide: true, env: env() });
 
 function lastError(stderr, code) {
   const lines = stderr.split(/\r?\n/);
@@ -41,30 +68,33 @@ function lastError(stderr, code) {
 }
 
 // ---------- downloads ----------
+// Video and audio are saved as two files (Title.mp4 + Title.m4a) and played together, which avoids
+// shipping FFmpeg just to merge them.
 const downloads = new Map(); // id -> child process
+const canceled = new Set();
 
-// onUpdate receives { status, title?, percent?, speed?, eta?, path?, error? }
-function download(id, url, outDir, onUpdate) {
+// onUpdate receives { status, title?, percent?, speed?, eta?, path?, audioPath?, error? }
+async function download(id, url, outDir, onUpdate) {
   fs.mkdirSync(outDir, { recursive: true });
+  onUpdate({ status: 'starting' });
   let proc;
   try {
-    proc = runYtdlp([
+    proc = await runYtdlp([
       url, ...baseArgs(),
-      '--merge-output-format', 'mp4',
-      '--ffmpeg-location', ffmpegPath(),
+      '-f', 'bv,ba',
       '-o', path.join(outDir, '%(title).120B [%(id)s].%(ext)s'),
       '--newline', '--progress', '--no-simulate',
       '--progress-template', 'download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s',
       '--print', 'before_dl:TITLE|%(title)s',
-      '--print', 'after_move:FILE|%(filepath)s',
+      '--print', 'after_move:FILE|%(vcodec)s|%(filepath)s',
     ]);
   } catch (e) {
     return onUpdate({ status: 'error', error: e.message });
   }
+  if (canceled.delete(id)) { proc.kill(); return onUpdate({ status: 'canceled' }); }
   downloads.set(id, proc);
-  onUpdate({ status: 'starting' });
 
-  let title = null, file = null, stderr = '', buf = '';
+  let title = null, video = null, audio = null, stderr = '', buf = '';
   proc.stdout.setEncoding('utf8');
   proc.stdout.on('data', chunk => {
     buf += chunk;
@@ -72,11 +102,14 @@ function download(id, url, outDir, onUpdate) {
     buf = lines.pop();
     for (const line of lines) {
       if (line.startsWith('TITLE|')) { title = line.slice(6).trim(); onUpdate({ title }); }
-      else if (line.startsWith('FILE|')) file = line.slice(5).trim();
-      else if (line.startsWith('PROG|')) {
+      else if (line.startsWith('FILE|')) {
+        const [, vcodec, ...rest] = line.split('|');
+        if (vcodec === 'none') audio = rest.join('|').trim(); else video = rest.join('|').trim();
+      } else if (line.startsWith('PROG|')) {
         const [, pct, speed, eta] = line.split('|');
-        const percent = parseFloat(pct);
-        if (!isNaN(percent)) onUpdate({ status: 'downloading', percent, speed: speed?.trim(), eta: eta?.trim() });
+        const p = parseFloat(pct);
+        // The video comes first and is most of the size; the audio fills the last 15%.
+        if (!isNaN(p)) onUpdate({ status: 'downloading', percent: video ? 85 + p * 0.15 : p * 0.85, speed: speed?.trim(), eta: eta?.trim() });
       }
     }
   });
@@ -86,14 +119,15 @@ function download(id, url, outDir, onUpdate) {
   proc.on('close', code => {
     downloads.delete(id);
     if (proc.canceled) onUpdate({ status: 'canceled' });
-    else if (code === 0 && file && fs.existsSync(file)) onUpdate({ status: 'done', path: file, title: title || path.basename(file) });
-    else onUpdate({ status: 'error', error: lastError(stderr, code) });
+    else if (code === 0 && video && fs.existsSync(video)) {
+      onUpdate({ status: 'done', path: video, audioPath: audio && fs.existsSync(audio) ? audio : null, title: title || path.basename(video) });
+    } else onUpdate({ status: 'error', error: lastError(stderr, code) });
   });
 }
 
 function cancelDownload(id) {
   const proc = downloads.get(id);
-  if (proc) { proc.canceled = true; proc.kill(); }
+  if (proc) { proc.canceled = true; proc.kill(); } else canceled.add(id);
 }
 
 // ---------- streaming ----------
@@ -129,12 +163,12 @@ function buildLadder(formats) {
 const streamCache = new Map(); // url -> { at, info }
 const STREAM_TTL = 2 * 60 * 60 * 1000; // YouTube links expire after ~6h
 
-function resolveStream(url, force) {
+async function resolveStream(url, force) {
   const hit = streamCache.get(url);
-  if (!force && hit && Date.now() - hit.at < STREAM_TTL) return Promise.resolve(hit.info);
+  if (!force && hit && Date.now() - hit.at < STREAM_TTL) return hit.info;
+  const proc = await runYtdlp([url, '-j', ...baseArgs()]);
   return new Promise((resolve, reject) => {
     let out = '', stderr = '';
-    const proc = runYtdlp([url, '-j', ...baseArgs()]);
     proc.stdout.setEncoding('utf8');
     proc.stdout.on('data', d => { out += d; });
     proc.stderr.setEncoding('utf8');
@@ -155,10 +189,12 @@ function resolveStream(url, force) {
   });
 }
 
-function updateYtdlp() {
+async function updateYtdlp() {
+  let exe;
+  try { exe = await ensureYtdlp(); } catch (e) { return e.message; }
   return new Promise(resolve => {
     let out = '';
-    const proc = spawn(ytdlpPath(), ['-U'], { windowsHide: true });
+    const proc = spawn(exe, ['-U'], { windowsHide: true });
     proc.stdout.on('data', d => { out += d; });
     proc.stderr.on('data', d => { out += d; });
     proc.on('close', () => resolve(out.trim().split(/\r?\n/).pop() || 'Done'));
@@ -166,4 +202,4 @@ function updateYtdlp() {
   });
 }
 
-module.exports = { download, cancelDownload, resolveStream, updateYtdlp };
+module.exports = { download, cancelDownload, resolveStream, updateYtdlp, setSetupListener };

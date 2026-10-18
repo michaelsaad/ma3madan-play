@@ -9,7 +9,7 @@ module.exports = async ({ getControl, getOutput }) => {
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const js = code => getControl().webContents.executeJavaScript(code);
   const ojs = code => getOutput().webContents.executeJavaScript(code);
-  const outState = async () => log('  output:', await ojs(`JSON.stringify({t:+v.currentTime.toFixed(2),paused:v.paused,vol:v.volume,muted:v.muted,black:blackOn,src:decodeURI(v.src).split('/').pop()})`));
+  const outState = async () => log('  output:', await ojs(`JSON.stringify({t:+v.currentTime.toFixed(2),split,at:+a.currentTime.toFixed(2),paused:v.paused,vol:v.volume,muted:v.muted,black:blackOn,src:decodeURI(v.src).split('/').pop()})`));
   const shot = async name => {
     for (const [w, n] of [[getControl(), 'control'], [getOutput(), 'output']]) {
       const img = await w.capturePage();

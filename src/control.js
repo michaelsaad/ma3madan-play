@@ -152,7 +152,7 @@ async function playItem(it, { autoplay = true, force = false, startAt = 0 } = {}
     if (playingId !== it.id) return; // something else was started meanwhile
     src = { path: it.path, ladder: r.ladder, quality: settings.streamQuality || 'auto' };
   } else {
-    src = { path: it.path, url: await api.fileUrl(it.path) };
+    src = { path: it.path, url: await api.fileUrl(it.path), audioUrl: it.audioPath ? await api.fileUrl(it.audioPath) : null };
   }
   cmd('load', { ...src, autoplay, startAt, volume: settings.volume ?? 1, muted: !!settings.muted });
   cmd('rate', { r: parseFloat($('rateSel').value) });
@@ -420,7 +420,7 @@ api.onDownload(d => {
   if (d.status === 'done') {
     downloads.delete(d.id);
     if (!items.some(x => x.path.toLowerCase() === d.path.toLowerCase())) {
-      items.push({ id: uid(), title: d.title, path: d.path, source: 'youtube', url: cur.url });
+      items.push({ id: uid(), title: d.title, path: d.path, audioPath: d.audioPath, source: 'youtube', url: cur.url });
       save(); renderList(); probeDurations();
     }
     toast(t('downloaded', { t: d.title }));
@@ -428,6 +428,9 @@ api.onDownload(d => {
   if (d.status === 'canceled') downloads.delete(d.id);
   renderDownloads();
 });
+
+// First YouTube use downloads yt-dlp (~17 MB); show it so the wait makes sense.
+api.onYtdlpSetup(p => toast(p >= 1 ? t('ytSetupDone') : t('ytSetup', { n: Math.round(p * 100) })));
 
 function renderDownloads() {
   const box = $('downloads');

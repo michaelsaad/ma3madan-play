@@ -1,12 +1,10 @@
 {
   "name": "ma3madan-video-presenter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Video player for churches and events: controls on your screen, clean full-screen video on the projector. Plays local files and YouTube.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "fetch-tools": "node scripts/fetch-yt-dlp.js",
-    "predist": "node scripts/fetch-yt-dlp.js",
     "dist": "electron-builder --win portable nsis",
     "icon": "electron build/make-icon.js",
     "test:media": "node test/make-media.js",
@@ -40,16 +38,6 @@
     "files": [
       "src/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "bin/yt-dlp.exe",
-        "to": "bin/yt-dlp.exe"
-      },
-      {
-        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
-        "to": "bin/ffmpeg.exe"
-      }
-    ],
     "win": {
       "icon": "build/icon.png"
     },
@@ -79,7 +67,12 @@
         "role": "Viewer"
       }
     ],
-    "copyright": "Public domain"
+    "copyright": "Public domain",
+    "electronLanguages": [
+      "en-US",
+      "ar"
+    ],
+    "compression": "maximum"
   },
   "homepage": "https://github.com/michaelsaad/ma3madan-video-presenter",
   "repository": {

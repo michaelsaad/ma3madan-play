@@ -184,7 +184,10 @@ ipcMain.handle('get-settings', () => settings);
 ipcMain.on('set-setting', (_e, key, value) => { settings[key] = value; saveSettings(); });
 
 ipcMain.handle('playlist-load', () =>
-  readJson(playlistFile(), []).map(it => ({ ...it, missing: it.source !== 'stream' && !fs.existsSync(it.path) })));
+  readJson(playlistFile(), []).map(it => ({
+    ...it,
+    missing: it.source !== 'stream' && (!fs.existsSync(it.path) || (it.audioPath && !fs.existsSync(it.audioPath))),
+  })));
 ipcMain.on('playlist-save', (_e, items) => writeJson(playlistFile(), items.map(({ missing, ...rest }) => rest)));
 ipcMain.handle('file-url', (_e, p) => pathToFileURL(p).href);
 
@@ -216,3 +219,4 @@ ipcMain.handle('stream-resolve', async (_e, url, force) => {
   catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('ytdlp-update', () => youtube.updateYtdlp());
+youtube.setSetupListener(progress => controlWin?.webContents.send('ytdlp-setup', progress));
