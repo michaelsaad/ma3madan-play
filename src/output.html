@@ -5,7 +5,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: https: http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
 <title>Output</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; -webkit-app-region: drag; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body.idle, body.idle * { cursor: none; } /* the pointer hides after 2 s without moving */
   video { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
   #black { position: absolute; inset: 0; background: #000; opacity: 1; transition: opacity .35s ease; pointer-events: none; }
   #black.off { opacity: 0; }
@@ -243,6 +244,7 @@
       if (i >= 0 && i !== qIndex) setQuality(i, false); else push();
     },
     blackOnEnd({ on }) { blackOnEnd = on; },
+    playerMode() {}, // the engine behaves the same in both modes; main.js moves it between windows
     async sink({ id }) { try { await ctx.setSinkId(id || ''); } catch (e) { console.error(e); } },
   };
 
@@ -269,6 +271,14 @@
   setInterval(() => { navigator.mediaSession.playbackState = !current ? 'none' : wantPlay ? 'playing' : 'paused'; }, 250);
 
   // Keys pressed while the projector window has focus go to the control window.
+  // The pointer shows while the mouse moves over the video and hides after 2 s of stillness.
+  let idleTimer;
+  const wake = () => { document.body.classList.remove('idle'); clearTimeout(idleTimer); idleTimer = setTimeout(() => document.body.classList.add('idle'), 2000); };
+  addEventListener('mousemove', wake);
+  document.body.classList.add('idle');
+  // Double-click toggles full screen in Player mode (handled by the control window).
+  addEventListener('dblclick', () => api.sendOutputKey({ code: 'DblClick' }));
+
   window.addEventListener('keydown', e => {
     e.preventDefault();
     if (e.code.startsWith('Media')) return; // already handled through the media session above

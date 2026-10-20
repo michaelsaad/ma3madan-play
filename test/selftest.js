@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
-module.exports = async ({ getControl, getOutput }) => {
+module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode }) => {
   const dir = process.env.VP_SELFTEST_DIR;
   const log = (...a) => fs.appendFileSync(path.join(dir, 'log.txt'), a.join(' ') + '\n');
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -11,10 +11,32 @@ module.exports = async ({ getControl, getOutput }) => {
   const ojs = code => getOutput().webContents.executeJavaScript(code);
   const outState = async () => log('  output:', await ojs(`JSON.stringify({t:+v.currentTime.toFixed(2),split:followers.length>0,at:+a.currentTime.toFixed(2),paused:v.paused,vol:v.volume,muted:v.muted,black:blackOn,src:decodeURI(v.src).split('/').pop()})`));
   const shot = async name => {
+    const imgs = {};
     for (const [w, n] of [[getControl(), 'control'], [getOutput(), 'output']]) {
-      const img = await w.capturePage();
+      const img = imgs[n] = await w.webContents.capturePage();
       fs.writeFileSync(path.join(dir, `${name}-${n}.png`), img.toPNG());
     }
+    // In Player mode the video is a separate layer over the page: paint it in, as the user sees it.
+    const m = getMode();
+    if (m.mode === 'player' && m.viewBounds.width > 0) await composite(imgs.control, imgs.output, m.viewBounds, path.join(dir, `${name}-window.png`));
+  };
+  const composite = async (page, video, at, file) => {
+    const { BrowserWindow } = require('electron');
+    const k = page.getSize().width / getControl().getContentBounds().width;
+    const blank = path.join(dir, 'blank.html');
+    fs.writeFileSync(blank, '<!doctype html><body></body>');
+    const w = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
+    await w.loadFile(blank);
+    const url = await w.webContents.executeJavaScript(`(async () => {
+      const load = src => { const i = new Image(); i.src = src; return i.decode().then(() => i); };
+      const [a, b] = await Promise.all([load(${JSON.stringify(page.toDataURL())}), load(${JSON.stringify(video.toDataURL())})]);
+      const c = document.createElement('canvas'); c.width = a.width; c.height = a.height;
+      const g = c.getContext('2d'); g.drawImage(a, 0, 0);
+      g.drawImage(b, ${at.x * k}, ${at.y * k}, ${at.width * k}, ${at.height * k});
+      return c.toDataURL('image/png');
+    })()`);
+    w.destroy();
+    fs.writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));
   };
   const key = async keyCode => {
     const wc = getControl().webContents;
@@ -69,20 +91,30 @@ module.exports = async ({ getControl, getOutput }) => {
     await js(`setLang('ar')`); await wait(500); await shot('2d-arabic'); await js(`setLang('en')`);
 
     if (process.env.VP_YT) {
-      await js(`$('ytUrl').value=${JSON.stringify(process.env.VP_YT)}; $('ytForm').requestSubmit()`);
+      const n0 = await js('items.length');
+      await js(`startDownload(${JSON.stringify(process.env.VP_YT)}, 'video')`);
       const start = Date.now();
       let last = '';
       while (Date.now() - start < 180000) {
         await wait(2000);
         const s = await js(`JSON.stringify({n:items.length, dl:[...downloads.values()].map(d=>[d.status,d.percent,d.title,d.error])})`);
         if (s !== last) { log('dl:', s); last = s; }
-        if (JSON.parse(s).n > files.length || JSON.parse(s).dl.some(d => d[0] === 'error')) break;
+        if ((JSON.parse(s).n > n0 && !JSON.parse(s).dl.length) || JSON.parse(s).dl.some(d => d[0] === 'error')) break;
       }
       await shot('3-downloaded');
       await js(`playItem(items[items.length-1])`);
       await wait(4000);
       log('youtube play:'); await outState();
       await shot('4-youtube-playing');
+      // One ordinary MP4 with picture and sound, no separate .m4a next to it.
+      {
+        const file = await js('items[items.length-1].path');
+        const ffmpeg = await require(path.join(__dirname, '..', 'src', 'youtube')).ensureFfmpeg();
+        const info = require('child_process').spawnSync(ffmpeg, ['-hide_banner', '-i', file], { encoding: 'utf8' }).stderr;
+        const streams = (info.match(/Stream #\S+.*?: (Video|Audio)/g) || []).map(x => x.split(': ').pop());
+        const siblings = fs.readdirSync(path.dirname(file)).filter(n => n.startsWith(path.basename(file, '.mp4')));
+        log('download file:', path.basename(file), '| streams', streams.join('+'), '| files with that name', JSON.stringify(siblings));
+      }
 
       // Same link as MP3 (fetches FFmpeg on first use)
       const before = await js('items.length');
@@ -143,11 +175,11 @@ module.exports = async ({ getControl, getOutput }) => {
       await wait(1500);
       await js(`cmd('black', { on: false })`); await wait(300); // even B must not uncover the projector
       log(`audio ${name}:`, await ojs(`JSON.stringify({ t: +v.currentTime.toFixed(1), playing: wantPlay, audioOnly, black: blackOn })`),
-        '| rms', await rms(), '| badge shown:', await js(`!$('audioBadge').hidden`), '| output window visible:', getOutput().isVisible());
+        '| rms', await rms(), '| badge shown:', await js(`!$('audioBadge').hidden`), '| player view:', JSON.stringify(getMode().viewBounds));
     }
     await shot('7-audio-only');
     await js('playItem(items[0])'); await wait(1500);
-    log('back to video, output window visible:', getOutput().isVisible());
+    log('back to video, player view:', JSON.stringify(getMode().viewBounds));
 
     // Item menu (⋯ / right-click)
     await js(`(() => { const li = document.querySelector('.item'); const r = li.getBoundingClientRect(); li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 60, clientY: r.top + 20 })); })()`);
@@ -186,6 +218,85 @@ module.exports = async ({ getControl, getOutput }) => {
       await require(path.join(__dirname, '..', 'src', 'vocals')).saveMix({ music: it.stems.music, vocals: it.stems.vocals, gains: { music: 1, vocals: 0.5 }, dest });
       log('saved mix:', fs.existsSync(dest) ? Math.round(fs.statSync(dest).size / 1024) + ' KB' : 'missing');
     }
+    // Player mode (single screen): the engine sits on the preview box inside the control window.
+    {
+      await js('playItem(items[0])'); await wait(1500);
+      const rect = JSON.parse(await js(`(r => JSON.stringify({ x: Math.round(r.left + 2), y: Math.round(r.top + 2), width: Math.round(r.width - 4), height: Math.round(r.height - 4) }))(document.querySelector('.preview').getBoundingClientRect())`));
+      const m = getMode();
+      const close = (a, b) => Math.abs(a - b) <= 2;
+      log('player mode:', m.mode, 'home', m.home, '| view', JSON.stringify(m.viewBounds), '| preview', JSON.stringify(rect),
+        ['x', 'y', 'width', 'height'].every(k => close(m.viewBounds[k], rect[k])) ? 'MATCH' : 'MISMATCH', '| rms', await rms());
+      const t1 = await ojs('v.currentTime');
+      getControl().webContents.send('output-key', { code: 'DblClick' }); await wait(1200);
+      const fs1 = getMode(); const cb = getControl().getContentBounds();
+      log('fullscreen:', fs1.playerFullscreen, getControl().isFullScreen(), '| view', JSON.stringify(fs1.viewBounds), 'window', cb.width + 'x' + cb.height);
+      await shot('16-player-fullscreen');
+      getControl().webContents.send('output-key', { code: 'Escape' }); await wait(1200);
+      log('after Esc:', getMode().playerFullscreen, getControl().isFullScreen(), '| kept playing:', (await ojs('v.currentTime')) > t1);
+      log('mode button shown with one screen:', await js(`!$('modeBtn').hidden`), '| output selector shown:', await js(`!$('outputField').hidden`));
+      // The About window must not be covered by the video layer.
+      await js(`$('aboutBtn').click()`); await wait(400);
+      log('view while a dialog is open:', JSON.stringify(getMode().viewBounds));
+      await js(`$('aboutClose').click()`); await wait(400);
+      // Window: restore to a normal size and snap to half the screen.
+      const ctl = getControl();
+      ctl.unmaximize(); await wait(500);
+      const wa = require('electron').screen.getPrimaryDisplay().workArea;
+      ctl.setBounds({ x: wa.x, y: wa.y, width: Math.round(wa.width / 2), height: wa.height }); await wait(800);
+      const b = ctl.getBounds();
+      log('half screen:', b.width + 'x' + b.height, 'asked', Math.round(wa.width / 2) + 'x' + wa.height, '| view follows:', JSON.stringify(getMode().viewBounds));
+      await shot('17-half-screen');
+      ctl.maximize(); await wait(800);
+    }
+
+    // Layout: the side panel resizes and hides (the video follows), Recents scrolls, Screen stays visible.
+    {
+      const close = (a, b) => Math.abs(a - b) <= 2;
+      const viewMatches = async () => {
+        const r = JSON.parse(await js(`(r => JSON.stringify({ x: Math.round(r.left + 2), y: Math.round(r.top + 2), width: Math.round(r.width - 4), height: Math.round(r.height - 4) }))(document.querySelector('.preview').getBoundingClientRect())`));
+        const v = getMode().viewBounds;
+        return ['x', 'y', 'width', 'height'].every(k => close(v[k], r[k])) ? 'MATCH' : `MISMATCH view ${JSON.stringify(v)} box ${JSON.stringify(r)}`;
+      };
+      const sideW = () => js(`Math.round(document.querySelector('.side').getBoundingClientRect().width)`);
+      log('side panel width:', await sideW());
+      await js(`settings.sidebarWidth = 520; applySide()`); await wait(600);
+      log('resized to 520:', await sideW(), '| video', await viewMatches());
+      await js(`settings.sidebarWidth = 100; applySide()`); await wait(400);
+      log('asked 100 (min 260):', await sideW());
+      await js(`$('sideGrip').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`); await wait(400);
+      log('double-click resets:', await sideW());
+      getControl().webContents.sendInputEvent({ type: 'keyDown', keyCode: 'B', modifiers: ['control'] }); await wait(600);
+      log('Ctrl+B hides:', await js(`document.body.classList.contains('side-hidden') && getComputedStyle(document.querySelector('.side')).display === 'none'`), '| video', await viewMatches());
+      await shot('18-side-hidden');
+      await js(`$('sideBtn').click()`); await wait(600);
+      await js(`setLang('ar')`); await wait(700);
+      log('Arabic (box moves to the other side): video', await viewMatches());
+      await js(`setLang('en')`); await wait(700);
+      log('button shows again:', await js(`!document.body.classList.contains('side-hidden')`), '| video', await viewMatches());
+      // Recents with many items scrolls inside the panel; the Screen section stays on screen.
+      const saved = await js('JSON.stringify(items)');
+      await js(`for (let i = 0; i < 40; i++) items.push({ ...items[0], id: 'fill' + i, title: 'Filler item ' + i }); renderList()`); await wait(400);
+      log('Recents scrolls:', await js(`(l => l.scrollHeight > l.clientHeight + 10)($('playlist'))`),
+        '| Screen section visible:', await js(`(r => r.bottom <= innerHeight && r.height > 20)(document.querySelector('.screen-panel').getBoundingClientRect())`),
+        '| full screen button visible:', await js(`$('fullBtn').offsetParent !== null`));
+      await shot('19-many-recents');
+      await js(`items = ${saved}; renderList()`); await wait(300);
+    }
+
+    // Theme: same as Windows → light → dark; the page and the native title-bar buttons follow.
+    {
+      const { nativeTheme } = require('electron');
+      const startTheme = await js('settings.theme || "system"');
+      for (let i = 0; i < 3; i++) {
+        await js(`$('themeBtn').click()`); await wait(700);
+        log('theme', await js('settings.theme'), '| source', nativeTheme.themeSource, '| dark', nativeTheme.shouldUseDarkColors,
+          '| --bg', await js(`getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()`),
+          '| icon', await js(`$('themeBtn').querySelector('use').getAttribute('href')`), '| tip', await js(`$('themeBtn').title`));
+        await shot(`20-theme-${await js('settings.theme')}`);
+      }
+      log('theme back to', await js('settings.theme'), '(started', startTheme + ')');
+    }
+
     // Keyboard media keys arrive through the projector window's media session.
     {
       await js('playItem(items[0])'); await wait(1500);
@@ -233,6 +344,9 @@ module.exports = async ({ getControl, getOutput }) => {
       log('about update check:', await js(`$('aboutStatus').textContent`));
       await shot('13-about');
       await js(`$('aboutClose').click()`);
+      await js(`setLang('ar'); $('aboutBtn').click()`); await wait(500);
+      await shot('13-about-ar');
+      await js(`$('aboutClose').click(); setLang('en')`);
     }
 
     // The ⋯ button opens its menu right next to it (real mouse click).
@@ -286,7 +400,7 @@ module.exports = async ({ getControl, getOutput }) => {
     // The key is copied into this test's settings and never logged.
     if (process.env.VP_ONLINE_REAL) {
       const url = process.env.VP_ONLINE_REAL;
-      const real = JSON.parse(fs.readFileSync(path.join(app.getPath('appData'), 'Ma3madan Video Presenter', 'settings.json'), 'utf8'));
+      const real = JSON.parse(fs.readFileSync(path.join(app.getPath('appData'), 'Ma3madan Play', 'settings.json'), 'utf8'));
       await js(`for (const [k, v] of [['vocalEngine', 'online'], ['mvsepToken', ${JSON.stringify(real.mvsepToken || '')}]]) { settings[k] = v; api.setSetting(k, v); } addStream(${JSON.stringify(url)})`);
       const t0 = Date.now();
       while (Date.now() - t0 < 60000 && await js(`items.some(x => x.loading)`)) await wait(500);
@@ -343,6 +457,22 @@ module.exports = async ({ getControl, getOutput }) => {
         if (msg) { log('update result:', msg, `(${Math.round((Date.now() - t1) / 1000)} s)`); break; }
       }
     }
+    // README screenshots (VP_README_SHOTS=1 with VP_STREAM=<a YouTube link>): the streamed video
+    // playing in Player mode, English dark and light, Arabic dark.
+    if (process.env.VP_README_SHOTS) {
+      const url = process.env.VP_STREAM;
+      await js(`items = items.filter(x => !x.id?.startsWith?.('fill')); renderList()`);
+      if (url) await js(`playItem(items.find(x => x.url === ${JSON.stringify(url)}), { startAt: 40 })`);
+      await wait(8000);
+      getControl().webContents.sendInputEvent({ type: 'mouseMove', x: 700, y: 760 }); // no tooltip in the pictures
+      for (const [lang, theme] of [['en', 'dark'], ['en', 'light'], ['ar', 'dark']]) {
+        await js(`setLang('${lang}'); settings.theme = '${theme}'; api.setTheme('${theme}'); renderTheme()`); await wait(1500);
+        await shot(`readme-${lang}-${theme}`);
+        log(`readme ${lang}-${theme}:`, JSON.stringify(getMode().viewBounds), getMode().mode, "| modal hidden", await js("$(\x27modal\x27).hidden"), "| menu", await js("!!document.getElementById(\x27menu\x27)"), "| audioOnly", await js("!!(out.loaded && out.audioOnly)"));
+      }
+      await js(`setLang('en'); settings.theme = 'system'; api.setTheme('system'); renderTheme()`);
+    }
+
     log('DONE');
   } catch (e) {
     log('FAIL', e.stack);

@@ -2,11 +2,11 @@
   <img src="docs/icon.png" width="96" alt="">
 </p>
 
-<h1 align="center">Ma3madan Video Presenter</h1>
+<h1 align="center">Ma3madan Play</h1>
 
 <p align="center">
   <b>The audience sees the video. You see everything else.</b><br>
-  A two-screen video player built for presenting.
+  A video player for Windows, built for presenting on a second screen.
 </p>
 
 <p align="center">
@@ -25,41 +25,44 @@ Playing a video for an audience usually goes like this:
 - 📺 You play from YouTube, and the room gets the title bar, the controls, an ad, and a wall of suggested videos when it ends.
 - ⏳ You download first, then hunt for the file in a folder… on the projector.
 
-**Ma3madan Video Presenter splits the job across two screens.** The projector is the stage: it only ever shows the video, or a clean black screen. Your laptop is backstage. Everything else stays on your laptop: the playlist, the controls, the volume, YouTube links, and a live preview of exactly what the audience sees. Pause, seek, boost the volume, line up the next clip, swap a YouTube link: none of it ever reaches the big screen.
+**Ma3madan Play splits the job across two screens.** The projector is the stage: it only ever shows the video, or a clean black screen. Your laptop is backstage. Everything else stays on your laptop: the list of recent videos, the controls, the volume, YouTube links, and a live preview of exactly what the audience sees. Pause, seek, boost the volume, line up the next clip, swap a YouTube link: none of it ever reaches the big screen.
 
 What the audience gets is a smooth, distraction-free flow from one video to the next, the way a professional production feels.
 
-It plays your own video files and YouTube links, streamed directly or downloaded first. Either way, YouTube's page, ads and suggestions never reach the projector.
+It plays your own video files and YouTube links, streamed directly or downloaded first. Either way, YouTube's page, ads and suggestions never reach the projector. And when there's no projector, it's simply a clean everyday video player.
 
 *Ma3madan* (المعمدان) means "the Baptist". The app was originally made for **St. John the Baptist Church in Qalyub, Al-Qalyubia, Egypt**. It's free for anyone to use, for anything.
 
 ## Features
 
-- **Two screens.** The projector shows a clean, full-screen video: no controls, no mouse cursor, no pop-ups. Your laptop shows the controls and a live preview of the projector.
+- **Presenter mode (two screens).** The projector shows a clean, full-screen video: no controls, no pop-ups, and the mouse only shows while you move it there. Your laptop shows the controls and a live preview of the projector.
+- **Player mode (one screen).** The video plays inside the window like a normal player. Full screen with `F` or a double-click, `Esc` to leave. The app picks the mode by itself: Presenter when a second screen is connected, Player when there isn't one or when you open a video from Explorer. The **Player / Presenter** button switches any time.
 - **Local files.** MP4, MKV, WebM and MOV video. Drag files in or use **Add videos**.
-- **Audio too.** MP3, WAV, M4A/AAC, FLAC, and WhatsApp voice notes (`.opus`/`.ogg`). Audio plays with sound only: the projector stays black, and with a single screen the output window steps aside.
+- **Audio too.** MP3, WAV, M4A/AAC, FLAC, and WhatsApp voice notes (`.opus`/`.ogg`). Audio plays with sound only: the projector stays black.
 - **Vocal remover (karaoke).** Split any song or video into music and vocals, then mix them live while it plays: karaoke, vocals only, or anything in between. Save any mix as an MP3.
 - **YouTube.**
   - **Stream** plays a link right away without downloading it. Quality drops automatically when the internet is slow, like on YouTube.
-  - **Download** saves the video to your PC (up to 1080p) so it plays offline, or just the sound as an **MP3**.
+  - **Download** saves the video to your PC as a single MP4 (up to 1080p) so it plays offline, or just the sound as an **MP3**.
   - Streamed something and want to keep it? Use the item's **⋯** menu (or right-click) → **Download video** or **Download as MP3**. The same menu opens the file's folder or the YouTube link.
 - **Black screen** (`B`) fades the projector to black at any moment.
 - **Volume up to 200%**, like VLC, for quiet videos in a big hall.
 - **Aspect ratio** (`A`): 16:9, 4:3, 2.35:1, stretch, zoom and more.
-- **Playlist** that's saved between sessions, with auto-play next, loop, speed control and black-at-end.
+- **Recents**: your videos stay listed between sessions, with auto-play next, loop, speed control and black-at-end.
 - **Audio output picker** to send the sound to the projector's HDMI or to the hall's speakers.
 - **English and Arabic** interface (Arabic is right-to-left).
+- **Light and dark themes** that follow Windows, or pick one with the sun/moon button.
+- **A flexible window.** Resize it or snap it to half the screen. Drag the side panel's edge to make it wider or narrower, or hide it with `Ctrl + B`.
 - **Opens videos from Explorer** and can be set as the default video player.
 
 ## Install
 
-1. Download **`Ma3madan-Video-Presenter-Setup-x.y.z.exe`** from the [latest release](https://github.com/michaelsaad/ma3madan-video-presenter/releases/latest).
+1. Download **`Ma3madan-Play-Setup-x.y.z.exe`** from the [latest release](https://github.com/michaelsaad/ma3madan-video-presenter/releases/latest).
 2. Run it. Because the app is new and not code-signed yet, Edge or Windows may warn you first. See [Windows says the file is unsafe](#windows-says-the-file-is-unsafe) below.
 3. Pick where to install it. No admin rights are needed. You'll get a desktop shortcut and a Start-menu entry.
 
-Prefer not to install? Download **`Ma3madan-Video-Presenter-Portable-x.y.z.exe`** and run it from anywhere, even a USB stick. The portable version can't register itself as a video player.
+Prefer not to install? Download **`Ma3madan-Play-Portable-x.y.z.exe`** and run it from anywhere, even a USB stick. The portable version can't register itself as a video player.
 
-Requirements: Windows 10 or 11 (64-bit). The installer is about 75 MB and there's nothing else to install. The first time you use a YouTube link, the app sets up [yt-dlp](https://github.com/yt-dlp/yt-dlp) by itself: about 17 MB, downloaded from its official GitHub release and checked against its published SHA-256 checksum. The first MP3 download sets up [FFmpeg](https://ffmpeg.org/) the same way (about 28 MB, a pinned build checked against a fixed SHA-256).
+Requirements: Windows 10 or 11 (64-bit). The installer is about 75 MB and there's nothing else to install. The first time you use a YouTube link, the app sets up [yt-dlp](https://github.com/yt-dlp/yt-dlp) by itself: about 17 MB, downloaded from its official GitHub release and checked against its published SHA-256 checksum. The first download sets up [FFmpeg](https://ffmpeg.org/) the same way (about 28 MB, a pinned build checked against a fixed SHA-256).
 
 ### Windows says the file is unsafe
 
@@ -72,16 +75,18 @@ The warnings fade as more people download the app. Signed releases (see [Code si
 
 ### Updates
 
+The app used to be called *Ma3madan Video Presenter*. Updating keeps your settings, videos and downloads.
+
 When a new version is out, an **Update to x.y.z** button appears in the top bar. Nothing changes until you click it, so it never interrupts a presentation. The app downloads the new installer, checks it against the SHA-256 that GitHub publishes for the file, installs it and restarts. The portable version's button opens the download page instead.
 
 ## Using it with a projector
 
 1. Connect the projector and press **`Win + P`**, then choose **Extend**. Don't choose Duplicate.
-2. Open the app. It puts the video window on the second screen by itself. If you have more than one extra screen, pick the right one under **Output screen**.
+2. Open the app. It switches to Presenter mode and puts the video on the second screen by itself. If you have more than one extra screen, pick the right one under **Output screen**, in the **Screen** section at the bottom of the side panel.
 3. Optional: under **Audio output**, choose where the sound should come out (for example the projector's HDMI).
-4. Double-click a video in the playlist to play it on the projector.
+4. Double-click a video in **Recents** to play it on the projector.
 
-With only one screen (for example, rehearsing on a laptop), the output opens as a small window in the corner. **Fullscreen** makes it fill the screen.
+With only one screen (for example, rehearsing on a laptop), the app works in Player mode: the video plays inside the window, and **Full screen** (or `F`, or a double-click) fills the screen.
 
 ## YouTube: Stream or Download?
 
@@ -92,7 +97,7 @@ With only one screen (for example, rehearsing on a laptop), the output opens as 
 | Quality | adapts to your connection (starts at 720p) | up to 1080p |
 | Best for | a good, steady connection | anything important, or weak Wi-Fi |
 
-Downloads are saved to `Videos\Ma3madan Video Presenter`. YouTube keeps picture and sound separate, so each download is two files: `Title.mp4` (picture) and `Title.m4a` (sound). The app plays them together, so keep both in the same folder.
+Downloads are saved to `Videos\Ma3madan Play` as one ordinary `.mp4` file each, so they play in any other player too.
 
 You can change a stream's quality from the **Quality** menu while it plays. **Auto** lowers it on its own when the connection can't keep up.
 
@@ -100,7 +105,7 @@ If YouTube links stop working one day, click **Update yt-dlp**. YouTube changes 
 
 ## Vocal remover
 
-Open a video's or song's **⋯** menu (or right-click it) → **Remove vocals (karaoke)**. The sound is split once into two tracks, music and vocals, saved under `Videos\Ma3madan Video Presenter\Separated`. From then on, that item plays with a **mixer**:
+Open a video's or song's **⋯** menu (or right-click it) → **Remove vocals (karaoke)**. The sound is split once into two tracks, music and vocals, saved under `Videos\Ma3madan Play\Separated`. From then on, that item plays with a **mixer**:
 
 - **Vocals** and **Music** sliders, 0–100%, that you can move live while it plays
 - Presets: **Karaoke** (music only), **Original**, **Vocals only**
@@ -134,19 +139,21 @@ Online, the song's sound is uploaded to MVSEP, separated on their servers, downl
 | `0`–`9` | Jump to 0%–90% |
 | `Home` / `End` | Start / end |
 | `Enter` | Play the selected video |
-| `Shift` + `↑` `↓` | Move the playlist selection |
+| `Shift` + `↑` `↓` | Move the selection in Recents |
 | `Delete` | Remove the selected video from the list |
-| `F` | Output full-screen (single-screen mode) |
+| `F` / double-click | Full screen (Player mode) |
+| `Esc` | Leave full screen |
+| `Ctrl + B` | Show or hide the side panel |
 | `Ctrl + O` | Add videos |
 
-Shortcuts also work while the projector window has focus.
+Shortcuts also work while the video has focus.
 
 ## Make it your default video player
 
 After installing, either:
 
-- **Settings → Apps → Default apps → Ma3madan Video Presenter**, then choose it for `.mp4`, `.mkv` and the other types, or
-- right-click a video → **Open with → Choose another app** → **Ma3madan Video Presenter**, and tick **Always**.
+- **Settings → Apps → Default apps → Ma3madan Play**, then choose it for `.mp4`, `.mkv` and the other types, or
+- right-click a video → **Open with → Choose another app** → **Ma3madan Play**, and tick **Always**.
 
 Windows doesn't let apps make themselves the default; you have to choose it once yourself.
 
@@ -171,15 +178,15 @@ Other scripts:
 
 | File | Role |
 |---|---|
-| `src/main.js` | Electron main process: windows, screens, settings, playlist, IPC |
+| `src/main.js` | Electron main process: windows, screens, Player/Presenter modes, theme, settings, Recents, IPC |
 | `src/control.html` · `control.js` · `control.css` | The operator window |
-| `src/output.html` | The projector window: playback, Web Audio volume boost, aspect ratio, stream buffering and automatic quality |
+| `src/output.html` | The video engine (on the projector in Presenter mode, inside the main window in Player mode): playback, Web Audio volume boost, aspect ratio, stream buffering and automatic quality |
 | `src/youtube.js` | yt-dlp: downloads, and resolving stream formats into a quality ladder |
 | `src/stream-proxy.js` | Local proxy that fetches YouTube streams in chunks, so they aren't throttled to playback speed |
 | `src/i18n.js` | English and Arabic strings |
 | `build/installer.nsh` | Registers the app under Windows Default apps |
 
-The preview in the control window is a live capture of the projector window, so it always shows exactly what the audience sees.
+In Presenter mode, the preview in the control window is a live capture of the projector, so it always shows exactly what the audience sees. In Player mode, the same video engine is moved into the main window over the preview box, so switching modes never interrupts playback.
 
 ### Releasing
 
@@ -198,7 +205,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 Only files built by this repository's GitHub Actions workflow from its public source code are signed. Each signing request is approved by hand.
 
-**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. Settings and the playlist stay on your computer.
+**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. Settings and the list of recent videos stay on your computer.
 
 ## Third-party software
 

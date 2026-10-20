@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: mediastream:; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
-<title>Ma3madan Video Presenter</title>
+<title>Ma3madan Play</title>
 <link rel="stylesheet" href="control.css">
 </head>
 <body>
@@ -20,7 +20,7 @@
   <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
   <symbol id="i-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
-  <symbol id="i-yt" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4" fill="currentColor"/><path d="M10 9v6l5-3z" fill="#0f1115"/></symbol>
+  <symbol id="i-yt" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4" fill="currentColor"/><path d="M10 9v6l5-3z" fill="var(--yt-play)"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
   <symbol id="i-win-min" viewBox="0 0 24 24"><path d="M6 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   <symbol id="i-win-max" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></symbol>
@@ -33,7 +33,20 @@
   <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 11v6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.3" fill="currentColor"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></symbol>
+  <symbol id="i-screens" viewBox="0 0 24 24"><rect x="2.5" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="9.5" y="9" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M15.5 18v2.5M12.5 21h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-theme-system" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></symbol>
+  <symbol id="i-theme-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-theme-dark" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M15 4.5v15" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-black" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" fill="currentColor"/><path d="M9 20.5h6M12 17v3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-autonext" viewBox="0 0 24 24"><path d="M4 6h11M4 11h11M4 16h6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 13.5v7l6-3.5z" fill="currentColor"/></symbol>
+  <symbol id="i-black-end" viewBox="0 0 24 24"><path d="M3 12h8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="11" cy="12" r="2.2" fill="currentColor"/><rect x="14.5" y="6" width="7" height="12" rx="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-loop" viewBox="0 0 24 24"><path d="M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-speed" viewBox="0 0 24 24"><path d="M4.2 17.5a8.5 8.5 0 1 1 15.6 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 13.5l4-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13.5" r="1.9" fill="currentColor"/></symbol>
+  <symbol id="i-aspect" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 12V9h3M17 12v3h-3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-hd" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 9v6M7 12h3.5M10.5 9v6M14 9v6h1.6a3 3 0 0 0 0-6z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-speaker" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="14.5" r="3.2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="1.3" fill="currentColor"/></symbol>
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
 </svg>
 
@@ -44,17 +57,10 @@
     <button id="aboutBtn" class="about-btn" data-i18n-title="about"><svg><use href="#i-info"/></svg></button>
   </div>
   <div class="spacer"></div>
-  <label class="field"><span data-i18n="outputScreen"></span>
-    <select id="displaySel"></select>
-  </label>
-  <button id="fullBtn" class="ghost" data-i18n-title="fullTitle"><svg><use href="#i-full"/></svg><span></span></button>
-  <button id="langBtn" class="ghost"><svg><use href="#i-globe"/></svg><span></span></button>
   <button id="updateBtn" class="update" hidden><svg><use href="#i-download"/></svg><span></span></button>
-  <div class="win-controls">
-    <button id="winMin" data-i18n-title="tMinimize"><svg><use href="#i-win-min"/></svg></button>
-    <button id="winMax" data-i18n-title="tMaximize"><svg><use href="#i-win-max"/></svg></button>
-    <button id="winClose" class="close" data-i18n-title="tClose"><svg><use href="#i-win-close"/></svg></button>
-  </div>
+  <button id="themeBtn" class="icon-btn"><svg><use href="#i-theme-system"/></svg></button>
+  <button id="langBtn" class="icon-btn"><svg><use href="#i-globe"/></svg></button>
+  <button id="sideBtn" class="icon-btn" data-i18n-title="tSidebar"><svg><use href="#i-sidebar"/></svg></button>
 </header>
 
 <main>
@@ -87,7 +93,8 @@
         <button id="stopBtn" data-i18n-title="tStop"><svg><use href="#i-stop"/></svg></button>
       </div>
       <div class="group">
-        <button id="blackBtn" class="toggle" data-i18n-title="tBlack"><span data-i18n="blackScreen"></span></button>
+        <button id="blackBtn" class="toggle" data-i18n-title="tBlack"><svg><use href="#i-black"/></svg></button>
+        <button id="fullBtn" data-i18n-title="fullTitle"><svg><use href="#i-full"/></svg></button>
       </div>
       <div class="group vol" dir="ltr">
         <button id="muteBtn" data-i18n-title="tMute"><svg><use href="#i-vol"/></svg></button>
@@ -100,22 +107,24 @@
     </div>
 
     <div class="options">
-      <label class="check"><input type="checkbox" id="autoNext"> <span data-i18n="autoNext"></span></label>
-      <label class="check"><input type="checkbox" id="blackOnEnd" checked> <span data-i18n="blackOnEnd"></span></label>
-      <label class="check"><input type="checkbox" id="loopChk"> <span data-i18n="loop"></span></label>
-      <label class="field"><span data-i18n="speed"></span>
+      <div class="opt-group">
+        <label class="opt-btn" data-i18n-title="autoNext"><input type="checkbox" id="autoNext"><svg><use href="#i-autonext"/></svg></label>
+        <label class="opt-btn" data-i18n-title="blackOnEnd"><input type="checkbox" id="blackOnEnd" checked><svg><use href="#i-black-end"/></svg></label>
+        <label class="opt-btn" data-i18n-title="loop"><input type="checkbox" id="loopChk"><svg><use href="#i-loop"/></svg></label>
+      </div>
+      <label class="field" data-i18n-title="speed"><svg><use href="#i-speed"/></svg>
         <select id="rateSel" dir="ltr">
           <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
           <option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
         </select>
       </label>
-      <label class="field"><span data-i18n="aspect"></span>
+      <label class="field" data-i18n-title="aspect"><svg><use href="#i-aspect"/></svg>
         <select id="aspectSel" data-i18n-title="tAspect"></select>
       </label>
-      <label class="field" id="qualityField" style="display:none"><span data-i18n="quality"></span>
+      <label class="field" id="qualityField" style="display:none" data-i18n-title="quality"><svg><use href="#i-hd"/></svg>
         <select id="qualitySel" dir="ltr"></select>
       </label>
-      <label class="field"><span data-i18n="audioOut"></span>
+      <label class="field" data-i18n-title="audioOut"><svg><use href="#i-speaker"/></svg>
         <select id="sinkSel"></select>
       </label>
     </div>
@@ -132,6 +141,7 @@
     </div>
   </section>
 
+  <div id="sideGrip" class="side-grip" data-i18n-title="tSideGrip"></div>
   <aside class="side">
     <form id="ytForm" class="yt">
       <svg class="yt-ico"><use href="#i-yt"/></svg>
@@ -154,6 +164,14 @@
     </div>
     <ol id="playlist" class="playlist"></ol>
     <div id="emptyList" class="empty-list" data-i18n="emptyList"></div>
+
+    <div class="screen-panel" id="screenPanel">
+      <div class="screen-head" data-i18n="screenHead"></div>
+      <button id="modeBtn" hidden><svg><use href="#i-screens"/></svg><span></span></button>
+      <label class="field" id="outputField"><span data-i18n="outputScreen"></span>
+        <select id="displaySel"></select>
+      </label>
+    </div>
   </aside>
 </main>
 

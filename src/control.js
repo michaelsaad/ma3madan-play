@@ -39,22 +39,109 @@ function toast(msg) {
 function setLang(lang) {
   applyLang(lang);
   settings.lang = LANG; api.setSetting('lang', LANG);
-  $('langBtn').querySelector('span').textContent = t('otherLang');
+  $('langBtn').title = t('otherLang');
+  renderTheme();
   $('aspectSel').innerHTML = ASPECTS.map(a => `<option value="${a}">${escapeHtml(aspectLabel(a))}</option>`).join('');
   $('aspectSel').value = aspect;
   renderDisplays(); loadSinks(); renderList(); renderState(); renderDownloads(); renderUpdate(); renderVocalJobs?.();
 }
 $('langBtn').onclick = () => setLang(LANG === 'en' ? 'ar' : 'en');
 
-// ---------- window buttons (the window has no system title bar) ----------
-$('winMin').onclick = () => api.winAction('minimize');
-$('winMax').onclick = () => api.winAction('maximize');
-$('winClose').onclick = () => api.winAction('close');
-function renderMaximized(max) {
-  setIcon($('winMax'), max ? 'i-win-restore' : 'i-win-max');
-  $('winMax').title = t(max ? 'tRestore' : 'tMaximize');
+// ---------- theme: same as Windows → light → dark ----------
+const THEMES = ['system', 'light', 'dark'];
+function renderTheme() {
+  const th = THEMES.includes(settings.theme) ? settings.theme : 'system';
+  $('themeBtn').querySelector('use').setAttribute('href', '#i-theme-' + th);
+  $('themeBtn').title = t('theme' + th[0].toUpperCase() + th.slice(1));
 }
-api.onWinMaximized(renderMaximized);
+$('themeBtn').onclick = () => {
+  const cur = THEMES.includes(settings.theme) ? settings.theme : 'system';
+  settings.theme = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+  api.setTheme(settings.theme);
+  renderTheme();
+};
+
+// ---------- side panel: drag the edge to resize, Ctrl+B or the button to hide ----------
+const SIDE_MIN = 260, SIDE_MAX = 560, SIDE_DEFAULT = 400;
+const clampSide = w => Math.max(SIDE_MIN, Math.min(SIDE_MAX, Math.round(w)));
+function applySide() {
+  document.body.classList.toggle('side-hidden', !!settings.sidebarHidden);
+  if (settings.sidebarWidth) document.body.style.setProperty('--side-w', clampSide(settings.sidebarWidth) + 'px');
+  else document.body.style.removeProperty('--side-w');
+  $('sideBtn').classList.toggle('on', !settings.sidebarHidden);
+  // The preview box can move without changing size, which the ResizeObserver doesn't see.
+  requestAnimationFrame(() => sendPlayerRect());
+}
+function toggleSide() {
+  settings.sidebarHidden = !settings.sidebarHidden;
+  api.setSetting('sidebarHidden', settings.sidebarHidden);
+  applySide();
+}
+$('sideBtn').onclick = toggleSide;
+$('sideGrip').addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const grip = e.currentTarget;
+  grip.setPointerCapture(e.pointerId);
+  document.body.classList.add('resizing');
+  const rtl = document.documentElement.dir === 'rtl';
+  const move = ev => {
+    const w = rtl ? ev.clientX : window.innerWidth - ev.clientX;
+    settings.sidebarWidth = clampSide(w);
+    applySide();
+  };
+  const up = () => {
+    grip.removeEventListener('pointermove', move);
+    document.body.classList.remove('resizing');
+    api.setSetting('sidebarWidth', settings.sidebarWidth);
+  };
+  grip.addEventListener('pointermove', move);
+  grip.addEventListener('pointerup', up, { once: true });
+  grip.addEventListener('pointercancel', up, { once: true });
+});
+$('sideGrip').addEventListener('dblclick', () => {
+  settings.sidebarWidth = null; api.setSetting('sidebarWidth', null); applySide();
+});
+
+// ---------- Player / Presenter ----------
+// Player: the video plays inside this window, over the preview box, like a normal player.
+// Presenter: the video is full screen on the projector and the box shows a live preview of it.
+let modeState = { mode: 'player', canPresent: false, fullscreen: false };
+function renderMode() {
+  const m = modeState;
+  document.body.classList.toggle('player-mode', m.mode === 'player');
+  $('modeBtn').hidden = !m.canPresent;
+  $('modeBtn').querySelector('span').textContent = t(m.mode === 'player' ? 'toPresenter' : 'toPlayer');
+  $('modeBtn').title = t(m.mode === 'player' ? 'toPresenterTip' : 'toPlayerTip');
+  $('outputField').hidden = m.mode !== 'presenter';
+  $('fullBtn').hidden = m.mode !== 'player';
+  $('screenPanel').hidden = !m.canPresent && m.mode === 'player';
+  sendPlayerRect();
+  if (m.mode === 'presenter') startPreview();
+}
+api.onMode(m => { modeState = m; renderMode(); });
+$('modeBtn').onclick = () => api.setMode(modeState.mode === 'player' ? 'presenter' : 'player');
+$('fullBtn').onclick = () => api.playerFullscreen(!modeState.fullscreen);
+
+// Tell the main process where the preview box is, so the video sits exactly on it. The video is a
+// separate layer above this page, so it steps aside while a dialog is open or for audio-only items.
+let lastPlayerRect = '';
+function sendPlayerRect() {
+  if (modeState.mode !== 'player') return;
+  const hide = !$('modal').hidden || (out.loaded && out.audioOnly);
+  const r = document.querySelector('.preview').getBoundingClientRect();
+  const rect = hide ? null : { x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 };
+  lastPlayerRect = JSON.stringify(rect);
+  api.playerRect(rect);
+}
+// The box can also move without changing size (language switch, side panel): catch any move.
+setInterval(() => {
+  if (modeState.mode !== 'player' || !$('modal').hidden || (out.loaded && out.audioOnly)) return;
+  const r = document.querySelector('.preview').getBoundingClientRect();
+  if (JSON.stringify({ x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 }) !== lastPlayerRect) sendPlayerRect();
+}, 200);
+new ResizeObserver(sendPlayerRect).observe(document.querySelector('.preview'));
+window.addEventListener('resize', sendPlayerRect);
+new MutationObserver(sendPlayerRect).observe($('modal'), { attributes: true, attributeFilter: ['hidden'] });
 
 // ---------- app update (optional: only when the operator clicks) ----------
 let update = null;      // { version, notes, canInstall }
@@ -81,8 +168,11 @@ async function showAbout() {
       <img src="assets/app-128.png" alt="" class="about-icon">
       <h2>${escapeHtml(t('appName'))}</h2>
       <div class="muted" dir="ltr">${escapeHtml(t('versionN', { v: version }))}</div>
-      <p>${escapeHtml(t('aboutText'))}</p>
-      <p class="muted small">${escapeHtml(t('aboutName'))}</p>
+      <p>${escapeHtml(t('aboutName'))}</p>
+      <div class="about-features">
+        <p>${escapeHtml(t('aboutText'))}</p>
+        <ul>${['aboutF1', 'aboutF2', 'aboutF3'].map(k => `<li>${escapeHtml(t(k))}</li>`).join('')}</ul>
+      </div>
       <div class="about-actions">
         <button id="aboutGithub" class="primary"><svg><use href="#i-github"/></svg><span>${escapeHtml(t('aboutGithub'))}</span></button>
         <button id="aboutCheck"><svg><use href="#i-download"/></svg><span>${escapeHtml(t('checkUpdates'))}</span></button>
@@ -388,6 +478,7 @@ function renderNow() {
   $('nextTitle').innerHTML = (out.buffering || it?.loading) ? escapeHtml(t('loading')) : (n ? `<span>${escapeHtml(t('next'))}</span><bdi>${escapeHtml(n.title)}</bdi>` : '');
 }
 
+let lastAudioOnly = false;
 function renderState() {
   setIcon($('playBtn'), out.paused ? 'i-play' : 'i-pause');
   if (!seeking) {
@@ -402,6 +493,7 @@ function renderState() {
 
   document.querySelector('.preview').classList.toggle('live', out.loaded && !out.paused && (out.audioOnly || !out.black));
   $('audioBadge').hidden = !(out.loaded && out.audioOnly);
+  if (out.audioOnly !== lastAudioOnly) { lastAudioOnly = out.audioOnly; sendPlayerRect(); }
   renderMixer(); // vocals-ui.js
   renderNow();
 }
@@ -442,20 +534,26 @@ api.onState(s => {
 
 // ---------- preview: live capture of the output window ----------
 let previewStream = null;
+let previewTimer = null;
 async function startPreview() {
+  clearTimeout(previewTimer);
   try {
     const id = await api.outputSourceId();
-    if (!id) throw new Error('no output');
+    if (!id) {
+      // Player mode: nothing to capture; the video itself sits on the preview box.
+      previewStream?.getTracks().forEach(tr => tr.stop()); previewStream = null; $('preview').srcObject = null;
+      return;
+    }
     previewStream?.getTracks().forEach(tr => tr.stop());
     previewStream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: 1280, maxHeight: 720, maxFrameRate: 30 } },
     });
     $('preview').srcObject = previewStream;
-    previewStream.getVideoTracks()[0].onended = () => setTimeout(startPreview, 1000);
+    previewStream.getVideoTracks()[0].onended = () => { previewTimer = setTimeout(startPreview, 1000); };
   } catch (e) {
     console.warn('preview failed', e);
-    setTimeout(startPreview, 2000);
+    previewTimer = setTimeout(startPreview, 2000);
   }
 }
 let outputReady = false;
@@ -489,14 +587,10 @@ function renderDisplays() {
   if (!displays) return;
   const d = displays;
   $('displaySel').innerHTML = d.list.map(x =>
-    `<option value="${x.id}" ${x.id === d.current ? 'selected' : ''}>${escapeHtml(t('screenN', { n: x.index }))} — ⁦${x.width}×${x.height}⁩${x.primary ? ' ' + escapeHtml(t('primary')) : ''}</option>`).join('');
-  $('fullBtn').querySelector('span').textContent = d.fullscreen ? t('windowed') : t('fullscreen');
-  const onPrimary = d.list.find(x => x.id === d.current)?.primary;
-  $('fullBtn').style.display = onPrimary ? '' : 'none';
+    `<option value="${x.id}" ${x.id === d.current ? 'selected' : ''}>${escapeHtml(t('screenN', { n: x.index }))} — ⁦${x.width}×${x.height}⁩</option>`).join('');
 }
 api.onDisplays(d => { displays = d; renderDisplays(); });
 $('displaySel').addEventListener('change', e => api.setOutputDisplay(Number(e.target.value)));
-$('fullBtn').addEventListener('click', () => api.toggleOutputFullscreen());
 
 // ---------- audio output ----------
 async function loadSinks() {
@@ -685,7 +779,8 @@ function handleKey(k) {
     case 'KeyA': setAspect(ASPECTS[(ASPECTS.indexOf(aspect) + 1) % ASPECTS.length], true); break;
     case 'Home': cmd('seek', { t: 0 }); break;
     case 'End': if (out.duration) cmd('seek', { t: out.duration - 0.1 }); break;
-    case 'KeyF': api.toggleOutputFullscreen(); break;
+    case 'KeyF': case 'DblClick': if (modeState.mode === 'player') api.playerFullscreen(!modeState.fullscreen); break;
+    case 'Escape': if (modeState.fullscreen) api.playerFullscreen(false); else return false; break;
     case 'Enter': case 'NumpadEnter': playItem(items.find(x => x.id === selectedId)); break;
     case 'Delete': if (selectedId) removeItem(selectedId); break;
     default: {
@@ -721,6 +816,7 @@ window.addEventListener('keydown', e => {
   if (tag === 'SELECT') return;
   if (e.ctrlKey || e.altKey || e.metaKey) {
     if (e.ctrlKey && e.code === 'KeyO') { e.preventDefault(); $('addFilesBtn').click(); }
+    if (e.ctrlKey && e.code === 'KeyB') { e.preventDefault(); toggleSide(); }
     return;
   }
   // Up/Down with Shift moves the playlist selection; plain Up/Down is volume.
@@ -755,13 +851,43 @@ window.addEventListener('drop', e => {
   $('autoNext').checked = !!settings.autoNext;
   $('blackOnEnd').checked = settings.blackOnEnd ?? true;
   items = (await api.loadPlaylist()).map(({ loading, ...it }) => it);
+  applySide();
   setLang(settings.lang || 'en');
   renderVolume(settings.volume ?? 1, !!settings.muted);
   probeDurations();
   api.getDisplays();
-  renderMaximized(await api.winIsMaximized());
   outputReady = await api.outputIsReady();
   startPreview();
   applyOutputSettings();
   openFiles(await api.takeOpenFiles());
 })();
+
+// ---------- quick tooltips ----------
+// Buttons show their label right away on hover. The text lives in data-tip so the slow native
+// tooltip doesn't show as well; translations still set title, which is moved over on hover.
+{
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  document.body.appendChild(tip);
+  let target = null, timer;
+  const hide = () => { clearTimeout(timer); tip.classList.remove('show'); target = null; };
+  document.addEventListener('pointerover', e => {
+    const el = e.target.closest('button[title], label[title], button[data-tip], label[data-tip]');
+    if (el === target) return;
+    hide();
+    if (!el || el.closest('.menu, .modal')) return;
+    if (el.title) { el.dataset.tip = el.title; el.removeAttribute('title'); }
+    if (!el.dataset.tip) return;
+    target = el;
+    timer = setTimeout(() => {
+      tip.textContent = el.dataset.tip;
+      const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+      const below = r.bottom + 8 + h < innerHeight;
+      tip.style.left = Math.max(6, Math.min(innerWidth - w - 6, r.left + r.width / 2 - w / 2)) + 'px';
+      tip.style.top = (below ? r.bottom + 8 : r.top - h - 8) + 'px';
+      tip.classList.add('show');
+    }, 250);
+  });
+  document.addEventListener('pointerdown', hide);
+  window.addEventListener('blur', hide);
+}

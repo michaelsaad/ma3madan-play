@@ -98,8 +98,8 @@ function lastError(stderr, code) {
 }
 
 // ---------- downloads ----------
-// kind 'video': picture and sound are saved as two files (Title.mp4 + Title.m4a) and played together,
-// which avoids shipping FFmpeg just to merge them.
+// kind 'video': one ordinary MP4 (picture and sound merged by FFmpeg, fetched on first use), so the
+// file can be copied anywhere and played by any player. The sound is only split out by the vocal remover.
 // kind 'mp3': the sound only, converted to MP3 with FFmpeg (fetched on first use).
 const downloads = new Map(); // id -> child process
 const canceled = new Set();
@@ -113,7 +113,7 @@ async function download(id, url, outDir, kind, onUpdate) {
   try {
     const format = mp3
       ? ['-f', 'ba', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '--ffmpeg-location', await ensureFfmpeg()]
-      : ['-f', 'bv,ba'];
+      : ['-f', 'bv*+ba/b', '--merge-output-format', 'mp4', '--ffmpeg-location', await ensureFfmpeg()];
     proc = await runYtdlp([
       url, ...baseArgs(),
       ...format,
@@ -130,6 +130,7 @@ async function download(id, url, outDir, kind, onUpdate) {
   downloads.set(id, proc);
 
   let title = null, video = null, audio = null, stderr = '', buf = '';
+  let part = 0, lastP = 0; // a video download is two parts (picture, then sound) before the merge
   proc.stdout.setEncoding('utf8');
   proc.stdout.on('data', chunk => {
     buf += chunk;
@@ -143,9 +144,11 @@ async function download(id, url, outDir, kind, onUpdate) {
       } else if (line.startsWith('PROG|')) {
         const [, pct, speed, eta] = line.split('|');
         const p = parseFloat(pct);
-        // For video, the picture comes first and is most of the size; the sound fills the last 15%.
-        // For MP3, the last 10% is left for the conversion.
-        const percent = mp3 ? p * 0.9 : video ? 85 + p * 0.15 : p * 0.85;
+        if (p + 30 < lastP) part++;
+        lastP = p;
+        // Video: the picture is most of the size, the sound next, and the merge takes the last few %.
+        // MP3: the last 10% is left for the conversion.
+        const percent = mp3 ? p * 0.9 : part === 0 ? p * 0.85 : 85 + p * 0.12;
         if (!isNaN(p)) onUpdate({ status: 'downloading', percent, speed: speed?.trim(), eta: eta?.trim() });
       }
     }
@@ -159,7 +162,7 @@ async function download(id, url, outDir, kind, onUpdate) {
     else if (code === 0 && mp3 && audio && fs.existsSync(audio)) {
       onUpdate({ status: 'done', path: audio, audioPath: null, title: title || path.basename(audio) });
     } else if (code === 0 && video && fs.existsSync(video)) {
-      onUpdate({ status: 'done', path: video, audioPath: audio && fs.existsSync(audio) ? audio : null, title: title || path.basename(video) });
+      onUpdate({ status: 'done', path: video, audioPath: null, title: title || path.basename(video) });
     } else onUpdate({ status: 'error', error: lastError(stderr, code) });
   });
 }

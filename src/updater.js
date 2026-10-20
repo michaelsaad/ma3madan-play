@@ -26,7 +26,7 @@ function isNewer(a, b) {
 
 async function check() {
   const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Ma3madan-Video-Presenter' },
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Ma3madan-Play' },
   });
   if (!res.ok) return null;
   const release = await res.json();

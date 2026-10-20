@@ -29,16 +29,17 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdate: () => ipcRenderer.invoke('update-check'),
   appVersion: () => ipcRenderer.invoke('app-version'),
 
-  // window buttons
-  winAction: action => ipcRenderer.send('win', action),
-  winIsMaximized: () => ipcRenderer.invoke('win-is-maximized'),
-  onWinMaximized: fn => on('win-maximized', fn),
+  // Player / Presenter
+  setMode: m => ipcRenderer.send('set-mode', m),
+  onMode: fn => on('mode', fn),
+  playerRect: r => ipcRenderer.send('player-rect', r),
+  playerFullscreen: on => ipcRenderer.send('player-fullscreen', on),
+  setTheme: theme => ipcRenderer.send('set-theme', theme),
 
   // displays
   getDisplays: () => ipcRenderer.invoke('get-displays'),
   onDisplays: fn => on('displays', fn),
   setOutputDisplay: id => ipcRenderer.send('set-output-display', id),
-  toggleOutputFullscreen: () => ipcRenderer.send('toggle-output-fullscreen'),
 
   // settings + playlist
   getSettings: () => ipcRenderer.invoke('get-settings'),

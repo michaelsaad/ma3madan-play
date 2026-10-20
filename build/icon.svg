@@ -1,53 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3d8bff"/>
-      <stop offset="1" stop-color="#5b2bd6"/>
+      <stop offset="0" stop-color="#17306b"/>
+      <stop offset="1" stop-color="#0a1534"/>
     </linearGradient>
-    <linearGradient id="play" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3d7bff"/>
-      <stop offset="1" stop-color="#5b2bd6"/>
+    <linearGradient id="disc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5aa2ff"/>
+      <stop offset="1" stop-color="#2a63de"/>
     </linearGradient>
-    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#38bdf8"/>
-      <stop offset="1" stop-color="#2563eb"/>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f5b82e"/>
     </linearGradient>
-    <clipPath id="screen"><rect x="168" y="188" width="264" height="166" rx="22"/></clipPath>
-    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#120a3a" flood-opacity=".35"/>
-    </filter>
   </defs>
-  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bg)"/>
+  <g transform="translate(24 24) scale(4.64)">
+    <rect width="100" height="100" rx="23.3" fill="url(#bg)"/>
 
-  <!-- presenter screen (behind) -->
-  <rect x="84" y="118" width="236" height="148" rx="20" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="16"/>
-
-  <!-- the dove of the Theophany, descending above the screens (head down, wings up) -->
-  <g fill="#fff" transform="translate(300 74) scale(1.36)">
-    <path d="M0 12 C -8 2 -28 -2 -46 -20 C -26 -18 -14 -13 -6 -7 C -4 -16 -2 -22 0 -28 C 2 -22 4 -16 6 -7 C 14 -13 26 -18 46 -20 C 28 -2 8 2 0 12 Z"/>
-    <circle cx="0" cy="17" r="6"/>
-  </g>
-
-  <!-- projector screen (front) with the Jordan flowing under the play button -->
-  <g filter="url(#sh)">
-    <rect x="168" y="188" width="264" height="166" rx="22" fill="#fff"/>
-    <g clip-path="url(#screen)">
-      <path d="M168 300 C 202 284, 234 284, 266 300 S 334 316, 366 300 S 410 286, 432 296 V 354 H 168 Z" fill="url(#water)" opacity=".9"/>
-      <path d="M168 326 C 202 312, 234 312, 266 326 S 334 340, 366 326 S 410 314, 432 322 V 354 H 168 Z" fill="#1d4ed8" opacity=".55"/>
-    </g>
-    <path d="M280 216 L280 278 L334 247 Z" fill="url(#play)" stroke="url(#play)" stroke-width="10" stroke-linejoin="round"/>
+    <!-- the play button: a light over the water -->
+    <circle cx="50" cy="52" r="29" fill="url(#disc)"/>
+    <path d="M42 39 L42 65 L64 52 Z" fill="#fff" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
     <!-- hidden in the play button, only noticeable up close: John baptising Christ in the Jordan -->
-    <g fill="#fff" fill-opacity=".72">
-      <circle cx="296" cy="238" r="2.6"/>
-      <rect x="293.8" y="242" width="4.4" height="10" rx="2.2"/>
-      <circle cx="311" cy="238.5" r="2.5"/>
-      <rect x="308.8" y="242.5" width="4.4" height="14" rx="2.2"/>
+    <g transform="translate(42 39) scale(0.42) translate(-280 -216)">
+      <g fill="#2a63de" fill-opacity=".45">
+        <circle cx="296" cy="238" r="2.6"/>
+        <rect x="293.8" y="242" width="4.4" height="10" rx="2.2"/>
+        <circle cx="311" cy="238.5" r="2.5"/>
+        <rect x="308.8" y="242.5" width="4.4" height="14" rx="2.2"/>
+      </g>
+      <g fill="none" stroke="#2a63de" stroke-opacity=".45" stroke-linecap="round">
+        <path d="M309.5 245 C 306 240 302 236.5 299 235.2" stroke-width="1.8"/>
+        <path d="M287.5 254 q 2.2 -1.8 4.4 0 t 4.4 0 t 4.4 0 t 4.4 0" stroke-width="1.5"/>
+      </g>
     </g>
-    <g fill="none" stroke="#fff" stroke-opacity=".72" stroke-linecap="round">
-      <path d="M309.5 245 C 306 240 302 236.5 299 235.2" stroke-width="1.8"/>
-      <path d="M287.5 254 q 2.2 -1.8 4.4 0 t 4.4 0 t 4.4 0 t 4.4 0" stroke-width="1.5"/>
+
+    <!-- the Jordan -->
+    <path d="M10 76 q10 -6 20 0 t20 0 t20 0 t20 0" stroke="#7dd3fc" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M10 87 q10 -6 20 0 t20 0 t20 0 t20 0" stroke="#3d8bff" stroke-width="4" fill="none" stroke-linecap="round" opacity=".75"/>
+
+    <!-- the dove of the Theophany, descending (head down, wings up) -->
+    <g fill="url(#gold)" transform="translate(50 15.6) scale(0.29)">
+      <path d="M0 12 C -8 2 -28 -2 -46 -20 C -26 -18 -14 -13 -6 -7 C -4 -16 -2 -22 0 -28 C 2 -22 4 -16 6 -7 C 14 -13 26 -18 46 -20 C 28 -2 8 2 0 12 Z"/>
+      <circle cx="0" cy="17" r="6"/>
     </g>
-    <rect x="284" y="354" width="32" height="30" fill="#fff"/>
-    <rect x="240" y="378" width="120" height="18" rx="9" fill="#fff"/>
   </g>
 </svg>

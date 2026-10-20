@@ -3,7 +3,7 @@
      Signs the app's main executable. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <pe-file path="Ma3madan Video Presenter.exe">
+    <pe-file path="Ma3madan Play.exe">
       <authenticode-sign />
     </pe-file>
   </zip-file>

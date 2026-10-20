@@ -3,8 +3,8 @@
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
     <pe-file-set>
-      <include path="Ma3madan-Video-Presenter-Setup-*.exe" />
-      <include path="Ma3madan-Video-Presenter-Portable-*.exe" />
+      <include path="Ma3madan-Play-Setup-*.exe" />
+      <include path="Ma3madan-Play-Portable-*.exe" />
       <for-each>
         <authenticode-sign />
       </for-each>
