@@ -6,7 +6,6 @@ let playingId = null;
 let out = { loaded: false, paused: true, time: 0, duration: 0, volume: 1, muted: false, black: true };
 let seeking = false;
 let settings = {};
-let displays = null;
 const downloads = new Map(); // id -> { url, title, status, percent, speed, eta, error }
 
 const MAX_VOLUME = 2;      // 200%, like VLC
@@ -40,10 +39,11 @@ function setLang(lang) {
   applyLang(lang);
   settings.lang = LANG; api.setSetting('lang', LANG);
   $('langBtn').title = t('otherLang');
+  document.querySelector('.tip')?.classList.remove('show'); // a tooltip in the old language
   renderTheme();
   $('aspectSel').innerHTML = ASPECTS.map(a => `<option value="${a}">${escapeHtml(aspectLabel(a))}</option>`).join('');
   $('aspectSel').value = aspect;
-  renderDisplays(); loadSinks(); renderList(); renderState(); renderDownloads(); renderUpdate(); renderVocalJobs?.();
+  renderMode(); loadSinks(); renderList(); renderState(); renderDownloads(); renderUpdate(); renderVocalJobs?.();
 }
 $('langBtn').onclick = () => setLang(LANG === 'en' ? 'ar' : 'en');
 
@@ -102,40 +102,134 @@ $('sideGrip').addEventListener('dblclick', () => {
   settings.sidebarWidth = null; api.setSetting('sidebarWidth', null); applySide();
 });
 
-// ---------- Player / Presenter ----------
-// Player: the video plays inside this window, over the preview box, like a normal player.
-// Presenter: the video is full screen on the projector and the box shows a live preview of it.
-let modeState = { mode: 'player', canPresent: false, fullscreen: false };
+// ---------- where the video shows ("Show on") ----------
+// No other screen chosen → Player: the video plays inside this window, over the preview box.
+// Other screens chosen → Presenter: full screen there, and the box shows a live preview of it.
+let modeState = { mode: 'player', canPresent: false, fullscreen: false, showOn: { screens: [], here: false }, screens: [] };
 function renderMode() {
   const m = modeState;
   document.body.classList.toggle('player-mode', m.mode === 'player');
-  $('modeBtn').hidden = !m.canPresent;
-  $('modeBtn').querySelector('span').textContent = t(m.mode === 'player' ? 'toPresenter' : 'toPlayer');
-  $('modeBtn').title = t(m.mode === 'player' ? 'toPresenterTip' : 'toPlayerTip');
-  $('outputField').hidden = m.mode !== 'presenter';
   $('fullBtn').hidden = m.mode !== 'player';
-  $('screenPanel').hidden = !m.canPresent && m.mode === 'player';
+  $('showOnBtn').hidden = !m.canPresent;
+  $('showOnLabel').textContent = showOnLabel();
+  if (document.querySelector('#menu.showon')) renderShowOnMenu();
   sendPlayerRect();
   if (m.mode === 'presenter') startPreview();
 }
 api.onMode(m => { modeState = m; renderMode(); });
-$('modeBtn').onclick = () => api.setMode(modeState.mode === 'player' ? 'presenter' : 'player');
 $('fullBtn').onclick = () => api.playerFullscreen(!modeState.fullscreen);
 
+const screenNo = id => modeState.screens.find(x => x.id === id)?.n;
+const hereScreen = () => modeState.screens.find(x => x.here);
+function showOnLabel() {
+  const { showOn: s, screens } = modeState;
+  if (!s.screens.length) return t('showThisWindow');
+  if (s.here && s.screens.length === screens.length - 1) return t('showAllScreens');
+  const ns = [...s.screens.map(screenNo), ...(s.here ? [hereScreen()?.n] : [])].filter(Boolean).sort();
+  return ns.map(n => t('screenN', { n })).join(' + ');
+}
+function setShowOn(screens, here) {
+  // The controls' screen alone is just Player mode inside this window.
+  if (!screens.length) here = false;
+  api.setShowOn({ screens, here });
+}
+
+// The menu: a map of the screens laid out like Windows' display settings. Click a screen to add
+// or remove it; the quick choices below cover the usual cases.
+function openShowOn() {
+  closeMenu();
+  const menu = document.createElement('div');
+  menu.className = 'menu showon';
+  menu.id = 'menu';
+  document.body.appendChild(menu);
+  renderShowOnMenu();
+  const b = $('showOnBtn').getBoundingClientRect(), r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(b.left + b.width / 2 - r.width / 2, innerWidth - r.width - 8)) + 'px';
+  menu.style.top = Math.max(8, b.top - r.height - 8) + 'px';
+  sendPlayerRect();
+  api.identifyScreens();
+}
+function renderShowOnMenu() {
+  const menu = document.querySelector('#menu.showon');
+  if (!menu) return;
+  const { showOn: s, screens } = modeState;
+  const on = x => (x.here ? s.here && s.screens.length > 0 : s.screens.includes(x.id));
+  const minX = Math.min(...screens.map(x => x.bounds.x)), minY = Math.min(...screens.map(x => x.bounds.y));
+  const W = Math.max(...screens.map(x => x.bounds.x + x.bounds.width)) - minX;
+  const H = Math.max(...screens.map(x => x.bounds.y + x.bounds.height)) - minY;
+  const k = Math.min(300 / W, 120 / H);
+  const gap = 6;
+  menu.innerHTML = `
+    <div class="so-head"><b>${escapeHtml(t('showOn'))}</b><span>${escapeHtml(t('showOnHint'))}</span></div>
+    <div class="so-map" dir="ltr" style="width:${Math.round(W * k)}px;height:${Math.round(H * k)}px">
+      ${screens.map(x => `<button class="so-screen ${on(x) ? 'on' : ''}" data-id="${x.id}" style="left:${Math.round((x.bounds.x - minX) * k) + gap / 2}px;top:${Math.round((x.bounds.y - minY) * k) + gap / 2}px;width:${Math.round(x.bounds.width * k) - gap}px;height:${Math.round(x.bounds.height * k) - gap}px">
+        <b>${x.n}</b><small>${escapeHtml(x.here ? t('thisScreen') : `${x.width}×${x.height}`)}</small></button>`).join('')}
+    </div>
+    <div class="so-quick">
+      <button data-q="window" class="${!s.screens.length ? 'on' : ''}">${escapeHtml(t('showThisWindow'))}</button>
+      <button data-q="projector" class="${s.screens.length === 1 && !s.here ? 'on' : ''}">${escapeHtml(t('showProjector'))}</button>
+      <button data-q="all" class="${s.here && s.screens.length === screens.length - 1 ? 'on' : ''}">${escapeHtml(t('showAllScreens'))}</button>
+    </div>`;
+  const others = screens.filter(x => !x.here).map(x => x.id);
+  for (const b of menu.querySelectorAll('.so-screen')) b.onclick = () => {
+    const x = screens.find(y => y.id === Number(b.dataset.id));
+    if (x.here) {
+      // This screen joins only next to another one (alone, it's just the window).
+      if (s.screens.length) setShowOn(s.screens, !s.here); else setShowOn([], false);
+    } else {
+      const list = s.screens.includes(x.id) ? s.screens.filter(id => id !== x.id) : [...s.screens, x.id];
+      setShowOn(list, s.here);
+    }
+  };
+  for (const b of menu.querySelectorAll('[data-q]')) b.onclick = () => {
+    if (b.dataset.q === 'window') setShowOn([], false);
+    else if (b.dataset.q === 'projector') setShowOn([s.screens[0] ?? others[0]], false);
+    else setShowOn(others, true);
+  };
+}
+$('showOnBtn').onclick = () => (document.querySelector('#menu.showon') ? closeMenu() : openShowOn());
+
+// ---------- freeze and frame by frame ----------
+$('freezeBtn').onclick = () => cmd('freeze', { on: !out.frozen });
+// Frozen in Presenter mode: the preview shows the running video from small live frames.
+let liveUrl = null;
+api.onLiveFrame(frame => {
+  const img = $('liveFrame');
+  if (liveUrl) URL.revokeObjectURL(liveUrl);
+  liveUrl = frame ? URL.createObjectURL(new Blob([frame], { type: 'image/jpeg' })) : null;
+  img.hidden = !liveUrl;
+  if (liveUrl) img.src = liveUrl; else img.removeAttribute('src');
+});
+// One frame per click; held down, it keeps stepping.
+for (const [id, n] of [['frameBackBtn', -1], ['frameFwdBtn', 1]]) {
+  const b = $(id);
+  let hold = null;
+  const stop = () => { clearTimeout(hold); clearInterval(hold); hold = null; };
+  b.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    stop();
+    cmd('frame', { n });
+    hold = setTimeout(() => { hold = setInterval(() => cmd('frame', { n }), 70); }, 400);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
+  b.addEventListener('keydown', e => { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); cmd('frame', { n }); } });
+}
+
 // Tell the main process where the preview box is, so the video sits exactly on it. The video is a
-// separate layer above this page, so it steps aside while a dialog is open or for audio-only items.
+// separate layer above this page, so it steps aside while a dialog or the screen map is open, and
+// for audio-only items.
 let lastPlayerRect = '';
+const videoCovered = () => !$('modal').hidden || !!document.querySelector('#menu.showon') || (out.loaded && out.audioOnly);
 function sendPlayerRect() {
   if (modeState.mode !== 'player') return;
-  const hide = !$('modal').hidden || (out.loaded && out.audioOnly);
   const r = document.querySelector('.preview').getBoundingClientRect();
-  const rect = hide ? null : { x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 };
+  const rect = videoCovered() ? null : { x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 };
   lastPlayerRect = JSON.stringify(rect);
   api.playerRect(rect);
 }
 // The box can also move without changing size (language switch, side panel): catch any move.
 setInterval(() => {
-  if (modeState.mode !== 'player' || !$('modal').hidden || (out.loaded && out.audioOnly)) return;
+  if (modeState.mode !== 'player' || videoCovered()) return;
   const r = document.querySelector('.preview').getBoundingClientRect();
   if (JSON.stringify({ x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 }) !== lastPlayerRect) sendPlayerRect();
 }, 200);
@@ -298,7 +392,12 @@ function showMenu(x, y, entries) {
   menu.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
   menu.querySelector('button')?.focus();
 }
-function closeMenu() { document.getElementById('menu')?.remove(); }
+function closeMenu() {
+  const menu = document.getElementById('menu');
+  if (!menu) return;
+  menu.remove();
+  if (menu.classList.contains('showon')) sendPlayerRect();
+}
 document.addEventListener('mousedown', e => { if (!e.target.closest('#menu')) closeMenu(); });
 window.addEventListener('blur', closeMenu);
 window.addEventListener('resize', closeMenu);
@@ -490,6 +589,8 @@ function renderState() {
   renderVolume(out.volume, out.muted);
   renderQuality();
   $('blackBtn').classList.toggle('on', out.black);
+  $('freezeBtn').classList.toggle('on', !!out.frozen);
+  $('frozenBadge').hidden = !out.frozen;
 
   document.querySelector('.preview').classList.toggle('live', out.loaded && !out.paused && (out.audioOnly || !out.black));
   $('audioBadge').hidden = !(out.loaded && out.audioOnly);
@@ -581,16 +682,6 @@ function applyOutputSettings() {
   cmd('aspect', { mode: aspect });
   if (settings.sinkId) cmd('sink', { id: settings.sinkId });
 }
-
-// ---------- displays ----------
-function renderDisplays() {
-  if (!displays) return;
-  const d = displays;
-  $('displaySel').innerHTML = d.list.map(x =>
-    `<option value="${x.id}" ${x.id === d.current ? 'selected' : ''}>${escapeHtml(t('screenN', { n: x.index }))} — ⁦${x.width}×${x.height}⁩</option>`).join('');
-}
-api.onDisplays(d => { displays = d; renderDisplays(); });
-$('displaySel').addEventListener('change', e => api.setOutputDisplay(Number(e.target.value)));
 
 // ---------- audio output ----------
 async function loadSinks() {
@@ -780,7 +871,15 @@ function handleKey(k) {
     case 'Home': cmd('seek', { t: 0 }); break;
     case 'End': if (out.duration) cmd('seek', { t: out.duration - 0.1 }); break;
     case 'KeyF': case 'DblClick': if (modeState.mode === 'player') api.playerFullscreen(!modeState.fullscreen); break;
-    case 'Escape': if (modeState.fullscreen) api.playerFullscreen(false); else return false; break;
+    case 'Escape':
+      // Leave full screen; or, when the video also covers this screen, give the screen back.
+      if (modeState.fullscreen) api.playerFullscreen(false);
+      else if (modeState.showOn.here) setShowOn(modeState.showOn.screens, false);
+      else return false;
+      break;
+    case 'KeyZ': cmd('freeze', { on: !out.frozen }); break;
+    case 'BracketLeft': cmd('frame', { n: -1 }); break;
+    case 'BracketRight': cmd('frame', { n: 1 }); break;
     case 'Enter': case 'NumpadEnter': playItem(items.find(x => x.id === selectedId)); break;
     case 'Delete': if (selectedId) removeItem(selectedId); break;
     default: {

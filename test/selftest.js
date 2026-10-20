@@ -233,7 +233,7 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
       await shot('16-player-fullscreen');
       getControl().webContents.send('output-key', { code: 'Escape' }); await wait(1200);
       log('after Esc:', getMode().playerFullscreen, getControl().isFullScreen(), '| kept playing:', (await ojs('v.currentTime')) > t1);
-      log('mode button shown with one screen:', await js(`!$('modeBtn').hidden`), '| output selector shown:', await js(`!$('outputField').hidden`));
+      log('Show on button with one screen:', await js(`!$('showOnBtn').hidden`), '| label', await js(`$('showOnLabel').textContent`));
       // The About window must not be covered by the video layer.
       await js(`$('aboutBtn').click()`); await wait(400);
       log('view while a dialog is open:', JSON.stringify(getMode().viewBounds));
@@ -273,14 +273,67 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
       log('Arabic (box moves to the other side): video', await viewMatches());
       await js(`setLang('en')`); await wait(700);
       log('button shows again:', await js(`!document.body.classList.contains('side-hidden')`), '| video', await viewMatches());
-      // Recents with many items scrolls inside the panel; the Screen section stays on screen.
+      // Recents with many items scrolls inside the panel.
       const saved = await js('JSON.stringify(items)');
       await js(`for (let i = 0; i < 40; i++) items.push({ ...items[0], id: 'fill' + i, title: 'Filler item ' + i }); renderList()`); await wait(400);
       log('Recents scrolls:', await js(`(l => l.scrollHeight > l.clientHeight + 10)($('playlist'))`),
-        '| Screen section visible:', await js(`(r => r.bottom <= innerHeight && r.height > 20)(document.querySelector('.screen-panel').getBoundingClientRect())`),
         '| full screen button visible:', await js(`$('fullBtn').offsetParent !== null`));
       await shot('19-many-recents');
       await js(`items = ${saved}; renderList()`); await wait(300);
+    }
+
+    // Freeze: the audience keeps a still frame while the video runs on; frame-by-frame stepping.
+    {
+      await js('playItem(items[0])'); await wait(2000);
+      await js(`$('freezeBtn').click()`); await wait(600);
+      const t0 = await ojs('v.currentTime');
+      await wait(1500);
+      log('freeze:', await ojs('JSON.stringify({ frozen, canvas: !freezeCv.hidden, size: freezeCv.width + "x" + freezeCv.height })'),
+        '| video kept running:', (await ojs('v.currentTime')) > t0 + 1, '| button on:', await js(`$('freezeBtn').classList.contains('on')`), '| badge:', await js(`!$('frozenBadge').hidden`));
+      // Presenter-style live frames for the preview (forced here: one screen has no projector).
+      await ojs('handlers.playerMode({ on: false })'); await wait(1200);
+      log('live frames in the preview:', await js(`!$('liveFrame').hidden && $('liveFrame').naturalWidth`));
+      await ojs('handlers.playerMode({ on: true })');
+      await js(`$('freezeBtn').click()`); await wait(600);
+      log('unfrozen:', await ojs('JSON.stringify({ frozen, canvas: !freezeCv.hidden })'), '| preview frame hidden:', await js(`$('liveFrame').hidden`));
+      // Frame by frame
+      const before = await ojs('v.currentTime');
+      const down = id => js(`$('${id}').dispatchEvent(new PointerEvent('pointerdown', { button: 0, bubbles: true }))`);
+      const up = id => js(`$('${id}').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))`);
+      await down('frameFwdBtn'); await up('frameFwdBtn'); await wait(500);
+      const one = await ojs('v.currentTime');
+      log('one frame forward:', (one - before).toFixed(3), 's | paused:', await ojs('!wantPlay'), '| frame length', (await ojs('frameDur')).toFixed(4));
+      await down('frameFwdBtn'); await wait(1500); await up('frameFwdBtn'); await wait(300);
+      const held = await ojs('v.currentTime');
+      log('held 1.5 s:', Math.round((held - one) / (await ojs('frameDur'))), 'frames');
+      await down('frameBackBtn'); await up('frameBackBtn'); await wait(500);
+      log('one frame back:', ((await ojs('v.currentTime')) - held).toFixed(3), 's');
+      await shot('21-frame-step');
+    }
+
+    // Show on: the screen map (a second screen is simulated; this PC may have only one).
+    {
+      await js(`modeState = { ...modeState, canPresent: true, showOn: { screens: [2], here: false }, screens: [
+        { id: 1, n: 1, here: true, width: 1920, height: 1080, bounds: { x: 0, y: 0, width: 1920, height: 1080 } },
+        { id: 2, n: 2, here: false, width: 1920, height: 1080, bounds: { x: 1920, y: 0, width: 1920, height: 1080 } }] }; renderMode(); openShowOn()`);
+      await wait(800);
+      log('show on menu:', await js(`JSON.stringify({ label: $('showOnLabel').textContent, screens: [...document.querySelectorAll('.so-screen')].map(b => b.innerText.split(String.fromCharCode(10)).join(' ') + (b.classList.contains('on') ? ' [on]' : '')), video: getComputedStyle(document.querySelector('#menu')).display })`),
+        '| video layer while open:', JSON.stringify(getMode().viewBounds));
+      await shot('22-show-on');
+      await js('closeMenu(); api.getDisplays()'); await wait(600);
+      log('after closing:', JSON.stringify(getMode().viewBounds), '| Show on button:', await js(`!$('showOnBtn').hidden`));
+    }
+
+    // Mirror page (a real second screen isn't available here): it loads, has the bridge, no errors.
+    {
+      const { BrowserWindow } = require('electron');
+      const w = new BrowserWindow({ show: false, webPreferences: { preload: path.join(__dirname, '..', 'src', 'preload.js') } });
+      const msgs = [];
+      w.webContents.on('console-message', (_e, level, message) => { if (level >= 2) msgs.push(message); });
+      await w.loadFile(path.join(__dirname, '..', 'src', 'mirror.html'));
+      await wait(1500);
+      log('mirror page:', await w.webContents.executeJavaScript('typeof api.outputSourceId + " " + typeof start'), '| errors:', JSON.stringify(msgs));
+      w.destroy();
     }
 
     // Theme: same as Windows → light → dark; the page and the native title-bar buttons follow.
@@ -464,7 +517,7 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
       await js(`items = items.filter(x => !x.id?.startsWith?.('fill')); renderList()`);
       if (url) await js(`playItem(items.find(x => x.url === ${JSON.stringify(url)}), { startAt: 40 })`);
       await wait(8000);
-      getControl().webContents.sendInputEvent({ type: 'mouseMove', x: 700, y: 760 }); // no tooltip in the pictures
+      getControl().webContents.sendInputEvent({ type: 'mouseMove', x: 1000, y: 735 }); // no tooltip in the pictures
       for (const [lang, theme] of [['en', 'dark'], ['en', 'light'], ['ar', 'dark']]) {
         await js(`setLang('${lang}'); settings.theme = '${theme}'; api.setTheme('${theme}'); renderTheme()`); await wait(1500);
         await shot(`readme-${lang}-${theme}`);

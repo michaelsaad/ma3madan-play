@@ -44,7 +44,10 @@ It plays your own video files and YouTube links, streamed directly or downloaded
   - **Stream** plays a link right away without downloading it. Quality drops automatically when the internet is slow, like on YouTube.
   - **Download** saves the video to your PC as a single MP4 (up to 1080p) so it plays offline, or just the sound as an **MP3**.
   - Streamed something and want to keep it? Use the item's **⋯** menu (or right-click) → **Download video** or **Download as MP3**. The same menu opens the file's folder or the YouTube link.
+- **Show on any screens.** The **Show on** button opens a map of your screens: the projector only, this window, or several screens at once (for example a projector and a TV), all showing the same video in sync with one sound.
 - **Black screen** (`B`) fades the projector to black at any moment.
+- **Freeze** (`Z`) holds the picture on the audience's screens while the video keeps running underneath, sound included. Your preview keeps showing the running video, marked *Frozen*.
+- **Frame by frame** (`[` and `]`): one click moves one frame; hold the button to keep stepping.
 - **Volume up to 200%**, like VLC, for quiet videos in a big hall.
 - **Aspect ratio** (`A`): 16:9, 4:3, 2.35:1, stretch, zoom and more.
 - **Recents**: your videos stay listed between sessions, with auto-play next, loop, speed control and black-at-end.
@@ -82,7 +85,7 @@ When a new version is out, an **Update to x.y.z** button appears in the top bar.
 ## Using it with a projector
 
 1. Connect the projector and press **`Win + P`**, then choose **Extend**. Don't choose Duplicate.
-2. Open the app. It switches to Presenter mode and puts the video on the second screen by itself. If you have more than one extra screen, pick the right one under **Output screen**, in the **Screen** section at the bottom of the side panel.
+2. Open the app. It switches to Presenter mode and puts the video on the second screen by itself. To use another screen, or several at once, click **Show on** in the Screen group under the video and pick the screens on the map. Their numbers show on the screens themselves for a moment, so you know which is which.
 3. Optional: under **Audio output**, choose where the sound should come out (for example the projector's HDMI).
 4. Double-click a video in **Recents** to play it on the projector.
 
@@ -134,6 +137,8 @@ Online, the song's sound is uploaded to MVSEP, separated on their servers, downl
 | `↑` `↓` | Volume (up to 200%) |
 | `M` | Mute |
 | `B` | Black screen |
+| `Z` | Freeze the picture |
+| `[` `]` | Previous / next frame |
 | `N` / `P` | Next / previous video |
 | `A` | Cycle aspect ratio |
 | `0`–`9` | Jump to 0%–90% |
@@ -142,7 +147,7 @@ Online, the song's sound is uploaded to MVSEP, separated on their servers, downl
 | `Shift` + `↑` `↓` | Move the selection in Recents |
 | `Delete` | Remove the selected video from the list |
 | `F` / double-click | Full screen (Player mode) |
-| `Esc` | Leave full screen |
+| `Esc` | Leave full screen, or take the video off the laptop's screen |
 | `Ctrl + B` | Show or hide the side panel |
 | `Ctrl + O` | Add videos |
 

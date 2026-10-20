@@ -92,30 +92,52 @@ function writeJson(file, data) {
 const settings = readJson(settingsFile(), {});
 const saveSettings = () => writeJson(settingsFile(), settings);
 
-// ---------- displays ----------
-// The projector is any screen other than the main one: the saved one if it's still connected,
-// else the first. With a single screen there is no projector, and the app is a normal player.
-function projectorDisplay() {
+// ---------- screens ----------
+// Screens are numbered like a map: 1 is the main screen, the others follow from left to right.
+function numberedDisplays() {
   const primary = screen.getPrimaryDisplay();
-  const others = screen.getAllDisplays().filter(d => d.id !== primary.id);
-  return others.find(d => d.id === settings.outputDisplayId) || others[0] || null;
+  const others = screen.getAllDisplays().filter(d => d.id !== primary.id)
+    .sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y);
+  return [primary, ...others].map((d, i) => ({ d, n: i + 1 }));
 }
+// The screen the controls are on (usually the laptop).
+const controlDisplay = () => (controlWin ? screen.getDisplayMatching(controlWin.getBounds()) : screen.getPrimaryDisplay());
 
-function sendDisplays() {
-  if (!controlWin) return;
-  const primary = screen.getPrimaryDisplay();
-  const projector = projectorDisplay();
-  controlWin.webContents.send('displays', {
-    current: projector?.id ?? null,
-    list: screen.getAllDisplays().filter(d => d.id !== primary.id).map((d, i) => ({
-      id: d.id, index: i + 2, width: d.size.width, height: d.size.height,
-    })),
-  });
+// "Show on": the other screens that show the video, and whether this screen shows it too.
+// No other screen → Player mode: the video plays inside this window.
+let showOn = null; // { screens: [display ids], here: bool }; null = automatic
+
+function defaultShowOn() {
+  const ctl = controlDisplay();
+  const others = screen.getAllDisplays().filter(d => d.id !== ctl.id);
+  const pick = others.find(d => d.id === settings.outputDisplayId) || others[0];
+  return { screens: pick ? [pick.id] : [], here: false };
+}
+function liveShowOn() {
+  const ctl = controlDisplay();
+  const ids = new Set(screen.getAllDisplays().map(d => d.id));
+  const s = showOn || defaultShowOn();
+  return { screens: s.screens.filter(id => ids.has(id) && id !== ctl.id), here: !!s.here };
+}
+// The screen where the video engine itself plays, full screen. Other chosen screens mirror it.
+function projectorDisplay() {
+  const id = liveShowOn().screens[0];
+  return screen.getAllDisplays().find(d => d.id === id) || null;
 }
 
 // ---------- modes ----------
 function sendMode() {
-  controlWin?.webContents.send('mode', { mode, canPresent: !!projectorDisplay(), fullscreen: playerFullscreen });
+  if (!controlWin) return;
+  const ctl = controlDisplay();
+  controlWin.webContents.send('mode', {
+    mode,
+    fullscreen: playerFullscreen,
+    canPresent: screen.getAllDisplays().length > 1,
+    showOn: liveShowOn(),
+    screens: numberedDisplays().map(({ d, n }) => ({
+      id: d.id, n, bounds: d.bounds, width: d.size.width, height: d.size.height, here: d.id === ctl.id,
+    })),
+  });
 }
 
 function fitViewToOutputWin() {
@@ -137,14 +159,13 @@ function fitViewToPlayer() {
 function setMode(next) {
   if (next === 'presenter' && !projectorDisplay()) next = 'player';
   if (!outputView || !controlWin) { mode = next; return; }
-  if (next === mode && outputView.__home === next) { sendMode(); return; }
+  if (next === mode && outputView.__home === next) return;
   mode = next;
   outputView.__home?.contentView?.removeChildView(outputView);
   if (mode === 'presenter') {
     if (playerFullscreen) { playerFullscreen = false; controlWin.setFullScreen(false); }
     outputWin.contentView.addChildView(outputView);
     outputView.__home = outputWin;
-    placeOutput();
   } else {
     outputWin.hide();
     controlWin.contentView.addChildView(outputView);
@@ -152,28 +173,86 @@ function setMode(next) {
     fitViewToPlayer();
   }
   outputView.webContents.send('cmd', { type: 'playerMode', on: mode === 'player' });
+}
+
+// Apply "Show on": move the engine, place the projector window, open or close the mirrors.
+function applyShowOn() {
+  const s = liveShowOn();
+  setMode(s.screens.length ? 'presenter' : 'player');
+  placeOutput();
+  syncMirrors();
   sendMode();
-  sendDisplays();
 }
 
 // Presenter: always full screen on the projector. Never a small window on the main screen.
 function placeOutput() {
   if (!outputWin || mode !== 'presenter') return;
   const d = projectorDisplay();
-  if (!d) { setMode('player'); return; }
-  outputWin.setFullScreen(false);
-  outputWin.setBounds(d.bounds);
-  outputWin.setFullScreen(true);
+  if (!d) { applyShowOn(); return; }
+  fullscreenOn(outputWin, d);
   outputWin.showInactive();
   fitViewToOutputWin();
 }
 
+function fullscreenOn(win, display) {
+  win.setFullScreen(false);
+  win.setBounds(display.bounds);
+  win.setFullScreen(true);
+}
+
+// Mirrors: the other chosen screens show a live copy of the projector window. The sound plays
+// once, from the engine. A mirror on this screen covers the controls; Esc takes it away again.
+const mirrors = new Map(); // display id → BrowserWindow
+function syncMirrors() {
+  const s = liveShowOn();
+  const here = controlDisplay().id;
+  const want = mode === 'presenter' ? [...s.screens.slice(1), ...(s.here ? [here] : [])] : [];
+  for (const [id, w] of mirrors) if (!want.includes(id)) { mirrors.delete(id); w.destroy(); }
+  for (const id of want) {
+    const d = screen.getAllDisplays().find(x => x.id === id);
+    if (!d) continue;
+    let w = mirrors.get(id);
+    if (!w) {
+      w = new BrowserWindow({
+        show: false, frame: false, backgroundColor: '#000000', skipTaskbar: true,
+        focusable: id === here, // only the one over the controls takes keys (Esc)
+        title: `${APP_NAME} — Mirror`,
+        webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
+      });
+      w.setMenu(null);
+      w.loadFile(path.join(__dirname, 'mirror.html'));
+      w.on('closed', () => { if (mirrors.get(id) === w) mirrors.delete(id); });
+      mirrors.set(id, w);
+    }
+    fullscreenOn(w, d);
+    if (id === here) { w.show(); w.focus(); } else w.showInactive();
+  }
+}
+
+// Big screen numbers for a moment, so the operator knows which screen is which.
+let identifyWins = [];
+function identifyScreens() {
+  for (const w of identifyWins) if (!w.isDestroyed()) w.destroy();
+  identifyWins = numberedDisplays().map(({ d, n }) => {
+    const size = 220;
+    const w = new BrowserWindow({
+      x: Math.round(d.bounds.x + (d.bounds.width - size) / 2), y: Math.round(d.bounds.y + (d.bounds.height - size) / 2),
+      width: size, height: size, frame: false, transparent: true, resizable: false, movable: false,
+      focusable: false, skipTaskbar: true, alwaysOnTop: true, show: false, hasShadow: false,
+    });
+    w.setAlwaysOnTop(true, 'screen-saver');
+    w.setIgnoreMouseEvents(true);
+    w.loadFile(path.join(__dirname, 'identify.html'), { query: { n: String(n) } });
+    w.once('ready-to-show', () => w.showInactive());
+    return w;
+  });
+  const wins = identifyWins;
+  setTimeout(() => { for (const w of wins) if (!w.isDestroyed()) w.destroy(); }, 2500);
+}
+
 function onDisplaysChanged() {
-  if (!modeChosen) setMode(projectorDisplay() ? 'presenter' : 'player');
-  else if (mode === 'presenter' && !projectorDisplay()) setMode('player');
-  else placeOutput();
-  sendMode();
-  sendDisplays();
+  if (!modeChosen) showOn = null;
+  applyShowOn();
 }
 
 // ---------- windows ----------
@@ -202,9 +281,10 @@ function createOutput() {
   outputView.webContents.loadFile(path.join(__dirname, 'output.html'));
   outputView.webContents.once('did-finish-load', () => {
     outputReady = true;
-    const start = modeChosen ? mode : (pendingOpen.length || !projectorDisplay() ? 'player' : 'presenter');
+    // A video opened from Explorer plays like a normal player; otherwise a second screen is used.
+    if (pendingOpen.length && !modeChosen) showOn = { screens: [], here: false };
     mode = null;
-    setMode(start);
+    applyShowOn();
     controlWin?.focus();
     controlWin?.webContents.send('output-ready');
   });
@@ -281,6 +361,7 @@ function createControl() {
   controlWin.on('leave-full-screen', () => { playerFullscreen = false; fitViewToPlayer(); sendMode(); });
   controlWin.on('closed', () => {
     controlWin = null;
+    for (const w of mirrors.values()) w.destroy();
     outputWin?.destroy();
     app.quit();
   });
@@ -316,7 +397,9 @@ app.whenReady().then(async () => {
       getOutput: () => outputView,
       getOutputWin: () => outputWin,
       getMode: () => ({ mode, playerFullscreen, playerRect, viewBounds: outputView?.getBounds(), home: outputView?.__home === controlWin ? 'control' : 'projector' }),
-      setMode: m => { modeChosen = true; setMode(m); },
+      setMode: m => { modeChosen = true; showOn = m === 'player' ? { screens: [], here: false } : null; applyShowOn(); },
+      getMirrors: () => [...mirrors.values()],
+      setShowOn: s => { modeChosen = true; showOn = s; applyShowOn(); },
     });
   }
 });
@@ -349,7 +432,7 @@ app.on('second-instance', (_e, argv) => {
   const files = filesFromArgv(argv);
   if (files.length) {
     // A video opened from Explorer while the app runs: play it like a normal player.
-    if (!modeChosen) setMode('player');
+    if (!modeChosen) { showOn = { screens: [], here: false }; applyShowOn(); }
     controlWin.webContents.send('open-files', files);
   }
 });
@@ -364,11 +447,16 @@ ipcMain.handle('output-is-ready', () => outputReady);
 ipcMain.handle('output-source-id', () => (mode === 'presenter' ? outputWin?.getMediaSourceId() ?? null : null));
 ipcMain.handle('take-open-files', () => { const files = pendingOpen; pendingOpen = []; return files; });
 
-ipcMain.handle('get-displays', () => { sendDisplays(); sendMode(); return true; });
-ipcMain.on('set-output-display', (_e, id) => {
-  settings.outputDisplayId = id; saveSettings(); placeOutput(); sendDisplays();
+ipcMain.handle('get-displays', () => { sendMode(); return true; });
+ipcMain.on('set-show-on', (_e, s) => {
+  modeChosen = true;
+  showOn = { screens: (s.screens || []).map(Number), here: !!s.here };
+  if (showOn.screens[0]) { settings.outputDisplayId = showOn.screens[0]; saveSettings(); }
+  applyShowOn();
 });
-ipcMain.on('set-mode', (_e, m) => { modeChosen = true; setMode(m); });
+ipcMain.on('identify-screens', () => identifyScreens());
+// Freeze: the engine sends small live frames so the preview keeps showing the running video.
+ipcMain.on('live-frame', (_e, frame) => controlWin?.webContents.send('live-frame', frame));
 ipcMain.on('player-rect', (_e, rect) => {
   playerRect = rect && rect.width > 0 && rect.height > 0
     ? { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }

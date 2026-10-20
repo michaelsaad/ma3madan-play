@@ -14,6 +14,30 @@ const RETRIES = 2;
 const targets = new Map(); // token -> { url, headers, size, type }
 let port = 0;
 
+// ---------- connection speed ----------
+// Measured only while data is actually arriving from YouTube: when the player's buffer is full it
+// stops reading, the proxy stops fetching, and that idle time must not count as a slow connection.
+// The output window reads it from /stats to decide when a higher quality can keep up.
+let active = 0;              // transfers currently pulling data
+let activeSince = 0;
+let activeMs = 0, bytes = 0; // since the last sample
+let bps = 0;                 // smoothed bits per second (0 = not measured yet)
+let samples = 0;
+let measuredAt = 0;
+const startActive = () => { if (active++ === 0) activeSince = Date.now(); };
+const stopActive = () => { if (--active === 0) activeMs += Date.now() - activeSince; };
+setInterval(() => {
+  const now = Date.now();
+  let ms = activeMs;
+  if (active) { ms += now - activeSince; activeSince = now; }
+  if (ms > 250 && bytes > 64 * 1024) {
+    const sample = (bytes * 8 * 1000) / ms;
+    bps = bps ? bps * 0.7 + sample * 0.3 : sample;
+    samples++; measuredAt = now;
+  }
+  activeMs = 0; bytes = 0;
+}, 1000).unref();
+
 async function fetchChunk(target, from, to, signal) {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -38,6 +62,10 @@ function drained(res) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (req.url === '/stats') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify(lastSpeed()));
+  }
   const target = targets.get(req.url.slice(1));
   if (!target) { res.writeHead(404); return res.end(); }
 
@@ -65,11 +93,22 @@ const server = http.createServer(async (req, res) => {
     while (pos <= end && !abort.signal.aborted) {
       const to = Math.min(pos + (first ? FIRST_CHUNK : CHUNK) - 1, end);
       first = false;
-      const upstream = await fetchChunk(target, pos, to, abort.signal);
-      for await (const chunk of upstream.body) {
-        if (abort.signal.aborted) break;
-        pos += chunk.length;
-        if (!res.write(chunk)) await drained(res);
+      startActive();
+      let pulling = true;
+      try {
+        const upstream = await fetchChunk(target, pos, to, abort.signal);
+        for await (const chunk of upstream.body) {
+          if (abort.signal.aborted) break;
+          pos += chunk.length; bytes += chunk.length;
+          if (!res.write(chunk)) {
+            // The player is full: waiting here is not network time.
+            stopActive(); pulling = false;
+            await drained(res);
+            startActive(); pulling = true;
+          }
+        }
+      } finally {
+        if (pulling) stopActive();
       }
     }
     res.end();
@@ -77,6 +116,11 @@ const server = http.createServer(async (req, res) => {
     res.destroy();
   }
 });
+
+// The smoothed speed and how old it is, so the player (and the next stream) can pick a quality.
+function lastSpeed() {
+  return { bps: Math.round(bps), samples, age: measuredAt ? Date.now() - measuredAt : null };
+}
 
 function start() {
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => { port = server.address().port; resolve(); }));
@@ -93,4 +137,4 @@ function proxyUrl(fmt) {
   return `http://127.0.0.1:${port}/${token}`;
 }
 
-module.exports = { start, proxyUrl };
+module.exports = { start, proxyUrl, lastSpeed };

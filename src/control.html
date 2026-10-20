@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: mediastream:; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: mediastream:; img-src 'self' file: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'">
 <title>Ma3madan Play</title>
 <link rel="stylesheet" href="control.css">
 </head>
@@ -47,6 +47,10 @@
   <symbol id="i-aspect" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 12V9h3M17 12v3h-3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-hd" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 9v6M7 12h3.5M10.5 9v6M14 9v6h1.6a3 3 0 0 0 0-6z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-speaker" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="14.5" r="3.2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-frame-back" viewBox="0 0 24 24"><path d="M6 5v14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 6l-7 6 7 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-frame-fwd" viewBox="0 0 24 24"><path d="M18 5v14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 6l7 6-7 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-freeze" viewBox="0 0 24 24"><path d="M12 2.5v19M3.8 7.25l16.4 9.5M3.8 16.75l16.4-9.5M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5M4.6 11l3.4 1-1 3.3M19.4 13l-3.4-1 1-3.3M4.6 13l3.4-1-1-3.3M19.4 11l-3.4 1 1 3.3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-show-on" viewBox="0 0 24 24"><rect x="2.5" y="4" width="13" height="9.5" rx="1.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="9" y="9.5" width="12.5" height="9.5" rx="1.5" fill="currentColor" fill-opacity=".25" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 17.5h1.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
 </svg>
 
@@ -69,6 +73,8 @@
       <div class="preview">
         <div id="audioBadge" class="audio-badge" hidden><svg><use href="#i-music"/></svg><span data-i18n="audioOnly"></span></div>
         <video id="preview" muted autoplay playsinline></video>
+        <img id="liveFrame" class="live-frame" alt="" hidden>
+        <div id="frozenBadge" class="frozen-badge" hidden><svg><use href="#i-freeze"/></svg><span data-i18n="frozenBadge"></span></div>
       </div>
     </div>
 
@@ -84,25 +90,38 @@
     </div>
 
     <div class="transport">
-      <div class="group" dir="ltr">
-        <button id="prevBtn" data-i18n-title="tPrev"><svg><use href="#i-prev"/></svg></button>
-        <button id="backBtn" data-i18n-title="tBack"><svg><use href="#i-back"/></svg></button>
-        <button id="playBtn" class="primary big" data-i18n-title="tPlay"><svg><use href="#i-play"/></svg></button>
-        <button id="fwdBtn" data-i18n-title="tFwd"><svg><use href="#i-fwd"/></svg></button>
-        <button id="nextBtn" data-i18n-title="tNext"><svg><use href="#i-next"/></svg></button>
-        <button id="stopBtn" data-i18n-title="tStop"><svg><use href="#i-stop"/></svg></button>
-      </div>
-      <div class="group">
-        <button id="blackBtn" class="toggle" data-i18n-title="tBlack"><svg><use href="#i-black"/></svg></button>
-        <button id="fullBtn" data-i18n-title="fullTitle"><svg><use href="#i-full"/></svg></button>
-      </div>
-      <div class="group vol" dir="ltr">
-        <button id="muteBtn" data-i18n-title="tMute"><svg><use href="#i-vol"/></svg></button>
-        <div class="vol-track">
-          <input id="vol" class="range" type="range" min="0" max="200" value="100">
-          <i class="vol-mark" title="100%"></i>
+      <div class="cgroup">
+        <div class="glabel" data-i18n="gPlayback"></div>
+        <div class="grp" dir="ltr">
+          <button id="prevBtn" class="ib" data-i18n-title="tPrev"><svg><use href="#i-prev"/></svg></button>
+          <button id="backBtn" class="ib" data-i18n-title="tBack"><svg><use href="#i-back"/></svg></button>
+          <button id="frameBackBtn" class="ib" data-i18n-title="tFrameBack"><svg><use href="#i-frame-back"/></svg></button>
+          <button id="playBtn" class="primary big" data-i18n-title="tPlay"><svg><use href="#i-play"/></svg></button>
+          <button id="frameFwdBtn" class="ib" data-i18n-title="tFrameFwd"><svg><use href="#i-frame-fwd"/></svg></button>
+          <button id="fwdBtn" class="ib" data-i18n-title="tFwd"><svg><use href="#i-fwd"/></svg></button>
+          <button id="nextBtn" class="ib" data-i18n-title="tNext"><svg><use href="#i-next"/></svg></button>
+          <button id="stopBtn" class="ib" data-i18n-title="tStop"><svg><use href="#i-stop"/></svg></button>
         </div>
-        <span id="volPct">100%</span>
+      </div>
+      <div class="cgroup">
+        <div class="glabel" data-i18n="gScreen"></div>
+        <div class="grp">
+          <button id="blackBtn" class="ib toggle" data-i18n-title="tBlack"><svg><use href="#i-black"/></svg></button>
+          <button id="freezeBtn" class="ib toggle freeze" data-i18n-title="tFreeze"><svg><use href="#i-freeze"/></svg></button>
+          <button id="fullBtn" class="ib" data-i18n-title="fullTitle"><svg><use href="#i-full"/></svg></button>
+          <button id="showOnBtn" class="chip-btn" data-i18n-title="tShowOn"><svg><use href="#i-show-on"/></svg><span id="showOnLabel"></span><svg class="caret"><use href="#i-caret"/></svg></button>
+        </div>
+      </div>
+      <div class="cgroup">
+        <div class="glabel" data-i18n="gSound"></div>
+        <div class="grp vol" dir="ltr">
+          <button id="muteBtn" class="ib" data-i18n-title="tMute"><svg><use href="#i-vol"/></svg></button>
+          <div class="vol-track">
+            <input id="vol" class="range" type="range" min="0" max="200" value="100">
+            <i class="vol-mark" title="100%"></i>
+          </div>
+          <span id="volPct">100%</span>
+        </div>
       </div>
     </div>
 
@@ -112,21 +131,23 @@
         <label class="opt-btn" data-i18n-title="blackOnEnd"><input type="checkbox" id="blackOnEnd" checked><svg><use href="#i-black-end"/></svg></label>
         <label class="opt-btn" data-i18n-title="loop"><input type="checkbox" id="loopChk"><svg><use href="#i-loop"/></svg></label>
       </div>
-      <label class="field" data-i18n-title="speed"><svg><use href="#i-speed"/></svg>
+      <div class="chips">
+      <label class="field chip" data-i18n-title="speed"><svg><use href="#i-speed"/></svg>
         <select id="rateSel" dir="ltr">
           <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
           <option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
         </select>
       </label>
-      <label class="field" data-i18n-title="aspect"><svg><use href="#i-aspect"/></svg>
+      <label class="field chip" data-i18n-title="aspect"><svg><use href="#i-aspect"/></svg>
         <select id="aspectSel" data-i18n-title="tAspect"></select>
       </label>
-      <label class="field" id="qualityField" style="display:none" data-i18n-title="quality"><svg><use href="#i-hd"/></svg>
+      <label class="field chip" id="qualityField" style="display:none" data-i18n-title="quality"><svg><use href="#i-hd"/></svg>
         <select id="qualitySel" dir="ltr"></select>
       </label>
-      <label class="field" data-i18n-title="audioOut"><svg><use href="#i-speaker"/></svg>
+      <label class="field chip" data-i18n-title="audioOut"><svg><use href="#i-speaker"/></svg>
         <select id="sinkSel"></select>
       </label>
+      </div>
     </div>
     <div id="mixer" class="mixer" hidden>
       <span class="mixer-title"><svg><use href="#i-mic"/></svg><span data-i18n="vocalRemover"></span></span>
@@ -164,14 +185,6 @@
     </div>
     <ol id="playlist" class="playlist"></ol>
     <div id="emptyList" class="empty-list" data-i18n="emptyList"></div>
-
-    <div class="screen-panel" id="screenPanel">
-      <div class="screen-head" data-i18n="screenHead"></div>
-      <button id="modeBtn" hidden><svg><use href="#i-screens"/></svg><span></span></button>
-      <label class="field" id="outputField"><span data-i18n="outputScreen"></span>
-        <select id="displaySel"></select>
-      </label>
-    </div>
   </aside>
 </main>
 

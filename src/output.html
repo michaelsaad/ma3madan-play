@@ -2,28 +2,68 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: https: http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; media-src file: blob: https: http://127.0.0.1:*; img-src file: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
 <title>Output</title>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   body.idle, body.idle * { cursor: none; } /* the pointer hides after 2 s without moving */
   video { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
-  #black { position: absolute; inset: 0; background: #000; opacity: 1; transition: opacity .35s ease; pointer-events: none; }
-  #black.off { opacity: 0; }
+  video.waiting { visibility: hidden; } /* the next quality, loading behind the one on screen */
+  video::cue { font: 600 4.2vh/1.35 "Segoe UI", Tahoma, sans-serif; background: rgba(0, 0, 0, .62); color: #fff; }
+  #freeze { position: absolute; background: #000; }
+  /* Standby: what the audience sees between videos. Black, or a picture, or a short text. */
+  #standby {
+    position: absolute; inset: 0; background: #000; opacity: 1; pointer-events: none;
+    transition: opacity var(--fade, .35s) ease; display: grid; place-items: center;
+  }
+  #standby.off { opacity: 0; }
+  #standby img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  #standby .text {
+    position: relative; max-width: 80vw; text-align: center; color: #fff; white-space: pre-line;
+    font: 600 6vh/1.5 "Segoe UI", Tahoma, sans-serif; text-shadow: 0 2px 12px rgba(0, 0, 0, .6);
+  }
+  /* Countdown before the meeting starts */
+  #countdown {
+    position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 2vh;
+    background: rgba(0, 0, 0, .78); color: #fff; font-family: "Segoe UI", Tahoma, sans-serif; text-align: center;
+    opacity: 0; transition: opacity .5s ease; pointer-events: none;
+  }
+  #countdown.on { opacity: 1; }
+  #countdown .msg { font-size: 5vh; font-weight: 600; max-width: 80vw; white-space: pre-line; opacity: .9; }
+  #countdown .time { font: 700 22vh/1 "Segoe UI", Tahoma, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .02em; direction: ltr; }
+  /* Lyrics: a band at the bottom over the video; centred and large over standby */
+  #lyrics {
+    position: absolute; left: 0; right: 0; bottom: 5vh; display: flex; justify-content: center; pointer-events: none;
+    opacity: 0; transform: translateY(1vh); transition: opacity .3s ease, transform .3s ease;
+  }
+  #lyrics.on { opacity: 1; transform: none; }
+  #lyrics div {
+    max-width: 88vw; padding: 1.4vh 3vw; border-radius: 1.4vh; background: rgba(0, 0, 0, .62); color: #fff; text-align: center;
+    font: 600 5vh/1.45 "Segoe UI", Tahoma, sans-serif; white-space: pre-line; text-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+  }
+  #lyrics.full { inset: 0; bottom: 0; align-items: center; }
+  #lyrics.full div { background: transparent; font-size: 7.5vh; }
 </style>
 </head>
 <body>
-<video id="v" preload="auto"></video>
+<video id="vA" preload="auto"></video>
+<video id="vB" preload="auto" class="waiting"></video>
 <audio id="a" preload="auto"></audio>
 <audio id="a2" preload="auto"></audio>
-<div id="black"></div>
+<canvas id="freeze" hidden></canvas>
+<div id="standby"><img id="standbyImg" alt="" hidden><div id="standbyText" class="text" dir="auto" hidden></div></div>
+<div id="lyrics"><div dir="auto"></div></div>
+<div id="countdown"><div class="msg" dir="auto"></div><div class="time"></div></div>
 <script>
-  const v = document.getElementById('v');
+  // Two video elements: `v` is the one on screen; `vNext` loads a higher stream quality behind it
+  // and takes over at the same frame, so stepping up never interrupts the picture.
+  let v = document.getElementById('vA');
+  let vNext = document.getElementById('vB');
   // Audio that follows the video's clock: `a` is a separate sound track (YouTube video and audio
   // come apart) or the "music" track of a separated song; `a2` is the "vocals" track.
   const a = document.getElementById('a');
   const a2 = document.getElementById('a2');
-  const black = document.getElementById('black');
+  const standby = document.getElementById('standby');
 
   let current = null;      // { path }
   let followers = [];      // audio elements kept in sync with v
@@ -37,12 +77,18 @@
   let ladder = null;       // stream qualities, best first
   let qIndex = 0;
   let autoQuality = true;
-  let blackOn = true;      // nothing loaded yet → black
+  let qualityChangedAt = 0;
+  let blackOn = true;      // standby showing (nothing loaded yet → standby)
   let blackOnEnd = true;
-  let audioOnly = false;   // MP3, voice notes…: sound only, the projector stays black
+  let audioOnly = false;   // MP3, voice notes…: sound only, the projector shows standby
   let level = 1;           // 0–2; above 1 is boosted through Web Audio, like VLC's 200%
+  let itemLevel = 1;       // this video's own volume (some videos are much quieter than others)
   let aspect = 'default';
   let rate = 1;
+  let fadeSec = 1;         // fades to and from standby, and between videos (0 = off)
+  let trim = { start: 0, end: 0 }; // play only this part of the video (end 0 = to the end)
+  let endedFlag = false;   // reached the end (or the trim end)
+  let endFading = false;   // already fading out before the end
 
   // Resume only once this much is buffered ahead, so a slow connection gets fewer, shorter pauses.
   const RESUME_AHEAD = 4;
@@ -52,27 +98,37 @@
   const STEP_DOWN_LOADING_MS = 10000; // after a load/seek, allow longer before blaming the connection
   const STALLS_PER_MINUTE = 3;       // or this many short ones
 
-  // Element volume stays at 1; loudness comes from the gain node so it can go past 100%.
+  // Element volume stays at 1; loudness comes from the gain nodes so it can go past 100%.
+  // element → its own gain (mixing) → this video's level → fades → master level → speakers
   const ctx = new AudioContext({ latencyHint: 'playback' });
   const gain = ctx.createGain();
-  // Each element gets its own gain so the vocals and music can be mixed live.
-  const trackGain = el => { const g = ctx.createGain(); ctx.createMediaElementSource(el).connect(g).connect(gain); el.volume = 1; return g; };
-  const vGain = trackGain(v), aGain = trackGain(a), a2Gain = trackGain(a2);
-  gain.connect(ctx.destination);
-  const allEls = [v, a, a2];
+  const itemGain = ctx.createGain();
+  const fadeGain = ctx.createGain();
+  itemGain.connect(fadeGain).connect(gain).connect(ctx.destination);
+  const trackGain = el => { const g = ctx.createGain(); ctx.createMediaElementSource(el).connect(g).connect(itemGain); el.volume = 1; return g; };
+  const gains = new Map([[v, trackGain(v)], [vNext, trackGain(vNext)], [a, trackGain(a)], [a2, trackGain(a2)]]);
+  const allEls = () => [v, vNext, a, a2];
   function applyMix(smooth) {
     const set = (g, x) => (smooth ? g.gain.setTargetAtTime(x, ctx.currentTime, 0.05) : (g.gain.value = x));
-    set(vGain, stemsMode ? 0 : 1);            // the original sound is replaced by the two tracks
-    set(aGain, stemsMode ? mix.music : 1);
-    set(a2Gain, stemsMode ? mix.vocals : 0);
+    for (const el of [v, vNext]) set(gains.get(el), stemsMode ? 0 : 1); // the original sound is replaced by the two tracks
+    set(gains.get(a), stemsMode ? mix.music : 1);
+    set(gains.get(a2), stemsMode ? mix.vocals : 0);
   }
   const resumeAudio = () => { if (ctx.state !== 'running') ctx.resume().catch(() => {}); };
   function setLevel(x) { level = Math.max(0, Math.min(2, x)); gain.gain.value = level; }
+  function setItemLevel(x) { itemLevel = Math.max(0, Math.min(2, x || 1)); itemGain.gain.setTargetAtTime(itemLevel, ctx.currentTime, 0.05); }
+  // Sound fades: always a short one on pause/resume (no clicks), the full fade to and from standby.
+  function fadeAudio(to, sec) {
+    const g = fadeGain.gain, now = ctx.currentTime;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    if (sec > 0) g.linearRampToValueAtTime(to, now + sec); else g.setValueAtTime(to, now);
+  }
 
   // ---------- buffering ----------
-  function bufferedAhead(el) {
-    const t = el.currentTime, b = el.buffered;
-    for (let i = 0; i < b.length; i++) if (b.start(i) <= t + 0.2 && b.end(i) >= t) return b.end(i) - t;
+  function bufferedAhead(el, at = el.currentTime) {
+    const b = el.buffered;
+    for (let i = 0; i < b.length; i++) if (b.start(i) <= at + 0.2 && b.end(i) >= at) return b.end(i) - at;
     return 0;
   }
   function hasAhead(el, need) {
@@ -82,17 +138,20 @@
     return el.readyState >= 3 && bufferedAhead(el) >= need;
   }
   const tracks = () => [v, ...followers];
-  function holdAll() { for (const el of tracks()) if (!el.paused) el.pause(); }
+  let pauseTimer = null;   // a short sound fade before the elements actually pause
+  function holdAll() { if (pauseTimer) return; for (const el of tracks()) if (!el.paused) el.pause(); }
+  let fadeInNext = 0;      // fade the sound in over this long when playback actually starts
 
   function tick() {
     if (!current) return;
     if (!wantPlay) { holdAll(); if (stalled) { stalled = false; push(); } return; }
-    if (v.ended) return;
+    if (endedFlag) return;
     const now = performance.now();
     const need = !stalled ? LOW_AHEAD : loadingPhase ? START_AHEAD : RESUME_AHEAD;
     if (!tracks().every(el => hasAhead(el, need))) {
       if (!stalled) {
         stalled = true; stallSince = now; stallLog.push(now);
+        abandonUpgrade();
         holdAll(); push();
       } else if (canStepDown() && now - stallSince > (loadingPhase ? STEP_DOWN_LOADING_MS : STEP_DOWN_AFTER_MS)) {
         stepDown();
@@ -104,7 +163,11 @@
     if (canStepDown() && stallLog.length >= STALLS_PER_MINUTE) { stepDown(); return; }
 
     resumeAudio();
-    if (v.paused) v.play().catch(() => {});
+    if (v.paused) {
+      fadeAudio(1, fadeInNext || 0.15);
+      fadeInNext = 0;
+      v.play().catch(() => {});
+    }
     for (const el of followers) {
       if (el.paused && !el.ended) el.play().catch(() => {});
       // Nudge the audio speed to close small drift instead of seeking (seeking is what repeats words).
@@ -113,15 +176,41 @@
       else if (Math.abs(drift) > 0.06) el.playbackRate = rate * (drift > 0 ? 0.97 : 1.03);
       else if (el.playbackRate !== rate) el.playbackRate = rate;
     }
+    checkEnd();
+    upgradeTick();
   }
   setInterval(tick, 150);
 
+  // ---------- the end (of the video, or of its trimmed part) ----------
+  const endTime = () => (trim.end > 0 ? Math.min(trim.end, isFinite(v.duration) ? v.duration : trim.end) : (isFinite(v.duration) ? v.duration : 0));
+  function checkEnd() {
+    const end = endTime();
+    if (!end || stalled) return;
+    const left = (end - v.currentTime) / rate;
+    // Fade out just before the end, so the last frame melts into standby instead of cutting.
+    if (!loopOn && blackOnEnd && fadeSec > 0 && !endFading && left > 0 && left <= fadeSec && !audioOnly) {
+      endFading = true;
+      setBlack(true);
+      fadeAudio(0, left);
+    }
+    if (trim.end > 0 && v.currentTime >= end - 0.03) reachedEnd();
+  }
+  function reachedEnd() {
+    if (endedFlag) return;
+    if (loopOn) { seekAll(trim.start || 0); return; }
+    endedFlag = true; wantPlay = false;
+    for (const el of tracks()) if (!el.paused) el.pause();
+    if (blackOnEnd) setBlack(true);
+    push();
+  }
+
   // ---------- quality ----------
   const canStepDown = () => autoQuality && ladder && qIndex < ladder.length - 1;
-  function stepDown() { setQuality(qIndex + 1, true); }
+  function stepDown() { abandonUpgrade(); setQuality(qIndex + 1, true); }
 
   function setSources(videoUrl, audioUrl, at, vocalsUrl) {
-    holdAll();
+    abandonUpgrade();
+    for (const el of [v, a, a2]) if (!el.paused) el.pause();
     followers = audioUrl ? (vocalsUrl ? [a, a2] : [a]) : [];
     v.src = videoUrl;
     for (const [el, src] of [[a, audioUrl], [a2, vocalsUrl]]) { if (src) el.src = src; else el.removeAttribute('src'); el.load(); }
@@ -129,7 +218,7 @@
     for (const el of [v, ...followers]) {
       if (at) el.addEventListener('loadedmetadata', () => { el.currentTime = at; }, { once: true });
       el.playbackRate = rate;
-      el.loop = loopOn;
+      el.loop = false; // looping is done here, so a trimmed part loops too
     }
     applyMix(false);
     beginLoading();
@@ -141,123 +230,412 @@
     if (!ladder || !ladder[i]) return;
     const at = v.currentTime;
     qIndex = i;
+    qualityChangedAt = performance.now();
     setSources(ladder[i].video, ladder[i].audio, at);
     push({ qualityChanged: automatic ? 'auto' : 'manual' });
   }
 
-  // ---------- layout: VLC-style forced aspect ratio ----------
-  function layout() {
-    const W = innerWidth, H = innerHeight;
-    const s = v.style;
-    if (aspect === 'default' || aspect === 'fill' || aspect === 'crop') {
-      Object.assign(s, { left: '0', top: '0', width: W + 'px', height: H + 'px' });
-      s.objectFit = aspect === 'fill' ? 'fill' : aspect === 'crop' ? 'cover' : 'contain';
+  // Auto quality goes up as well as down. The connection speed is measured by the stream proxy
+  // (only while data is arriving). When it comfortably carries the next quality up, that quality
+  // loads in the second video element and takes over at the same frame, without a pause.
+  let speed = { bps: 0, samples: 0, age: null };
+  let goodSince = 0;
+  const STEP_UP_MARGIN = 1.6;       // the connection must be this much faster than the quality needs
+  const STEP_UP_AFTER_MS = 6000;    // …for this long
+  const NO_STEP_UP_AFTER_STALL = 25000;
+  const fits = (rung, bps) => rung && rung.kbps && bps > rung.kbps * 1000 * STEP_UP_MARGIN;
+  setInterval(async () => {
+    if (!ladder || !current) return;
+    try { speed = await api.streamSpeed(); } catch { return; }
+    push();
+  }, 1000);
+
+  let upgrade = null; // { i, at, since, tries }
+  function upgradeTick() {
+    if (!ladder || !autoQuality || stalled || loadingPhase) { goodSince = 0; return; }
+    const now = performance.now();
+    if (upgrade) return finishUpgrade(now);
+    if (qIndex === 0) return;
+    const up = ladder[qIndex - 1];
+    const fresh = speed.age != null && speed.age < 4000;
+    const recentStall = stallLog.some(t => now - t < NO_STEP_UP_AFTER_STALL);
+    if (!(fresh && fits(up, speed.bps) && !recentStall && now - qualityChangedAt > 4000)) { goodSince = 0; return; }
+    if (!goodSince) goodSince = now;
+    if (now - goodSince < STEP_UP_AFTER_MS) return;
+    // Seamless when only the picture changes; the single-file fallback (or a different sound
+    // track) needs a plain switch, done only with plenty buffered.
+    const swappable = up.audio && ladder[qIndex].audio && up.audio === ladder[qIndex].audio;
+    if (swappable && bufferedAhead(v) >= 3) startUpgrade(qIndex - 1);
+    else if (!swappable && bufferedAhead(v) > 10) setQuality(qIndex - 1, true);
+  }
+  function startUpgrade(i) {
+    // Jump to a point a few seconds ahead, load the new picture there, and switch when we arrive.
+    const lead = 4 * rate;
+    const at = v.currentTime + lead;
+    if (endTime() && at > endTime() - 2) return;
+    upgrade = { i, at, since: performance.now(), tries: (upgrade?.tries || 0) + 1 };
+    vNext.src = ladder[i].video;
+    vNext.playbackRate = rate;
+    vNext.addEventListener('loadedmetadata', () => { vNext.currentTime = at; }, { once: true });
+    vNext.load();
+  }
+  function abandonUpgrade() {
+    if (!upgrade) return;
+    upgrade = null;
+    vNext.pause(); vNext.removeAttribute('src'); vNext.load();
+  }
+  function finishUpgrade(now) {
+    const ready = vNext.readyState >= 3 && Math.abs(vNext.currentTime - upgrade.at) < 0.5 && bufferedAhead(vNext) >= 3;
+    if (v.currentTime >= upgrade.at - 0.04) {
+      if (!ready) {
+        // Too slow: we're past the switch point. Try once more from further ahead, then give up for a while.
+        const tries = upgrade.tries, i = upgrade.i;
+        abandonUpgrade();
+        if (tries < 2) { upgrade = { tries }; startUpgrade(i); } else { qualityChangedAt = now; goodSince = 0; }
+        return;
+      }
+      swapToNext();
       return;
     }
-    const [x, y] = aspect.split(':').map(Number);
-    const r = x / y;
-    let w = W, h = W / r;
-    if (h > H) { h = H; w = H * r; }
-    Object.assign(s, { left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px', width: w + 'px', height: h + 'px', objectFit: 'fill' });
+    if (now - upgrade.since > 25000) { abandonUpgrade(); qualityChangedAt = now; }
+  }
+  function swapToNext() {
+    const old = v, i = upgrade.i;
+    upgrade = null;
+    vNext.currentTime = old.currentTime;
+    vNext.play().catch(() => {});
+    v = vNext; vNext = old;
+    v.classList.remove('waiting');
+    old.classList.add('waiting');
+    layout();
+    old.pause(); old.removeAttribute('src'); old.load();
+    qIndex = i;
+    qualityChangedAt = performance.now();
+    goodSince = 0;
+    if (frozen) syncFreezeBox();
+    push({ qualityChanged: 'up' });
+  }
+
+  // ---------- layout: VLC-style forced aspect ratio ----------
+  function layout() { layoutVideo(); syncFreezeBox(); }
+  function layoutVideo() {
+    const W = innerWidth, H = innerHeight;
+    for (const el of [v, vNext]) {
+      const s = el.style;
+      if (aspect === 'default' || aspect === 'fill' || aspect === 'crop') {
+        Object.assign(s, { left: '0', top: '0', width: W + 'px', height: H + 'px' });
+        s.objectFit = aspect === 'fill' ? 'fill' : aspect === 'crop' ? 'cover' : 'contain';
+        continue;
+      }
+      const [x, y] = aspect.split(':').map(Number);
+      const r = x / y;
+      let w = W, h = W / r;
+      if (h > H) { h = H; w = H * r; }
+      Object.assign(s, { left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px', width: w + 'px', height: h + 'px', objectFit: 'fill' });
+    }
   }
   addEventListener('resize', layout);
 
-  // ---------- state ----------
-  function setBlack(on) { blackOn = on; black.classList.toggle('off', !on); push(); }
+  // ---------- freeze ----------
+  // The audience keeps seeing one frame while the video (and its sound) runs on underneath.
+  // Meanwhile small live frames go to the controls, so the preview still shows the running video.
+  const freezeCv = document.getElementById('freeze');
+  let frozen = false;
+  let isPlayer = true;
+  function syncFreezeBox() {
+    if (!frozen) return;
+    const { left, top, width, height, objectFit } = v.style;
+    Object.assign(freezeCv.style, { left, top, width, height, objectFit: objectFit || 'contain' });
+  }
+  function setFreeze(on) {
+    on = !!on && !!current && !audioOnly && v.readyState >= 2;
+    if (on && !frozen) {
+      freezeCv.width = v.videoWidth; freezeCv.height = v.videoHeight;
+      freezeCv.getContext('2d').drawImage(v, 0, 0, freezeCv.width, freezeCv.height);
+      frozen = true; syncFreezeBox(); freezeCv.hidden = false;
+      startLiveFrames();
+    } else if (!on && frozen) {
+      frozen = false; freezeCv.hidden = true;
+      stopLiveFrames();
+    }
+    push();
+  }
+  const liveCv = document.createElement('canvas');
+  let liveTimer = null, sending = false;
+  function startLiveFrames() { if (!liveTimer && !isPlayer) liveTimer = setInterval(sendLiveFrame, 66); }
+  function stopLiveFrames() { clearInterval(liveTimer); liveTimer = null; api.sendLiveFrame(null); }
+  function sendLiveFrame() {
+    if (sending || !v.videoWidth) return;
+    liveCv.width = 640; liveCv.height = Math.round(640 * v.videoHeight / v.videoWidth);
+    liveCv.getContext('2d').drawImage(v, 0, 0, liveCv.width, liveCv.height);
+    sending = true;
+    liveCv.toBlob(async b => {
+      try { if (b && liveTimer) api.sendLiveFrame(new Uint8Array(await b.arrayBuffer())); } finally { sending = false; }
+    }, 'image/jpeg', 0.75);
+  }
 
+  // ---------- frame by frame ----------
+  // The frame length is measured while the video plays (25, 30, 60 fps…); 1/30 s until then.
+  let frameDur = 1 / 30;
+  for (const el of [v, vNext]) {
+    if (!el.requestVideoFrameCallback) break;
+    let last = null;
+    const onFrame = (_now, meta) => {
+      if (el === v && last && !el.paused) {
+        const n = meta.presentedFrames - last.presentedFrames, d = meta.mediaTime - last.mediaTime;
+        if (n > 0 && d > 0 && d / n < 0.1) frameDur = frameDur * 0.8 + (d / n) * 0.2;
+      }
+      last = meta;
+      el.requestVideoFrameCallback(onFrame);
+    };
+    el.requestVideoFrameCallback(onFrame);
+  }
+
+  // ---------- standby, countdown, lyrics, subtitles ----------
+  function setBlack(on) { blackOn = on; standby.classList.toggle('off', !on); syncLyrics(); push(); }
+  function setFade(sec) {
+    fadeSec = Math.max(0, Math.min(5, Number(sec) || 0));
+    document.body.style.setProperty('--fade', (fadeSec > 0 ? fadeSec : 0.2) + 's');
+  }
+  function setStandby({ kind, image, text } = {}) {
+    const img = document.getElementById('standbyImg'), txt = document.getElementById('standbyText');
+    img.hidden = !(kind === 'image' && image);
+    if (!img.hidden) img.src = image; else img.removeAttribute('src');
+    txt.hidden = !(kind === 'text' && text);
+    txt.textContent = kind === 'text' ? text || '' : '';
+  }
+
+  const cdBox = document.getElementById('countdown');
+  let countdown = null, cdTimer = null; // { until, text }
+  function setCountdown(c) {
+    clearInterval(cdTimer);
+    countdown = c && c.until > Date.now() ? { until: c.until, text: c.text || '' } : null;
+    cdBox.querySelector('.msg').textContent = countdown?.text || '';
+    cdBox.classList.toggle('on', !!countdown);
+    if (countdown) { drawCountdown(); cdTimer = setInterval(drawCountdown, 250); }
+    push();
+  }
+  function drawCountdown() {
+    const left = Math.max(0, Math.ceil((countdown.until - Date.now()) / 1000));
+    const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
+    cdBox.querySelector('.time').textContent = (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+    // At zero: hold "0:00" a moment, then give the screen back.
+    if (left === 0) { clearInterval(cdTimer); setTimeout(() => { if (countdown && Date.now() >= countdown.until) setCountdown(null); }, 2500); }
+  }
+
+  const lyricsBox = document.getElementById('lyrics');
+  let lyricsText = '';
+  function setLyrics(text) {
+    lyricsText = text || '';
+    if (lyricsText) lyricsBox.firstElementChild.textContent = lyricsText;
+    syncLyrics(); push();
+  }
+  // Over standby (no picture), the words take the whole screen; over a video, a band at the bottom.
+  function syncLyrics() {
+    lyricsBox.classList.toggle('on', !!lyricsText);
+    lyricsBox.classList.toggle('full', blackOn || audioOnly);
+  }
+
+  let subsUrl = null, subsOn = true;
+  function setSubs(vtt) {
+    for (const el of [v, vNext]) for (const tr of [...el.querySelectorAll('track')]) tr.remove();
+    if (subsUrl) { URL.revokeObjectURL(subsUrl); subsUrl = null; }
+    if (!vtt) return;
+    subsUrl = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }));
+    const tr = document.createElement('track');
+    tr.kind = 'subtitles'; tr.src = subsUrl; tr.default = true;
+    v.appendChild(tr);
+    tr.track.mode = subsOn ? 'showing' : 'hidden';
+  }
+  function showSubs(on) {
+    subsOn = !!on;
+    for (const tr of v.querySelectorAll('track')) tr.track.mode = subsOn ? 'showing' : 'hidden';
+    push();
+  }
+
+  // ---------- state ----------
   let loopOn = false;
   function push(extra) {
     api.sendState({
       loaded: !!current,
       path: current?.path ?? null,
       paused: !wantPlay,
-      ended: v.ended,
+      ended: endedFlag,
       time: v.currentTime || 0,
       duration: isFinite(v.duration) ? v.duration : 0,
+      trim,
       volume: level,
+      itemVolume: itemLevel,
       muted: v.muted,
       rate,
       loop: loopOn,
       black: blackOn,
+      frozen,
       aspect,
       audioOnly,
       buffering: wantPlay && stalled,
       quality: ladder ? ladder[qIndex].label : null,
       qualities: ladder ? ladder.map(q => q.label) : null,
       autoQuality,
+      upgrading: upgrade?.i != null ? ladder?.[upgrade.i]?.label : null,
+      speedMbps: ladder && speed.bps ? +(speed.bps / 1e6).toFixed(1) : null,
       stems: stemsMode,
       mix,
+      countdown: countdown ? { until: countdown.until, text: countdown.text } : null,
+      lyrics: lyricsText || null,
+      subs: !!subsUrl,
+      subsOn,
       error: v.error ? (v.error.message || String(v.error.code)) : (followers.find(el => el.error) ? 'audio: ' + (followers.find(el => el.error).error.message || 'error') : null),
       ...extra,
     });
   }
 
+  function seekAll(t) {
+    // Seeking back out of the closing fade brings the picture and sound back.
+    if (endFading && !endedFlag) { setBlack(audioOnly); fadeAudio(1, 0.2); }
+    endedFlag = false; endFading = false;
+    for (const el of tracks()) el.currentTime = t;
+    if (bufferedAhead(v) < START_AHEAD) { beginLoading(); holdAll(); }
+  }
+  function cancelPauseFade() { clearTimeout(pauseTimer); pauseTimer = null; }
+
+  // Changing video while one is on screen: fade it out first (picture and sound), then load.
+  let pendingLoad = null;
   const handlers = {
-    load({ path, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt, audio, stems, mix: m }) {
+    load(opts) {
+      clearTimeout(pendingLoad);
+      const showing = current && wantPlay && !blackOn && !audioOnly && !stalled;
+      if (fadeSec > 0 && showing) {
+        setBlack(true);
+        fadeAudio(0, fadeSec);
+        pendingLoad = setTimeout(() => handlers.loadNow(opts), fadeSec * 1000);
+        return;
+      }
+      handlers.loadNow(opts);
+    },
+    loadNow({ path, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt, audio, stems, mix: m, trim: tr, itemVolume, subs, speed: sp }) {
+      pendingLoad = null;
+      cancelPauseFade();
       audioOnly = !!audio;
       current = { path };
       stemsMode = !!stems;
+      endedFlag = false; endFading = false;
+      trim = { start: tr?.start || 0, end: tr?.end || 0 };
       if (m) mix = { music: m.music ?? 1, vocals: m.vocals ?? 1 };
       ladder = lad && lad.length ? lad : null;
+      const at = startAt || trim.start || 0;
       if (ladder) {
         autoQuality = quality == null || quality === 'auto';
-        // Auto starts at 720p: sharp on a projector and much easier on the connection than 1080p.
-        const pick = autoQuality ? '720p' : quality;
-        qIndex = Math.max(0, ladder.findIndex(q => q.label === pick));
-        setSources(ladder[qIndex].video, ladder[qIndex].audio, startAt);
+        // Auto starts at 720p, or straight at the best the connection measured lately can carry.
+        if (sp) speed = sp;
+        const fastLately = speed.bps && speed.age != null && speed.age < 30 * 60 * 1000 && fits(ladder[0], speed.bps);
+        const i720 = Math.max(0, ladder.findIndex(q => q.label === '720p'));
+        qIndex = autoQuality ? (fastLately ? 0 : i720) : Math.max(0, ladder.findIndex(q => q.label === quality));
+        qualityChangedAt = performance.now();
+        goodSince = 0;
+        setSources(ladder[qIndex].video, ladder[qIndex].audio, at);
       } else if (stems) {
-        setSources(url, stems.music, startAt, stems.vocals);
+        setSources(url, stems.music, at, stems.vocals);
       } else {
-        setSources(url, audioUrl, startAt);
+        setSources(url, audioUrl, at);
       }
+      setSubs(subs || null);
       if (volume != null) setLevel(volume);
-      if (muted != null) for (const el of allEls) el.muted = muted;
+      setItemLevel(itemVolume ?? 1);
+      if (muted != null) for (const el of allEls()) el.muted = muted;
       wantPlay = !!autoplay;
+      fadeGain.gain.cancelScheduledValues(ctx.currentTime);
+      fadeGain.gain.value = 0;
+      fadeInNext = fadeSec > 0 ? Math.min(fadeSec, 1.5) : 0.15;
+      setFreeze(false);
       setBlack(audioOnly);
       resumeAudio();
       push();
     },
-    play() { if (!current) return; if (v.ended) for (const el of tracks()) el.currentTime = 0; wantPlay = true; setBlack(audioOnly); tick(); push(); },
-    pause() { wantPlay = false; holdAll(); push(); },
+    play() {
+      if (!current) return;
+      cancelPauseFade();
+      if (endedFlag || v.ended) { seekAll(trim.start || 0); fadeInNext = fadeSec > 0 ? Math.min(fadeSec, 1.5) : 0.15; }
+      if (blackOn && !audioOnly && fadeSec > 0) fadeInNext = Math.min(fadeSec, 1.5);
+      wantPlay = true; setBlack(audioOnly); tick(); push();
+    },
+    pause() {
+      if (!wantPlay) return;
+      wantPlay = false;
+      // A quick sound fade so the pause doesn't click, then the elements stop.
+      fadeAudio(0, 0.18);
+      cancelPauseFade();
+      pauseTimer = setTimeout(() => { pauseTimer = null; if (!wantPlay) holdAll(); }, 190);
+      push();
+    },
     toggle() { if (current) (wantPlay ? handlers.pause : handlers.play)(); },
-    stop() { wantPlay = false; holdAll(); for (const el of tracks()) el.currentTime = 0; setBlack(true); },
+    stop() {
+      clearTimeout(pendingLoad);
+      wantPlay = false;
+      setFreeze(false);
+      setBlack(true);
+      const reset = () => { cancelPauseFade(); holdAll(); for (const el of tracks()) el.currentTime = trim.start || 0; endedFlag = false; endFading = false; push(); };
+      if (fadeSec > 0 && current && !audioOnly) {
+        fadeAudio(0, fadeSec);
+        cancelPauseFade();
+        pauseTimer = setTimeout(() => { pauseTimer = null; reset(); }, fadeSec * 1000);
+      } else reset();
+    },
+    freeze({ on }) { setFreeze(on ?? !frozen); },
+    frame({ n }) {
+      if (!current || audioOnly) return;
+      wantPlay = false; cancelPauseFade(); holdAll();
+      const t = Math.max(0, Math.min(isFinite(v.duration) ? v.duration : Infinity, v.currentTime + n * frameDur));
+      for (const el of tracks()) el.currentTime = t;
+      push();
+    },
     seek({ t }) {
       if (!current) return;
+      abandonUpgrade();
       t = Math.max(0, Math.min(t, v.duration || t));
-      for (const el of tracks()) el.currentTime = t;
-      if (bufferedAhead(v) < START_AHEAD) { beginLoading(); holdAll(); }
+      seekAll(t);
       push();
     },
     seekBy({ d }) { if (current) handlers.seek({ t: v.currentTime + d }); },
-    volume({ v: vol }) { setLevel(vol); if (vol > 0) for (const el of allEls) el.muted = false; push(); },
-    mute({ m }) { const on = m ?? !v.muted; for (const el of allEls) el.muted = on; push(); },
+    volume({ v: vol }) { setLevel(vol); if (vol > 0) for (const el of allEls()) el.muted = false; push(); },
+    itemVolume({ v: vol }) { setItemLevel(vol); push(); },
+    mute({ m }) { const on = m ?? !v.muted; for (const el of allEls()) el.muted = on; push(); },
     mix({ music, vocals }) { mix = { music: music ?? mix.music, vocals: vocals ?? mix.vocals }; applyMix(true); push(); },
     black({ on }) { setBlack(audioOnly || (on ?? !blackOn)); },
-    rate({ r }) { rate = r; for (const el of allEls) el.playbackRate = r; push(); },
-    loop({ on }) { loopOn = on; for (const el of allEls) el.loop = on; push(); },
+    rate({ r }) { rate = r; for (const el of allEls()) el.playbackRate = r; push(); },
+    loop({ on }) { loopOn = on; push(); },
+    trim({ start, end }) { trim = { start: start || 0, end: end || 0 }; endFading = false; push(); },
     aspect({ mode }) { aspect = mode; layout(); push(); },
     quality({ q }) {
       if (!ladder) return;
-      if (q === 'auto') { autoQuality = true; push(); return; }
+      if (q === 'auto') { autoQuality = true; qualityChangedAt = performance.now(); push(); return; }
       autoQuality = false;
+      abandonUpgrade();
       const i = ladder.findIndex(x => x.label === q);
       if (i >= 0 && i !== qIndex) setQuality(i, false); else push();
     },
     blackOnEnd({ on }) { blackOnEnd = on; },
-    playerMode() {}, // the engine behaves the same in both modes; main.js moves it between windows
+    fade({ sec }) { setFade(sec); },
+    standby(s) { setStandby(s); },
+    countdown(c) { setCountdown(c.until ? c : null); },
+    lyrics({ text }) { setLyrics(text); },
+    subs({ on }) { showSubs(on); },
+    // The engine behaves the same in both modes (main.js moves it between windows); only the live
+    // frames for a frozen preview are needed in Presenter mode.
+    playerMode({ on }) { isPlayer = !!on; if (frozen) (isPlayer ? stopLiveFrames : startLiveFrames)(); },
     async sink({ id }) { try { await ctx.setSinkId(id || ''); } catch (e) { console.error(e); } },
   };
 
   api.onCmd(cmd => handlers[cmd.type]?.(cmd));
 
-  for (const ev of ['seeked', 'loadedmetadata', 'error', 'emptied']) v.addEventListener(ev, () => push());
+  for (const el of [v, vNext]) {
+    for (const ev of ['seeked', 'loadedmetadata', 'error', 'emptied']) el.addEventListener(ev, () => { if (el === v) push(); });
+    el.addEventListener('ended', () => { if (el === v) reachedEnd(); });
+    el.addEventListener('error', () => { if (el !== v && upgrade) abandonUpgrade(); });
+  }
   a.addEventListener('error', () => push());
   a2.addEventListener('error', () => push());
-  v.addEventListener('ended', () => {
-    wantPlay = false; holdAll();
-    if (blackOnEnd) setBlack(true); else push();
-  });
-  setInterval(() => { if (wantPlay) push(); }, 250);
+  setInterval(() => { if (wantPlay || upgrade) push(); }, 250);
 
   // Keyboard media keys (and Windows' media overlay) talk to this window's media session, not to
   // our controls; left alone they would pause the <video> behind our back and playback would carry
@@ -284,6 +662,7 @@
     if (e.code.startsWith('Media')) return; // already handled through the media session above
     api.sendOutputKey({ key: e.key, code: e.code, shift: e.shiftKey, ctrl: e.ctrlKey });
   });
+  setFade(fadeSec);
   layout();
   push();
 </script>

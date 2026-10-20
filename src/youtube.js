@@ -191,14 +191,18 @@ function buildLadder(formats) {
       const video = direct
         .filter(f => f.height === h && f.vcodec && f.vcodec !== 'none' && (!f.acodec || f.acodec === 'none'))
         .sort((a, b) => codecRank(a.vcodec) - codecRank(b.vcodec) || (a.fps || 30) - (b.fps || 30))[0];
-      if (video) ladder.push({ label: h + 'p', video: proxyUrl(video), audio: proxyUrl(h <= 240 ? lightAudio : bestAudio) });
+      if (!video) continue;
+      const audio = h <= 240 ? lightAudio : bestAudio;
+      // The pair's bitrate (kbit/s), so the player can tell whether the connection can carry it.
+      const kbps = Math.round((video.tbr || video.vbr || h * 3) + (audio.abr || audio.tbr || 128));
+      ladder.push({ label: h + 'p', height: h, kbps, video: proxyUrl(video), audio: proxyUrl(audio) });
     }
   }
   // A single file with both tracks is the most robust fallback when YouTube still offers one.
   const muxed = direct
     .filter(f => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none')
     .sort((a, b) => (b.height || 0) - (a.height || 0))[0];
-  if (muxed) ladder.push({ label: (muxed.height || 360) + 'p·', video: proxyUrl(muxed), audio: null });
+  if (muxed) ladder.push({ label: (muxed.height || 360) + 'p·', height: muxed.height || 360, kbps: Math.round(muxed.tbr || 700), video: proxyUrl(muxed), audio: null });
   return ladder;
 }
 
@@ -223,7 +227,11 @@ async function resolveStream(url, force) {
         if (info.is_live) return reject(new Error('LIVE'));
         const ladder = buildLadder(info.formats || []);
         if (!ladder.length) return reject(new Error('No playable format'));
-        const result = { title: info.title, duration: info.duration || 0, ladder };
+        // A small JPEG thumbnail for the list (YouTube also offers WebP, which is bigger to keep).
+        const thumbnail = (info.thumbnails || [])
+          .filter(x => x.url && /\.jpe?g(\?|$)/.test(x.url) && (x.width || 0) <= 640)
+          .sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url || null;
+        const result = { title: info.title, duration: info.duration || 0, ladder, thumbnail };
         streamCache.set(url, { at: Date.now(), info: result });
         resolve(result);
       } catch (e) { reject(e); }

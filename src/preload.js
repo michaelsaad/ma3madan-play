@@ -30,7 +30,10 @@ contextBridge.exposeInMainWorld('api', {
   appVersion: () => ipcRenderer.invoke('app-version'),
 
   // Player / Presenter
-  setMode: m => ipcRenderer.send('set-mode', m),
+  setShowOn: s => ipcRenderer.send('set-show-on', s),
+  identifyScreens: () => ipcRenderer.send('identify-screens'),
+  sendLiveFrame: f => ipcRenderer.send('live-frame', f),
+  onLiveFrame: fn => on('live-frame', fn),
   onMode: fn => on('mode', fn),
   playerRect: r => ipcRenderer.send('player-rect', r),
   playerFullscreen: on => ipcRenderer.send('player-fullscreen', on),
@@ -38,8 +41,6 @@ contextBridge.exposeInMainWorld('api', {
 
   // displays
   getDisplays: () => ipcRenderer.invoke('get-displays'),
-  onDisplays: fn => on('displays', fn),
-  setOutputDisplay: id => ipcRenderer.send('set-output-display', id),
 
   // settings + playlist
   getSettings: () => ipcRenderer.invoke('get-settings'),

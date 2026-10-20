@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src mediastream: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>Mirror</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  video { width: 100%; height: 100%; object-fit: contain; display: block; }
+</style>
+</head>
+<body>
+<video id="v" autoplay muted playsinline></video>
+<script>
+  // A live copy of the projector window, full screen on another screen. No sound: the engine
+  // plays it once. Keys go to the controls (Esc on the controls' screen takes this mirror away).
+  const v = document.getElementById('v');
+  let stream = null, retry;
+  async function start() {
+    clearTimeout(retry);
+    try {
+      const id = await api.outputSourceId();
+      if (!id) { retry = setTimeout(start, 1000); return; }
+      stream?.getTracks().forEach(t => t.stop());
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, maxWidth: screen.width * devicePixelRatio, maxHeight: screen.height * devicePixelRatio, maxFrameRate: 60 } },
+      });
+      v.srcObject = stream;
+      stream.getVideoTracks()[0].onended = () => { retry = setTimeout(start, 1000); };
+    } catch (e) {
+      retry = setTimeout(start, 2000);
+    }
+  }
+  start();
+  addEventListener('keydown', e => {
+    e.preventDefault();
+    if (e.code.startsWith('Media')) return;
+    api.sendOutputKey({ key: e.key, code: e.code, shift: e.shiftKey, ctrl: e.ctrlKey });
+  });
+</script>
+</body>
+</html>
