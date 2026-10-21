@@ -69,6 +69,7 @@
   <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.5 1.6A3.8 3.8 0 0 1 17.5 18.5z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
   <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="9" cy="10" r="1.8" fill="currentColor"/><path d="M4 18l5-5 3.5 3.5L15 14l5 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-resume" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
@@ -237,6 +238,16 @@
     </div>
     <ol id="playlist" class="playlist"></ol>
     <div id="emptyList" class="empty-list"><svg><use href="#i-add"/></svg><span id="emptyListText"></span></div>
+
+    <!-- Checkpoints of the playing video: verse 1, chorus… click one to jump there -->
+    <section id="marksPanel" class="marks" hidden>
+      <div class="marks-head">
+        <svg><use href="#i-flag"/></svg><b data-i18n="marks"></b><span id="marksFor" class="muted" dir="auto"></span>
+        <button id="markAddBtn" class="small-btn primary" data-i18n-title="tMarkAdd"><svg><use href="#i-add"/></svg><span data-i18n="markAdd"></span></button>
+      </div>
+      <ol id="marksList" class="marks-list"></ol>
+      <div id="marksEmpty" class="marks-empty" data-i18n="marksEmpty"></div>
+    </section>
   </aside>
 </main>
 

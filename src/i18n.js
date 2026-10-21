@@ -1,6 +1,13 @@
 // UI strings. English is the default; Arabic switches the layout to RTL.
 const STRINGS = {
   en: {
+    marks: "Checkpoints",
+    markAdd: "Here",
+    tMarkAdd: "Add a checkpoint at this moment (Ctrl+D)",
+    markN: "Point {n}",
+    markRename: "Rename",
+    marksEmpty: "Mark the moments you jump to, like Verse 1 or the chorus: press Here (Ctrl+D) while it plays. Alt+← → jumps between them.",
+    kMarks: "Add a checkpoint / jump between them",
     aboutF4: "Saved lists, start and end points, fades, a standby screen, a countdown, lyrics and a phone remote",
     trimmed: "Plays only this part",
     lyrics: "Lyrics",
@@ -343,6 +350,13 @@ const STRINGS = {
     pickTitle: 'Choose videos',
   },
   ar: {
+    marks: "نقاط الفيديو",
+    markAdd: "هنا",
+    tMarkAdd: "إضافة نقطة عند هذه اللحظة (Ctrl+D)",
+    markN: "نقطة {n}",
+    markRename: "إعادة تسمية",
+    marksEmpty: "علّم اللحظات التي تنتقل إليها، مثل البيت الأول أو القرار: اضغط «هنا» (Ctrl+D) أثناء التشغيل. Alt+← → للتنقل بينها.",
+    kMarks: "إضافة نقطة / التنقل بين النقاط",
     aboutF4: "قوائم محفوظة، وبداية ونهاية لكل فيديو، وانتقالات ناعمة، وشاشة انتظار، وعدّ تنازلي، وكلمات الترانيم، وريموت من الموبايل",
     trimmed: "يُعرض هذا الجزء فقط",
     lyrics: "الكلمات",

@@ -21,8 +21,15 @@
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
   .title { font-size: 19px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .next { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
-  .bar { height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; }
-  .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .logo { width: 30px; height: 30px; border-radius: 8px; }
+  .seekwrap { position: relative; height: 30px; display: flex; align-items: center; direction: ltr; }
+  #seek { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; margin: 0; border-radius: 99px; background: linear-gradient(to right, var(--accent) var(--p, 0%), var(--line) var(--p, 0%)); }
+  #seek::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); position: relative; z-index: 2; }
+  .ticks { position: absolute; left: 11px; right: 11px; top: 50%; height: 0; pointer-events: none; }
+  .ticks i { position: absolute; top: -7px; width: 3px; height: 14px; margin-left: -1.5px; border-radius: 2px; background: var(--gold); }
+  .marks button { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+  .marks button b { font: 600 12px ui-monospace, Consolas, monospace; color: var(--gold); direction: ltr; }
+  .marks button.on { border-color: var(--gold); background: #2b2412; }
   .times { display: flex; justify-content: space-between; font: 600 12px ui-monospace, Consolas, monospace; color: var(--muted); direction: ltr; }
   .row { display: flex; align-items: center; justify-content: center; gap: 8px; direction: ltr; }
   .row button { min-width: 0; width: 54px; padding: 0; flex: none; }
@@ -74,13 +81,13 @@
   <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="17.5" cy="16" r="2.5" fill="currentColor"/></symbol>
 </svg>
 
-<header><span id="dot" class="dot"></span><b id="appName">Ma3madan Play</b><span id="status" class="status"></span></header>
+<header><img id="logo" class="logo" alt=""><span id="dot" class="dot"></span><b id="appName">Ma3madan Play</b><span id="status" class="status"></span></header>
 <div id="offline" class="off" hidden></div>
 
 <section class="card">
   <div id="title" class="title" dir="auto"></div>
   <div id="next" class="next" dir="auto"></div>
-  <div class="bar"><i id="fill"></i></div>
+  <div class="seekwrap"><div id="ticks" class="ticks"></div><input id="seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Seek"></div>
   <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
   <div class="row">
     <button data-a="prev" aria-label="Previous"><svg><use href="#i-prev"/></svg></button>
@@ -103,6 +110,11 @@
   <span id="volPct"></span>
 </div>
 
+<section id="marksBox" hidden>
+  <h3><span data-s="marks"></span><button data-a="addMark" style="min-height:32px;padding:0 12px;font-size:12px" data-s="addHere"></button></h3>
+  <div id="marks" class="lyrics marks"></div>
+</section>
+
 <section id="lyricsBox" hidden>
   <h3><span data-s="lyrics"></span><button data-a="lyricsOff" style="min-height:32px;padding:0 10px;font-size:12px" data-s="hide"></button></h3>
   <div id="lyrics" class="lyrics"></div>
@@ -115,8 +127,8 @@
   const $ = id => document.getElementById(id);
   const key = new URLSearchParams(location.search).get('k');
   const S = {
-    en: { standby: 'Standby', freeze: 'Freeze', stop: 'Stop', lyrics: 'Lyrics', hide: 'Hide', next: 'Next: ', nothing: 'Nothing playing', live: 'LIVE', standbyOn: 'Standby', paused: 'Paused', off: 'Lost connection to the laptop. Trying again…', videos: '{n} videos', recents: 'Recents' },
-    ar: { standby: 'شاشة الانتظار', freeze: 'تثبيت', stop: 'إيقاف', lyrics: 'الكلمات', hide: 'إخفاء', next: 'التالي: ', nothing: 'لا يوجد تشغيل', live: 'مباشر', standbyOn: 'انتظار', paused: 'متوقف', off: 'انقطع الاتصال باللابتوب. جارٍ إعادة المحاولة…', videos: '{n} فيديو', recents: 'الأخيرة' },
+    en: { standby: 'Standby', freeze: 'Freeze', stop: 'Stop', lyrics: 'Lyrics', hide: 'Hide', marks: 'Checkpoints', addHere: '+ Here', next: 'Next: ', nothing: 'Nothing playing', live: 'LIVE', standbyOn: 'Standby', paused: 'Paused', off: 'Lost connection to the laptop. Trying again…', videos: '{n} videos', recents: 'Recents' },
+    ar: { standby: 'شاشة الانتظار', freeze: 'تثبيت', stop: 'إيقاف', lyrics: 'الكلمات', hide: 'إخفاء', marks: 'نقاط الفيديو', addHere: '+ هنا', next: 'التالي: ', nothing: 'لا يوجد تشغيل', live: 'مباشر', standbyOn: 'انتظار', paused: 'متوقف', off: 'انقطع الاتصال باللابتوب. جارٍ إعادة المحاولة…', videos: '{n} فيديو', recents: 'الأخيرة' },
   };
   let lang = 'en', st = {}, at = 0;
   const t = (k, v = {}) => (S[lang][k] || S.en[k] || k).replace(/\{(\w+)\}/g, (_, x) => v[x] ?? '');
@@ -165,6 +177,16 @@
     $('lyricsBox').hidden = !slides.length;
     $('lyrics').innerHTML = slides.map((s, i) => `<button data-i="${i}" class="${st.lyrics.current === i ? 'on' : ''}" dir="auto">${esc(s)}</button>`).join('');
     for (const b of $('lyrics').querySelectorAll('button')) b.onclick = () => send({ action: 'lyric', i: Number(b.dataset.i) });
+    // Checkpoints of the playing video: tap to jump there.
+    const marks = st.marks?.list || [];
+    $('marksBox').hidden = !st.loaded;
+    const mk = JSON.stringify(st.marks);
+    if ($('marks').dataset.key !== mk) {
+      $('marks').dataset.key = mk;
+      $('marks').innerHTML = marks.map((m, i) => `<button data-i="${i}" class="${st.marks.current === i ? 'on' : ''}"><b>${fmt(m.t)}</b><span dir="auto">${esc(m.label)}</span></button>`).join('');
+      for (const b of $('marks').querySelectorAll('button')) b.onclick = () => send({ action: 'mark', i: Number(b.dataset.i) });
+      $('ticks').innerHTML = st.duration ? marks.map(m => `<i style="left:${(m.t / st.duration) * 100}%"></i>`).join('') : '';
+    }
     tickTime();
   }
   function tickTime() {
@@ -172,8 +194,20 @@
     const d = st.duration || 0;
     $('cur').textContent = fmt(Math.min(now, d || now));
     $('dur').textContent = fmt(d);
-    $('fill').style.width = d ? Math.min(100, now / d * 100) + '%' : '0';
+    if (!dragging) { $('seek').value = d ? Math.round(Math.min(1, now / d) * 1000) : 0; $('seek').style.setProperty('--p', $('seek').value / 10 + '%'); }
   }
+  // The time bar: drag (or tap) to move in the video.
+  let dragging = false;
+  $('seek').addEventListener('input', e => {
+    dragging = true;
+    e.target.style.setProperty('--p', e.target.value / 10 + '%');
+    $('cur').textContent = fmt((e.target.value / 1000) * (st.duration || 0));
+  });
+  $('seek').addEventListener('change', e => {
+    const t = (e.target.value / 1000) * (st.duration || 0);
+    if (st.duration) { send({ action: 'seek', t }); st.time = t; at = Date.now(); }
+    dragging = false;
+  });
   setInterval(tickTime, 250);
 
   function connect() {
@@ -181,6 +215,9 @@
     es.onmessage = e => { st = JSON.parse(e.data); at = Date.now(); $('dot').classList.add('on'); $('offline').hidden = true; render(); };
     es.onerror = () => { $('dot').classList.remove('on'); $('offline').hidden = false; $('offline').textContent = t('off'); };
   }
+  $('logo').src = '/logo.png?k=' + encodeURIComponent(key);
+  const icon = document.createElement('link'); icon.rel = 'icon'; icon.href = $('logo').src; document.head.appendChild(icon);
+  const touch = document.createElement('link'); touch.rel = 'apple-touch-icon'; touch.href = $('logo').src; document.head.appendChild(touch);
   render();
   connect();
 </script>

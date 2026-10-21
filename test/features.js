@@ -159,6 +159,33 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     await js(`closeModal(); api.remoteStop().then(r => { remote = r; renderRemoteBtn(); })`);
   }
 
+  // ---------- checkpoints (and from the phone) ----------
+  {
+    await js(`playItem(items[0])`); await wait(1500);
+    await js(`cmd('seek', { t: 4 })`); await wait(500);
+    await js(`addMark({ rename: false })`);
+    await js(`cmd('seek', { t: 12 })`); await wait(500);
+    await js(`addMark()`); await wait(300);
+    await js(`(i => { i.value = 'Verse 2'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); })(document.querySelector('.ml-edit'))`); await wait(300);
+    log('checkpoints:', await js(`JSON.stringify(items[0].marks)`), '| rows:', await js(`[...document.querySelectorAll('#marksList .mark')].map(x => x.textContent.trim().replace(/\s+/g, ' ')).join(' | ')`), '| ticks:', await js(`document.querySelectorAll('.mark-ticks i').length`));
+    await js(`document.querySelector('#marksList .mark').click()`); await wait(700);
+    log('clicked the first checkpoint:', await js('out.time.toFixed(1)'));
+    await shot('50-checkpoints');
+    const r = JSON.parse(await js(`api.remoteStart().then(r => JSON.stringify(r))`));
+    const key = new URL(r.urls[0]).searchParams.get('k'), base = `http://127.0.0.1:${r.port}`;
+    await fetch(`${base}/cmd?k=${key}`, { method: 'POST', body: JSON.stringify({ action: 'mark', i: 1 }) }); await wait(700);
+    log('phone → checkpoint 2:', await js('out.time.toFixed(1)'));
+    await fetch(`${base}/cmd?k=${key}`, { method: 'POST', body: JSON.stringify({ action: 'seek', t: 7 }) }); await wait(700);
+    log('phone seek to 7:', await js('out.time.toFixed(1)'), '| logo:', (await fetch(`${base}/logo.png?k=${key}`)).status);
+    const { BrowserWindow } = require('electron');
+    const w = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true } });
+    await w.loadURL(`${base}/?k=${key}`); await wait(1500);
+    log('phone page:', await w.webContents.executeJavaScript(`JSON.stringify({logo: document.getElementById('logo').naturalWidth, marks: document.querySelectorAll('#marks button').length, seek: document.getElementById('seek').value})`));
+    fs.writeFileSync(path.join(dir, '51-remote-phone-marks.png'), (await w.webContents.capturePage()).toPNG());
+    w.destroy();
+    await js(`api.remoteStop().then(r => { remote = r; renderRemoteBtn(); })`);
+  }
+
   // ---------- karaoke button ----------
   log('karaoke button:', await js(`JSON.stringify({disabled: $('karaokeBtn').disabled, tip: $('karaokeBtn').dataset.tip || $('karaokeBtn').title})`));
 

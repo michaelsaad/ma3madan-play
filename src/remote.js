@@ -72,6 +72,10 @@ function handle(req, res) {
     onCommand({ action: 'clients' });
     return;
   }
+  if (req.method === 'GET' && url.pathname === '/logo.png') {
+    res.writeHead(200, { ...headers, 'Cache-Control': 'max-age=86400', 'Content-Type': 'image/png' });
+    return fs.createReadStream(path.join(__dirname, 'assets', 'app-128.png')).pipe(res);
+  }
   if (req.method === 'GET' && url.pathname.startsWith('/thumb/')) {
     const file = thumbPath(decodeURIComponent(url.pathname.slice(7)));
     if (!file || !fs.existsSync(file)) { res.writeHead(404, headers); return res.end(); }

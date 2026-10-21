@@ -810,6 +810,7 @@ function renderState() {
   renderMixer(); // vocals-ui.js
   renderKaraokeBtn(); // vocals-ui.js
   renderLyricsBar(); // features.js
+  renderMarks(); // features.js
   renderNow();
   renderStatus();
   renderChips();
@@ -826,9 +827,16 @@ function renderTrimMarks() {
   const d = out.duration, tr = out.trim || {};
   const on = !!(d && (tr.start || tr.end));
   mask.hidden = !on;
-  if (!on) return;
-  mask.style.setProperty('--a', (tr.start / d) * 100 + '%');
-  mask.style.setProperty('--b', (Math.min(tr.end || d, d) / d) * 100 + '%');
+  if (on) {
+    mask.style.setProperty('--a', (tr.start / d) * 100 + '%');
+    mask.style.setProperty('--b', (Math.min(tr.end || d, d) / d) * 100 + '%');
+  }
+  // Checkpoints: small ticks on the bar.
+  let ticks = document.querySelector('.mark-ticks');
+  if (!ticks) { ticks = document.createElement('div'); ticks.className = 'mark-ticks'; document.querySelector('.seek-track').prepend(ticks); }
+  const it = items.find(x => x.id === playingId);
+  const html = d && out.loaded && it?.marks?.length ? it.marks.map(m => `<i style="left:${(m.t / d) * 100}%"></i>`).join('') : '';
+  if (ticks.innerHTML !== html) ticks.innerHTML = html;
 }
 
 // ---------- playback settings: one popover instead of four dropdowns ----------
@@ -1267,6 +1275,8 @@ window.addEventListener('keydown', e => {
     if (e.ctrlKey && e.code === 'KeyF') { e.preventDefault(); openSearch(); }
     if (e.ctrlKey && e.code === 'KeyM') { e.preventDefault(); toggleMini(); }
     if (e.ctrlKey && e.code === 'Comma') { e.preventDefault(); showSettings(); }
+    if (e.ctrlKey && e.code === 'KeyD') { e.preventDefault(); addMark(); }
+    if (e.altKey && (e.code === 'ArrowRight' || e.code === 'ArrowLeft')) { e.preventDefault(); stepMark(e.code === 'ArrowRight' ? 1 : -1); }
     return;
   }
   // Up/Down with Shift moves the playlist selection; plain Up/Down is volume.
@@ -1311,6 +1321,7 @@ function pushRemote() {
       playingId, listName: activeList()?.name || '',
       items: viewItems().map(x => ({ id: x.id, title: x.title, duration: x.duration || 0, missing: !!x.missing, thumb: x.thumbUrl ? (x.thumbUrl.split('?v=')[1] || '1') : '' })),
       lyrics: slides.length ? { slides, current: out.lyrics ? currentLyric : -1 } : null,
+      marks: out.loaded && it?.marks?.length ? { list: it.marks.map(m => ({ t: m.t, label: m.label })), current: currentMark(it.marks) } : null,
     });
   }, 200);
 }

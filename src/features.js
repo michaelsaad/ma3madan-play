@@ -483,6 +483,9 @@ api.onRemoteCmd(async c => {
     case 'play': { const it = items.find(x => x.id === c.id); if (it) playItem(it); break; }
     case 'lyric': if (Number.isInteger(c.i)) (c.i === currentLyric && out.lyrics ? hideLyrics() : showLyric(c.i)); break;
     case 'lyricsOff': hideLyrics(); break;
+    case 'seek': if (typeof c.t === 'number' && isFinite(c.t)) cmd('seek', { t: c.t }); break;
+    case 'mark': if (Number.isInteger(c.i)) goToMark(c.i); break;
+    case 'addMark': addMark({ rename: false }); break;
     case 'clients': remote = await api.remoteInfo(); renderRemoteBtn(); renderRemoteModal(); break;
   }
   pushRemote();
@@ -491,7 +494,7 @@ api.onRemoteCmd(async c => {
 // ---------- keyboard shortcuts ----------
 function showShortcuts() {
   const groups = [
-    [t('gPlayback'), [['Space', t('kPlay')], ['N / P', t('kNextPrev')], ['← →', t('kSeek5')], ['J / L', t('kSeek10')], ['Shift + ← →', t('kSeek30')], ['0 – 9', t('kJump')], ['[ ]', t('kFrame')], ['Home / End', t('kHomeEnd')], ['I / O', t('kTrim')]]],
+    [t('gPlayback'), [['Space', t('kPlay')], ['N / P', t('kNextPrev')], ['← →', t('kSeek5')], ['J / L', t('kSeek10')], ['Shift + ← →', t('kSeek30')], ['0 – 9', t('kJump')], ['[ ]', t('kFrame')], ['Home / End', t('kHomeEnd')], ['I / O', t('kTrim')], ['Ctrl + D / Alt + ← →', t('kMarks')]]],
     [t('gScreen'), [['B', t('kStandby')], ['Z', t('kFreeze')], ['T', t('kCountdown')], ['F', t('kFull')], ['A', t('kAspect')], ['C', t('kSubs')], ['Shift + N / P', t('kLyrics')], ['Esc', t('kEsc')]]],
     [t('gSound'), [['↑ ↓', t('kVolume')], ['M', t('kMute')]]],
     [t('kWindow'), [['Ctrl + O', t('addVideos')], ['Ctrl + F', t('tSearch')], ['Ctrl + B', t('kSide')], ['Ctrl + M', t('tMini')], ['Ctrl + ,', t('settings')], ['Shift + ↑ ↓', t('kSelect')], ['Enter', t('kPlaySel')], ['?', t('shortcuts')]]],
@@ -560,3 +563,83 @@ api.onMini(on => {
   closeMenu();
   requestAnimationFrame(sendPlayerRect);
 });
+
+// ---------- checkpoints ----------
+// Named moments in a video ("Verse 1", "Chorus"…), added by hand while it plays. They show under
+// the list and as ticks on the seek bar; a click (here or on the phone) jumps there.
+let editingMark = -1; // the checkpoint being renamed
+const marksOf = it => it?.marks || [];
+function currentMark(marks) {
+  let i = -1;
+  marks.forEach((m, j) => { if (m.t <= out.time + 0.25) i = j; });
+  return i;
+}
+function renderMarks() {
+  const it = items.find(x => x.id === playingId);
+  const show = !!(out.loaded && it);
+  $('marksPanel').hidden = !show;
+  if (!show) return;
+  const marks = marksOf(it), cur = currentMark(marks);
+  const key = JSON.stringify([it.id, marks, cur, editingMark, LANG]);
+  const list = $('marksList');
+  if (list.dataset.key === key) return;
+  list.dataset.key = key;
+  $('marksFor').textContent = it.title;
+  $('marksEmpty').hidden = !!marks.length;
+  list.innerHTML = marks.map((m, i) => `
+    <li class="mark ${i === cur ? 'on' : ''}" data-i="${i}">
+      <span class="mt" dir="ltr">${fmt(m.t)}</span>
+      ${i === editingMark
+        ? `<input class="ml-edit" type="text" dir="auto" maxlength="60" value="${escapeHtml(m.label)}">`
+        : `<span class="ml" dir="auto">${escapeHtml(m.label)}</span>`}
+      <button class="ib-x" data-act="rename" title="${escapeHtml(t('markRename'))}"><svg><use href="#i-edit"/></svg></button>
+      <button class="ib-x" data-act="delete" title="${escapeHtml(t('remove'))}"><svg><use href="#i-x"/></svg></button>
+    </li>`).join('');
+  for (const li of list.querySelectorAll('.mark')) {
+    const i = Number(li.dataset.i);
+    li.onclick = e => {
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if (act === 'delete') { it.marks.splice(i, 1); editingMark = -1; save(); renderMarks(); renderTrimMarks(); return; }
+      if (act === 'rename') { editingMark = i; renderMarks(); return; }
+      if (!e.target.closest('input')) goToMark(i);
+    };
+    li.ondblclick = e => { if (!e.target.closest('button')) { editingMark = i; renderMarks(); } };
+  }
+  const input = list.querySelector('.ml-edit');
+  if (input) {
+    const done = keep => {
+      if (editingMark < 0) return;
+      if (keep && input.value.trim()) it.marks[editingMark].label = input.value.trim();
+      editingMark = -1; save(); renderMarks();
+    };
+    input.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); };
+    input.onblur = () => done(true);
+    input.focus(); input.select();
+  }
+  list.querySelector('.mark.on')?.scrollIntoView({ block: 'nearest' });
+}
+function goToMark(i) {
+  const m = marksOf(items.find(x => x.id === playingId))[i];
+  if (m) cmd('seek', { t: m.t });
+}
+// A new checkpoint at the current moment, named "Point 3" until it's renamed.
+function addMark({ label, rename = true } = {}) {
+  const it = items.find(x => x.id === playingId);
+  if (!it || !out.loaded) return;
+  const at = Math.round(out.time * 10) / 10;
+  it.marks = marksOf(it).filter(m => Math.abs(m.t - at) > 0.5);
+  it.marks.push({ t: at, label: label || t('markN', { n: it.marks.length + 1 }) });
+  it.marks.sort((a, b) => a.t - b.t);
+  editingMark = rename ? it.marks.findIndex(m => m.t === at) : -1;
+  if (settings.sidebarHidden && rename) toggleSide();
+  save(); renderMarks(); renderTrimMarks(); pushRemote();
+}
+// Previous / next checkpoint from where the video is now.
+function stepMark(d) {
+  const marks = marksOf(items.find(x => x.id === playingId));
+  if (!marks.length) return;
+  const now = out.time;
+  const m = d > 0 ? marks.find(x => x.t > now + 0.5) : [...marks].reverse().find(x => x.t < now - 1.5);
+  cmd('seek', { t: m ? m.t : d > 0 ? marks[marks.length - 1].t : marks[0].t });
+}
+$('markAddBtn').onclick = () => addMark();

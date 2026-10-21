@@ -53,9 +53,10 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 - **Continue where you stopped.** Videos longer than 3 minutes pick up where they were left, with a **start over** button next to the title.
 - **Volume per video**, for the one clip that's always too quiet.
 - **Subtitles.** A `.srt` or `.vtt` file with the same name as the video is used by itself, or pick one in **Video settings…**. `C` turns them on and off.
+- **Checkpoints.** Mark the moments you jump to ("Verse 1", "Chorus") with **Here** (`Ctrl + D`) while a video plays. They list under Recents and show as gold ticks on the seek bar; click one to jump there, or `Alt + ←` / `Alt + →` to step between them. The phone remote has them too.
 - **Lyrics on screen.** Write a song's lyrics in its **Video settings…**, one slide per paragraph. While it plays, the slides line up under the controls: click one (or `Shift + N` / `Shift + P`) to show it over the video, or full screen over the standby screen for a song with no picture.
 - **Countdown** (`T`): a big "We start in 5:00" on the audience's screen before the meeting.
-- **Phone remote.** Turn it on, scan the QR code with a phone on the same Wi-Fi, and change videos, pause, put up the standby screen or show lyrics while you walk around. No app to install; only phones that scanned the code can connect.
+- **Phone remote.** Turn it on, scan the QR code with a phone on the same Wi-Fi, and change videos, pause, put up the standby screen or show lyrics while you walk around. No app to install; only phones that scanned the code can connect. The phone has the seek bar and the checkpoints too.
 - **Freeze** (`Z`) holds the picture on the audience's screens while the video keeps running underneath, sound included. Your preview keeps showing the running video, marked *Frozen*.
 - **Frame by frame** (`[` and `]`): one click moves one frame; hold the button to keep stepping.
 - **Always know what the audience sees**: a status next to the title says *On screen*, *Standby*, *Paused*, *Frozen* or *Countdown*, and on which screens.
@@ -158,6 +159,8 @@ Online, the song's sound is uploaded to MVSEP, separated on their servers, downl
 | `N` / `P` | Next / previous video |
 | `Shift + N` / `Shift + P` | Next / previous lyrics slide |
 | `I` / `O` | Set the start / end point here |
+| `Ctrl + D` | Add a checkpoint here |
+| `Alt + ←` / `Alt + →` | Previous / next checkpoint |
 | `A` | Cycle aspect ratio |
 | `0`–`9` | Jump to 0%–90% |
 | `Home` / `End` | Start / end |
