@@ -783,3 +783,17 @@ body.mini .transport .grp button.big svg { width: 18px; height: 18px; }
 .r-lan summary { cursor: pointer; padding: 10px 0; font-weight: 600; font-size: 13px; color: var(--muted); }
 .r-lan[open] { padding-bottom: 12px; }
 .r-lan .r-grid { grid-template-columns: 140px minmax(0, 1fr); }
+
+/* A phone from "Nearby computers" asking to connect */
+.link-request {
+  position: fixed; top: 66px; inset-inline-end: 16px; z-index: 60; width: min(380px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 14px;
+  background: var(--modal-bg); border: 1px solid var(--accent); box-shadow: 0 16px 50px var(--shadow); animation: rise .2s ease-out;
+}
+.lr-top { display: flex; align-items: center; gap: 12px; }
+.lr-ico { width: 28px; height: 28px; color: var(--accent); flex: none; }
+.lr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lr-text span { font-size: 12.5px; color: var(--muted); }
+.link-request code { font: 700 22px Consolas, monospace; letter-spacing: .12em; color: var(--gold); flex: none; }
+.lr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.lr-actions button { flex: 1 1 auto; }

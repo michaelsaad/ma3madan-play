@@ -1,6 +1,11 @@
 // UI strings. English is the default; Arabic switches the layout to RTL.
 const STRINGS = {
   en: {
+    lrTitle: "{d} wants to control Ma3madan Play",
+    lrCode: "Check the phone shows the same code",
+    lrTrust: "Trust this device",
+    lrOnce: "Just this time",
+    lrDeny: "Don’t allow",
     appScan: "Scan with your phone camera",
     appStep1: "The Ma3madan Remote app opens in the browser.",
     appStep2: "Add it to the home screen (Share → Add to Home Screen, or ⋮ → Install app).",
@@ -357,6 +362,11 @@ const STRINGS = {
     pickTitle: 'Choose videos',
   },
   ar: {
+    lrTitle: "{d} يريد التحكم في معمدان بلاي",
+    lrCode: "تأكد أن الموبايل يعرض نفس الرقم",
+    lrTrust: "جهاز موثوق",
+    lrOnce: "هذه المرة فقط",
+    lrDeny: "رفض",
     appScan: "امسح بكاميرا الموبايل",
     appStep1: "يفتح تطبيق Ma3madan Remote في المتصفح.",
     appStep2: "أضفه إلى الشاشة الرئيسية (مشاركة ← إضافة إلى الشاشة الرئيسية، أو ⋮ ← تثبيت التطبيق).",

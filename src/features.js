@@ -429,12 +429,49 @@ function renderRemoteBtn() {
 }
 async function startLink() {
   if (!settings.linkKey) { settings.linkKey = MaLink.randomId(18); api.setSetting('linkKey', settings.linkKey); }
+  // How phones on the same network find this computer without the QR code (not secret).
+  if (!settings.linkHostId) { settings.linkHostId = MaLink.randomId(12); api.setSetting('linkHostId', settings.linkHostId); }
+  if (!settings.linkLobby) { settings.linkLobby = MaLink.randomHex(16); api.setSetting('linkLobby', settings.linkLobby); }
   hostName ||= await api.hostName();
   await LinkHost.start(settings.linkKey, {
-    name: hostName, onCommand: remoteCommand, thumb: thumbData,
+    name: hostName, hostId: settings.linkHostId, lobby: settings.linkLobby,
+    onCommand: remoteCommand, thumb: thumbData,
+    onRequest: askLinkRequest, onCancel: cancelLinkRequest,
     onChange: () => { renderRemoteBtn(); renderRemoteModal(); },
   });
   pushRemote();
+}
+
+// A phone from "Nearby computers" asks to connect: it waits until it's approved here. The same
+// 4 digits show on the phone, so you know it's that phone.
+const linkRequests = []; // [{ device, code, resolve }]
+function askLinkRequest(req) {
+  return new Promise(resolve => { linkRequests.push({ ...req, resolve }); renderLinkRequest(); });
+}
+function cancelLinkRequest(code) {
+  const i = linkRequests.findIndex(r => r.code === code);
+  if (i < 0) return;
+  linkRequests.splice(i, 1)[0].resolve('deny');
+  renderLinkRequest();
+}
+function renderLinkRequest() {
+  let box = $('linkRequest');
+  const r = linkRequests[0];
+  if (!r) { box?.remove(); return; }
+  if (!box) { box = document.createElement('div'); box.id = 'linkRequest'; box.className = 'link-request'; document.body.appendChild(box); }
+  box.innerHTML = `
+    <div class="lr-top"><svg class="lr-ico"><use href="#i-phone"/></svg>
+      <div class="lr-text"><b dir="auto">${escapeHtml(t('lrTitle', { d: r.device }))}</b><span>${escapeHtml(t('lrCode'))}</span></div>
+      <code dir="ltr">${escapeHtml(r.code || '----')}</code></div>
+    <div class="lr-actions">
+      <button data-a="trust" class="primary">${escapeHtml(t('lrTrust'))}</button>
+      <button data-a="once">${escapeHtml(t('lrOnce'))}</button>
+      <button data-a="deny" class="ghost">${escapeHtml(t('lrDeny'))}</button>
+    </div>`;
+  for (const b of box.querySelectorAll('[data-a]')) b.onclick = () => {
+    linkRequests.shift().resolve(b.dataset.a);
+    renderLinkRequest();
+  };
 }
 // Called once the settings are loaded: the remote comes back on if it was on.
 async function initRemote() {

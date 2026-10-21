@@ -1,6 +1,6 @@
 {
   "name": "ma3madan-play",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Video player for churches and events: controls on your screen, clean full-screen video on the projector. Plays local files and YouTube.",
   "main": "src/main.js",
   "scripts": {

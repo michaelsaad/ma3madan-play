@@ -217,6 +217,54 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     await js(`LinkHost.stop()`);
   }
 
+  // ---------- a new phone finds this computer without the QR code ----------
+  {
+    await js(`startLink()`); await wait(2500);
+    const { BrowserWindow } = require('electron');
+    const mk = () => new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true, partition: 'nearby-test-' + Date.now() } });
+    let phone = mk();
+    const pjs = code => phone.webContents.executeJavaScript(code);
+    await phone.loadURL('https://ma3madan-remote.pages.dev/');
+    const t0 = Date.now();
+    while (Date.now() - t0 < 20000 && !(await pjs(`document.querySelectorAll('#nearbyList button').length`))) await wait(500);
+    log('nearby list:', await pjs(`[...document.querySelectorAll('#nearbyList button span')].map(s => s.textContent).join(', ')`), 'after', Date.now() - t0, 'ms');
+    fs.writeFileSync(path.join(dir, '53-phone-nearby.png'), (await phone.webContents.capturePage()).toPNG());
+    await pjs(`document.querySelector('#nearbyList button').click()`);
+    const t1 = Date.now();
+    while (Date.now() - t1 < 30000 && !(await js(`!!document.getElementById('linkRequest')`))) await wait(500);
+    await wait(800);
+    const pcCode = await js(`document.querySelector('#linkRequest code')?.textContent`);
+    const phoneCode = await pjs(`document.getElementById('approveCode').hidden ? null : document.getElementById('approveCode').textContent`);
+    log('approval asked in', Date.now() - t1, 'ms | code on the computer:', pcCode, '| on the phone:', phoneCode, '| match:', !!pcCode && pcCode === phoneCode);
+    log('before approval the phone gets nothing:', await pjs(`document.getElementById('remoteUi').hidden`), '| host counts it:', await js('LinkHost.connected()'));
+    await shot('54-approve-request');
+    fs.writeFileSync(path.join(dir, '55-phone-waiting.png'), (await phone.webContents.capturePage()).toPNG());
+    await js(`document.querySelector('#linkRequest [data-a="trust"]').click()`); await wait(1500);
+    log('trusted → phone remote:', await pjs(`JSON.stringify({ui: !document.getElementById('remoteUi').hidden, title: document.getElementById('title').textContent, saved: JSON.parse(localStorage.getItem('laptops') || '[]').map(l => l.name + (l.secret ? ' (key)' : ''))})`));
+    const before = await js('out.paused');
+    await pjs(`document.getElementById('playBtn').click()`); await wait(800);
+    log('trusted phone controls it:', before, '→', await js('out.paused'));
+    // Next time: no list, no approval.
+    await phone.loadURL('https://ma3madan-remote.pages.dev/');
+    const t2 = Date.now();
+    while (Date.now() - t2 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(500);
+    log('reopened: connected by itself in', Date.now() - t2, 'ms | asked again:', await js(`!!document.getElementById('linkRequest')`));
+    phone.destroy();
+
+    // Another phone: "Don't allow".
+    phone = mk();
+    await phone.loadURL('https://ma3madan-remote.pages.dev/');
+    const t3 = Date.now();
+    while (Date.now() - t3 < 20000 && !(await pjs(`document.querySelectorAll('#nearbyList button').length`))) await wait(500);
+    await pjs(`document.querySelector('#nearbyList button').click()`);
+    const t4 = Date.now();
+    while (Date.now() - t4 < 30000 && !(await js(`!!document.getElementById('linkRequest')`))) await wait(500);
+    await js(`document.querySelector('#linkRequest [data-a="deny"]').click()`); await wait(1500);
+    log('denied phone:', await pjs(`JSON.stringify({title: document.getElementById('connTitle').textContent, remote: !document.getElementById('remoteUi').hidden, saved: (localStorage.getItem('laptops') || '[]').length > 2})`));
+    phone.destroy();
+    await js(`LinkHost.stop()`);
+  }
+
   // ---------- karaoke button ----------
   log('karaoke button:', await js(`JSON.stringify({disabled: $('karaokeBtn').disabled, tip: $('karaokeBtn').dataset.tip || $('karaokeBtn').title})`));
 

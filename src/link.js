@@ -74,5 +74,38 @@
     });
   }
 
-  root.MaLink = { SIGNAL, ICE_SERVERS, randomId, deriveLink, send, receive, gathered };
+  // ---------- nearby computers (no QR code) ----------
+  // A computer announces its name and a "lobby" room; phones on the same network list it. With no
+  // shared key yet, lobby messages aren't encrypted: the WebRTC connection itself is, and the
+  // computer must approve the phone, comparing a 4-digit code made from both ends' certificates
+  // (sasCode), so neither the server nor anyone else can slip in between.
+  const API = SIGNAL.replace(/\/signal$/, '');
+  async function announce(host, name, lobby) {
+    await fetch(`${API}/presence`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ host, name, lobby }) });
+  }
+  async function nearby() {
+    const r = await fetch(`${API}/presence`, { cache: 'no-store' });
+    if (!r.ok) throw new Error('presence ' + r.status);
+    return (await r.json()).hosts || [];
+  }
+  async function sendOpen(room, from, to, obj) {
+    const r = await fetch(`${SIGNAL}?room=${room}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ from, to, data: JSON.stringify(obj) }) });
+    if (!r.ok) throw new Error('signal ' + r.status);
+  }
+  async function receiveOpen(room, me, after) {
+    const r = await fetch(`${SIGNAL}?room=${room}&for=${encodeURIComponent(me)}&after=${after}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error('signal ' + r.status);
+    const { messages = [] } = await r.json();
+    return messages.map(m => { let msg = null; try { msg = JSON.parse(m.data); } catch {} return { id: m.id, from: m.from_id, msg }; });
+  }
+  // The same 4 digits on both screens only if both ends see the same two certificates.
+  async function sasCode(sdpA, sdpB) {
+    const fp = sdp => (/a=fingerprint:\S+ (\S+)/.exec(sdp || '') || [])[1] || '';
+    const both = [fp(sdpA), fp(sdpB)].sort().join('|');
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(both)));
+    return String(((h[0] << 16) | (h[1] << 8) | h[2]) % 10000).padStart(4, '0');
+  }
+  const randomHex = (bytes = 16) => hex(crypto.getRandomValues(new Uint8Array(bytes)));
+
+  root.MaLink = { SIGNAL, ICE_SERVERS, randomId, randomHex, deriveLink, send, receive, gathered, announce, nearby, sendOpen, receiveOpen, sasCode };
 })(typeof window !== 'undefined' ? window : globalThis);
