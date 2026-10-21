@@ -16,7 +16,7 @@ const { spawn } = require('child_process');
 const { ensureFfmpeg } = require('../youtube');
 
 const ENGINE = {
-  url: 'https://github.com/michaelsaad/ma3madan-video-presenter/releases/download/vocal-engine-1/vocal-engine-ort-1.22.0-win-x64.tar.gz',
+  url: 'https://github.com/michaelsaad/ma3madan-play/releases/download/vocal-engine-1/vocal-engine-ort-1.22.0-win-x64.tar.gz',
   sha256: 'e150b6765de2c1cb486283d09b771c4d1100c213653a9d0570fff50616f9b19a',
   dir: 'vocal-engine-1',
 };

@@ -776,3 +776,10 @@ body.mini .transport .grp button.big svg { width: 18px; height: 18px; }
 /* …and as ticks on the seek bar */
 .mark-ticks { position: absolute; left: 0; right: 0; top: 50%; height: 0; pointer-events: none; z-index: 1; }
 .mark-ticks i { position: absolute; top: -8px; width: 3px; height: 16px; margin-left: -1.5px; border-radius: 2px; background: var(--gold); opacity: .9; }
+
+/* Phone remote dialog: the app QR first, the Wi-Fi page folded underneath */
+.r-steps { margin: 2px 0 0; padding-inline-start: 20px; line-height: 1.7; color: var(--muted); font-size: 13px; }
+.r-lan { border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; }
+.r-lan summary { cursor: pointer; padding: 10px 0; font-weight: 600; font-size: 13px; color: var(--muted); }
+.r-lan[open] { padding-bottom: 12px; }
+.r-lan .r-grid { grid-template-columns: 140px minmax(0, 1fr); }

@@ -128,4 +128,12 @@ function setState(s) {
   for (const c of clients) c.write(msg);
 }
 
-module.exports = { start, stop, info, setState, key: () => key };
+// An SVG QR code for any text (the phone app's pairing link).
+function qrSvg(text) {
+  const q = qrcode(0, 'M');
+  q.addData(text);
+  q.make();
+  return q.createSvgTag({ cellSize: 6, margin: 3, scalable: true });
+}
+
+module.exports = { start, stop, info, setState, qrSvg, key: () => key };

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/michaelsaad/ma3madan-video-presenter/releases/latest"><b>⬇ Download for Windows</b></a>
+  <a href="https://github.com/michaelsaad/ma3madan-play/releases/latest"><b>⬇ Download for Windows</b></a>
 </p>
 
 ![Screenshot](docs/screenshot.png)
@@ -56,7 +56,7 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 - **Checkpoints.** Mark the moments you jump to ("Verse 1", "Chorus") with **Here** (`Ctrl + D`) while a video plays. They list under Recents and show as gold ticks on the seek bar; click one to jump there, or `Alt + ←` / `Alt + →` to step between them. The phone remote has them too.
 - **Lyrics on screen.** Write a song's lyrics in its **Video settings…**, one slide per paragraph. While it plays, the slides line up under the controls: click one (or `Shift + N` / `Shift + P`) to show it over the video, or full screen over the standby screen for a song with no picture.
 - **Countdown** (`T`): a big "We start in 5:00" on the audience's screen before the meeting.
-- **Phone remote.** Turn it on, scan the QR code with a phone on the same Wi-Fi, and change videos, pause, put up the standby screen or show lyrics while you walk around. No app to install; only phones that scanned the code can connect. The phone has the seek bar and the checkpoints too.
+- **Phone remote.** Turn it on and scan the QR code once: the [Ma3madan Remote](https://github.com/michaelsaad/ma3madan-remote) app opens on the phone (add it to the home screen), and from then on it connects to the laptop by itself, directly over the Wi-Fi. Change videos, pause, seek, put up the standby screen, jump to checkpoints or show lyrics while you walk around. Only phones that scanned the code can connect, and the connection is encrypted. For a place with no internet, a plain Wi-Fi page works too (**No internet here?**).
 - **Freeze** (`Z`) holds the picture on the audience's screens while the video keeps running underneath, sound included. Your preview keeps showing the running video, marked *Frozen*.
 - **Frame by frame** (`[` and `]`): one click moves one frame; hold the button to keep stepping.
 - **Always know what the audience sees**: a status next to the title says *On screen*, *Standby*, *Paused*, *Frozen* or *Countdown*, and on which screens.
@@ -74,7 +74,7 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 
 ## Install
 
-1. Download **`Ma3madan-Play-Setup-x.y.z.exe`** from the [latest release](https://github.com/michaelsaad/ma3madan-video-presenter/releases/latest).
+1. Download **`Ma3madan-Play-Setup-x.y.z.exe`** from the [latest release](https://github.com/michaelsaad/ma3madan-play/releases/latest).
 2. Run it. Because the app is new and not code-signed yet, Edge or Windows may warn you first. See [Windows says the file is unsafe](#windows-says-the-file-is-unsafe) below.
 3. Pick where to install it. No admin rights are needed. You'll get a desktop shortcut and a Start-menu entry.
 
@@ -192,8 +192,8 @@ Windows doesn't let apps make themselves the default; you have to choose it once
 You'll need [Node.js](https://nodejs.org) 20 or newer.
 
 ```bash
-git clone https://github.com/michaelsaad/ma3madan-video-presenter.git
-cd ma3madan-video-presenter
+git clone https://github.com/michaelsaad/ma3madan-play.git
+cd ma3madan-play
 npm install
 npm start             # run the app
 npm run dist          # build the installer and the portable .exe into dist/
@@ -214,7 +214,8 @@ Other scripts:
 | `src/output.html` | The video engine (on the projector in Presenter mode, inside the main window in Player mode): playback, fades, standby screen, countdown, lyrics, subtitles, Web Audio volume boost, aspect ratio, stream buffering and automatic quality (two video elements, so a higher quality takes over at the same frame) |
 | `src/youtube.js` | yt-dlp: downloads, and resolving stream formats into a quality ladder |
 | `src/stream-proxy.js` | Local proxy that fetches YouTube streams in chunks, so they aren't throttled to playback speed, and measures the connection speed for auto quality |
-| `src/remote.js` · `remote.html` | The phone remote: a small web page on the local network, protected by the key in the QR code |
+| `src/link.js` · `link-host.js` | The phone app's side here: pairing, then a direct WebRTC connection to [Ma3madan Remote](https://github.com/michaelsaad/ma3madan-remote) |
+| `src/remote.js` · `remote.html` | The Wi-Fi remote page for places without internet, protected by the key in its QR code |
 | `src/i18n.js` | English and Arabic strings |
 | `build/installer.nsh` | Registers the app under Windows Default apps |
 
@@ -237,7 +238,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 Only files built by this repository's GitHub Actions workflow from its public source code are signed. Each signing request is approved by hand.
 
-**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. The phone remote, when you turn it on, is a web page served only on your local network to phones that scanned its code. Settings, lists and the list of recent videos stay on your computer.
+**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. The phone remote, when you turn it on, connects only to phones that scanned its code: the Ma3madan Remote app finds the laptop through a signaling server that sees only encrypted messages and deletes them after ten minutes, then talks to it directly over the Wi-Fi; the Wi-Fi page is served only on your local network. Settings, lists and the list of recent videos stay on your computer.
 
 ## Third-party software
 
@@ -255,7 +256,7 @@ Only use YouTube content you have the right to show, and follow YouTube's Terms 
 
 Free to use for any person or organization, for any purpose: use it, copy it, change it and share it ([MIT License](LICENSE)).
 
-The app is provided as is, without warranty of any kind, and may contain bugs. Please try it before relying on it at an important event. If you find a problem, [open an issue](https://github.com/michaelsaad/ma3madan-video-presenter/issues).
+The app is provided as is, without warranty of any kind, and may contain bugs. Please try it before relying on it at an important event. If you find a problem, [open an issue](https://github.com/michaelsaad/ma3madan-play/issues).
 
 ---
 

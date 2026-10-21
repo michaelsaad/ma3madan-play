@@ -17,9 +17,11 @@ const remote = require('./remote');
 const APP_NAME = 'Ma3madan Play';
 const OLD_APP_NAME = 'Ma3madan Video Presenter'; // the name before 1.4.0
 
+// The phone app connects straight over the Wi-Fi (WebRTC): offer this PC's real local address
+// rather than a hidden ".local" name, which many church and office networks can't resolve.
+// The tests also run with the screen locked or off: keep painting windows Windows thinks are hidden.
+app.commandLine.appendSwitch('disable-features', ['WebRtcHideLocalIpsWithMdns', ...(process.env.VP_SELFTEST ? ['CalculateNativeWinOcclusion'] : [])].join(','));
 if (process.env.VP_SELFTEST) {
-  // The tests also run with the screen locked or off: keep painting windows Windows thinks are hidden.
-  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
   app.setPath('userData', process.env.VP_SELFTEST_DIR);
   app.setPath('videos', process.env.VP_SELFTEST_DIR);
@@ -636,6 +638,9 @@ ipcMain.handle('remote-new-key', async () => {
   try { return { ok: true, ...(await startRemote()) }; } catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.on('remote-state', (_e, s) => remote.setState(s));
+// The phone app (WebRTC, see link-host.js): its pairing QR code, and this PC's name for it.
+ipcMain.handle('qr-svg', (_e, text) => (typeof text === 'string' && text.length < 600 ? remote.qrSvg(text) : null));
+ipcMain.handle('host-name', () => require('os').hostname());
 
 ipcMain.handle('pick-files', async (_e, title) => {
   const r = await dialog.showOpenDialog(controlWin, {

@@ -284,7 +284,7 @@ function closeModal() {
 }
 
 // ---------- About (the ⓘ next to the name) ----------
-const REPO_URL = 'https://github.com/michaelsaad/ma3madan-video-presenter';
+const REPO_URL = 'https://github.com/michaelsaad/ma3madan-play';
 async function showAbout() {
   const version = await api.appVersion();
   openModal(`
@@ -1313,7 +1313,7 @@ function pushRemote() {
     remoteTimer = null;
     const it = items.find(x => x.id === playingId);
     const slides = out.loaded ? lyricSlides(it) : [];
-    api.remoteState({
+    const state = {
       lang: LANG, appName: t('appName'),
       title: out.loaded && it ? it.title : '', next: nextUp()?.title || '',
       loaded: out.loaded, paused: out.paused, buffering: out.buffering, time: out.time, duration: out.duration, rate: out.rate,
@@ -1322,7 +1322,9 @@ function pushRemote() {
       items: viewItems().map(x => ({ id: x.id, title: x.title, duration: x.duration || 0, missing: !!x.missing, thumb: x.thumbUrl ? (x.thumbUrl.split('?v=')[1] || '1') : '' })),
       lyrics: slides.length ? { slides, current: out.lyrics ? currentLyric : -1 } : null,
       marks: out.loaded && it?.marks?.length ? { list: it.marks.map(m => ({ t: m.t, label: m.label })), current: currentMark(it.marks) } : null,
-    });
+    };
+    api.remoteState(state);     // the Wi-Fi page (remote.js)
+    LinkHost.broadcast(state);  // the phone app (link-host.js)
   }, 200);
 }
 
@@ -1333,6 +1335,7 @@ async function init() {
   $('blackOnEnd').checked = settings.blackOnEnd ?? true;
   items = (await api.loadPlaylist()).map(({ loading, ...it }) => it);
   await loadLists(); // features.js
+  initRemote(); // features.js
   applySide();
   setLang(settings.lang || 'en');
   renderVolume(settings.volume ?? 1, !!settings.muted);

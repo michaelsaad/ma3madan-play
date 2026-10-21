@@ -12,7 +12,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const REPO = 'michaelsaad/ma3madan-video-presenter';
+const REPO = 'michaelsaad/ma3madan-play';
 const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR;
 const currentVersion = () => process.env.VP_FAKE_VERSION || app.getVersion();
 

@@ -415,39 +415,85 @@ function showSettings() {
 $('settingsBtn').onclick = showSettings;
 
 // ---------- phone remote ----------
+// Two ways in, both on while the remote is on:
+// - the phone app (Ma3madan Remote): pair once with the QR code, then it finds this PC by itself
+//   and talks to it directly over the Wi-Fi (link-host.js; the internet is needed only for the
+//   moment of connecting);
+// - the Wi-Fi page (remote.js): needs no internet at all, but its address changes with the network.
 let remote = { on: false };
+let hostName = '';
+let lanOpen = false;
 function renderRemoteBtn() {
   $('remoteBtn').classList.toggle('on', !!remote.on);
-  $('remoteBtn').classList.toggle('linked', !!remote.clients);
+  $('remoteBtn').classList.toggle('linked', !!(remote.clients || LinkHost.connected()));
+}
+async function startLink() {
+  if (!settings.linkKey) { settings.linkKey = MaLink.randomId(18); api.setSetting('linkKey', settings.linkKey); }
+  hostName ||= await api.hostName();
+  await LinkHost.start(settings.linkKey, {
+    name: hostName, onCommand: remoteCommand, thumb: thumbData,
+    onChange: () => { renderRemoteBtn(); renderRemoteModal(); },
+  });
+  pushRemote();
+}
+// Called once the settings are loaded: the remote comes back on if it was on.
+async function initRemote() {
+  remote = await api.remoteInfo();
+  renderRemoteBtn();
+  if (remote.on && !settings._selftest) startLink().catch(e => console.warn('link', e));
+}
+// A small JPEG of a video's thumbnail, sent to the phone app over the connection.
+async function thumbData(id) {
+  const it = items.find(x => x.id === id);
+  if (!it?.thumbUrl) return null;
+  const img = new Image();
+  img.src = it.thumbUrl;
+  try { await img.decode(); } catch { return null; }
+  const c = document.createElement('canvas');
+  c.width = 160; c.height = Math.round((160 * img.naturalHeight) / img.naturalWidth) || 90;
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.72);
 }
 async function showRemote() {
   remote = await api.remoteInfo();
   renderRemoteBtn();
-  openModal(`<div id="remoteBody"></div>`, { cls: 'remote' });
+  openModal(`<div id="remoteBody"></div>`, { cls: 'remote wide' });
   renderRemoteModal();
 }
-function renderRemoteModal() {
-  const body = $('remoteBody');
-  if (!body) return;
+async function renderRemoteModal() {
+  if (!$('remoteBody')) return;
+  let html;
   if (!remote.on) {
-    body.innerHTML = `
+    html = `
       <h2><svg class="h-ico"><use href="#i-phone"/></svg>${escapeHtml(t('remoteTitle'))}</h2>
       <p>${escapeHtml(t('remoteIntro'))}</p>
       <ul class="r-points"><li>${escapeHtml(t('remoteP1'))}</li><li>${escapeHtml(t('remoteP2'))}</li><li>${escapeHtml(t('remoteP3'))}</li></ul>
       <div class="modal-actions"><button class="ghost" data-close>${escapeHtml(t('close'))}</button><button id="rOn" class="primary" data-primary>${escapeHtml(t('remoteOn'))}</button></div>`;
   } else {
-    body.innerHTML = `
+    const qr = LinkHost.isRunning() ? await api.qrSvg(LinkHost.pairUrl(hostName)) : '';
+    const n = LinkHost.connected() + (remote.clients || 0);
+    html = `
       <h2><svg class="h-ico"><use href="#i-phone"/></svg>${escapeHtml(t('remoteTitle'))}<span class="r-live">${escapeHtml(t('remoteIsOn'))}</span></h2>
       <div class="r-grid">
-        <div class="qr">${remote.qr || ''}</div>
+        <div class="qr">${qr}</div>
         <div class="r-info">
-          <b>${escapeHtml(t('remoteScan'))}</b>
-          <p class="muted">${escapeHtml(t('remoteScanHint'))}</p>
-          ${remote.urls?.length ? `<code dir="ltr">${escapeHtml(remote.urls[0])}</code>` : `<p class="warn-text">${escapeHtml(t('remoteNoNet'))}</p>`}
-          <p class="r-count">${escapeHtml(remote.clients ? t('remoteClients', { n: remote.clients }) : t('remoteNoClients'))}</p>
-          <p class="muted small">${escapeHtml(t('remoteFirewall'))}</p>
+          <b>${escapeHtml(t('appScan'))}</b>
+          <ol class="r-steps"><li>${escapeHtml(t('appStep1'))}</li><li>${escapeHtml(t('appStep2'))}</li><li>${escapeHtml(t('appStep3'))}</li></ol>
+          <p class="r-count">${escapeHtml(n ? t('remoteClients', { n }) : t('remoteNoClients'))}</p>
+          ${LinkHost.isOnline() === false ? `<p class="warn-text small">${escapeHtml(t('appOffline'))}</p>` : ''}
         </div>
       </div>
+      <details class="r-lan" ${lanOpen ? 'open' : ''}>
+        <summary>${escapeHtml(t('lanTitle'))}</summary>
+        <div class="r-grid">
+          <div class="qr">${remote.qr || ''}</div>
+          <div class="r-info">
+            <p class="muted">${escapeHtml(t('lanText'))}</p>
+            ${remote.urls?.length ? `<code dir="ltr">${escapeHtml(remote.urls[0])}</code>` : `<p class="warn-text">${escapeHtml(t('remoteNoNet'))}</p>`}
+            <p class="muted small">${escapeHtml(t('remoteFirewall'))}</p>
+          </div>
+        </div>
+      </details>
       <div class="modal-actions">
         <button id="rOff" class="danger-btn">${escapeHtml(t('remoteOff'))}</button>
         <button id="rNewKey" class="ghost" title="${escapeHtml(t('remoteNewKeyTip'))}">${escapeHtml(t('remoteNewKey'))}</button>
@@ -455,20 +501,34 @@ function renderRemoteModal() {
         <button class="primary" data-close>${escapeHtml(t('done'))}</button>
       </div>`;
   }
+  const body = $('remoteBody');
+  if (!body || body.dataset.html === html) return;
+  body.dataset.html = html;
+  body.innerHTML = html;
   for (const b of body.querySelectorAll('[data-close]')) b.onclick = closeModal;
+  body.querySelector('details')?.addEventListener('toggle', e => { lanOpen = e.target.open; });
   $('rOn')?.addEventListener('click', async () => {
     const r = await api.remoteStart();
     if (!r.ok) { toast(t('remoteFailed', { e: r.error })); return; }
-    remote = r; renderRemoteBtn(); renderRemoteModal(); pushRemote();
+    remote = r; renderRemoteBtn();
+    await startLink();
+    renderRemoteModal();
   });
-  $('rOff')?.addEventListener('click', async () => { remote = await api.remoteStop(); renderRemoteBtn(); renderRemoteModal(); });
-  $('rNewKey')?.addEventListener('click', async () => { const r = await api.remoteNewKey(); if (r.ok) { remote = r; renderRemoteModal(); pushRemote(); } });
+  $('rOff')?.addEventListener('click', async () => { remote = await api.remoteStop(); LinkHost.stop(); renderRemoteBtn(); renderRemoteModal(); });
+  // A new code: every paired phone (app and Wi-Fi page) has to scan again.
+  $('rNewKey')?.addEventListener('click', async () => {
+    const r = await api.remoteNewKey();
+    if (!r.ok) return;
+    remote = r;
+    settings.linkKey = MaLink.randomId(18); api.setSetting('linkKey', settings.linkKey);
+    await startLink();
+    renderRemoteModal();
+  });
 }
 $('remoteBtn').onclick = showRemote;
-api.remoteInfo().then(r => { remote = r; renderRemoteBtn(); });
 
 // The phone's buttons do exactly what the same buttons here do.
-api.onRemoteCmd(async c => {
+async function remoteCommand(c) {
   switch (c.action) {
     case 'toggle': togglePlay(); break;
     case 'next': nextItem(); break;
@@ -489,7 +549,8 @@ api.onRemoteCmd(async c => {
     case 'clients': remote = await api.remoteInfo(); renderRemoteBtn(); renderRemoteModal(); break;
   }
   pushRemote();
-});
+}
+api.onRemoteCmd(remoteCommand);
 
 // ---------- keyboard shortcuts ----------
 function showShortcuts() {

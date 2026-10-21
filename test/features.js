@@ -186,6 +186,37 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     await js(`api.remoteStop().then(r => { remote = r; renderRemoteBtn(); })`);
   }
 
+  // ---------- the phone app (WebRTC through ma3madan-remote.pages.dev) ----------
+  {
+    await js(`playItem(items[0])`); await wait(1000);
+    await js(`startLink()`); await wait(1500);
+    const pair = await js(`LinkHost.pairUrl(hostName)`);
+    log('pairing link:', pair.replace(/pair=[^&]+/, 'pair=…'));
+    const { BrowserWindow } = require('electron');
+    const phone = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true } });
+    await phone.loadURL(pair);
+    const pjs = code => phone.webContents.executeJavaScript(code);
+    const t0 = Date.now();
+    while (Date.now() - t0 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(500);
+    log('phone app connected in', Date.now() - t0, 'ms:', await pjs(`JSON.stringify({ui: !document.getElementById('remoteUi').hidden, title: document.getElementById('title').textContent, sub: document.getElementById('whoSub').textContent, address: location.href})`));
+    log('host sees phones:', await js(`LinkHost.connected()`));
+    const before = await js('out.paused');
+    await pjs(`document.getElementById('playBtn').click()`); await wait(800);
+    log('phone app play/pause:', before, '→', await js('out.paused'));
+    await pjs(`[...document.querySelectorAll('#list li')][3].click()`); await wait(1500);
+    log('phone app picked:', await js(`items.find(x => x.id === playingId)?.title`), '| phone shows:', await pjs(`document.getElementById('title').textContent`));
+    await wait(1500);
+    log('thumbnails over the link:', await pjs(`[...document.querySelectorAll('#list .th')].filter(e => e.style.backgroundImage).length`));
+    fs.writeFileSync(path.join(dir, '52-phone-app.png'), (await phone.webContents.capturePage()).toPNG());
+    // Reopen the app without the QR link: it must find the laptop by itself.
+    await phone.loadURL('https://ma3madan-remote.pages.dev/');
+    const t1 = Date.now();
+    while (Date.now() - t1 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(500);
+    log('reopened without scanning, connected in', Date.now() - t1, 'ms:', await pjs(`!document.getElementById('remoteUi').hidden`));
+    phone.destroy();
+    await js(`LinkHost.stop()`);
+  }
+
   // ---------- karaoke button ----------
   log('karaoke button:', await js(`JSON.stringify({disabled: $('karaokeBtn').disabled, tip: $('karaokeBtn').dataset.tip || $('karaokeBtn').title})`));
 

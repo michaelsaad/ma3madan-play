@@ -89,5 +89,7 @@ contextBridge.exposeInMainWorld('api', {
   remoteInfo: () => ipcRenderer.invoke('remote-info'),
   remoteNewKey: () => ipcRenderer.invoke('remote-new-key'),
   remoteState: s => ipcRenderer.send('remote-state', s),
+  qrSvg: text => ipcRenderer.invoke('qr-svg', text),
+  hostName: () => ipcRenderer.invoke('host-name'),
   onRemoteCmd: fn => on('remote-cmd', fn),
 });
