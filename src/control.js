@@ -1154,6 +1154,7 @@ api.onToolSetup(({ tool, progress }) => {
 });
 
 function renderDownloads() {
+  pushRemote();
   const box = $('downloads');
   box.innerHTML = '';
   for (const [tool, p] of toolSetup) {
@@ -1319,9 +1320,15 @@ function pushRemote() {
       loaded: out.loaded, paused: out.paused, buffering: out.buffering, time: out.time, duration: out.duration, rate: out.rate,
       black: !!out.black && !out.audioOnly, frozen: !!out.frozen, volume: out.volume, muted: out.muted,
       playingId, listName: activeList()?.name || '',
-      items: viewItems().map(x => ({ id: x.id, title: x.title, duration: x.duration || 0, missing: !!x.missing, thumb: x.thumbUrl ? (x.thumbUrl.split('?v=')[1] || '1') : '' })),
+      items: viewItems().map(x => ({ id: x.id, title: x.title, duration: x.duration || 0, missing: !!x.missing, loading: !!x.loading, online: x.source === 'stream', thumb: x.thumbUrl ? (x.thumbUrl.split('?v=')[1] || '1') : '' })),
       lyrics: slides.length ? { slides, current: out.lyrics ? currentLyric : -1 } : null,
       marks: out.loaded && it?.marks?.length ? { list: it.marks.map(m => ({ t: m.t, label: m.label })), current: currentMark(it.marks) } : null,
+      // Lists, downloads, the countdown, karaoke and the playback options, for the phone app.
+      lists: lists.map(l => ({ id: l.id, name: l.name, count: l.itemIds.length })), activeList: activeList()?.id || null,
+      downloads: [...downloads].map(([id, d]) => ({ id, title: d.title, kind: d.kind, status: d.status, percent: Math.round(d.percent || 0), error: d.error || '' })),
+      countdown: out.countdown ? out.countdown.until : 0,
+      karaoke: (() => { const k = karaokeState(); return { kind: k.kind, on: !!k.it?.stemsOn, progress: k.job ? Math.round((k.job.progress || 0) * 100) : null }; })(),
+      speed: rate, subs: !!out.subs, subsOn: !!out.subsOn, autoNext: $('autoNext').checked, loop: $('loopChk').checked,
     };
     api.remoteState(state);     // the Wi-Fi page (remote.js)
     LinkHost.broadcast(state);  // the phone app (link-host.js)

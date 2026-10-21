@@ -32,6 +32,8 @@ const LinkHost = (() => {
     loop();
   }
   function stop() {
+    // Off the phones' "nearby" list right away (not after it times out).
+    if (running && opts.hostId) MaLink.leave(opts.hostId).catch(() => {});
     running = false;
     clearTimeout(timer); clearTimeout(presenceTimer);
     for (const p of peers.values()) close(p);

@@ -583,6 +583,27 @@ async function remoteCommand(c) {
     case 'seek': if (typeof c.t === 'number' && isFinite(c.t)) cmd('seek', { t: c.t }); break;
     case 'mark': if (Number.isInteger(c.i)) goToMark(c.i); break;
     case 'addMark': addMark({ rename: false }); break;
+    // A YouTube link pasted on the phone: play it now (online), or download it.
+    case 'link': {
+      const url = String(c.url || '').trim();
+      if (!/^https?:\/\/\S+$/i.test(url) || url.length > 500) break;
+      if (c.mode === 'video' || c.mode === 'mp3') startDownload(url, c.mode);
+      else addStream(url, { play: true });
+      break;
+    }
+    case 'cancelDownload': if (downloads.has(c.id)) api.downloadCancel(c.id); break;
+    case 'openList': if (c.id == null || lists.some(l => l.id === c.id)) openList(c.id ?? null); break;
+    case 'countdown': {
+      const m = Number(c.minutes);
+      if (m > 0 && m <= 600) cmd('countdown', { until: Date.now() + m * 60000 + 900, text: settings.countdownText ?? t('cdDefaultMsg') });
+      else cmd('countdown', { until: 0 });
+      break;
+    }
+    case 'karaoke': $('karaokeBtn').click(); break;
+    case 'speed': if (RATES.includes(c.r)) setRate(c.r); break;
+    case 'subs': setSubsOn(!!c.on); break;
+    case 'autoNext': $('autoNext').checked = !!c.on; api.setSetting('autoNext', !!c.on); break;
+    case 'loop': $('loopChk').checked = !!c.on; cmd('loop', { on: !!c.on }); break;
     case 'clients': remote = await api.remoteInfo(); renderRemoteBtn(); renderRemoteModal(); break;
   }
   pushRemote();

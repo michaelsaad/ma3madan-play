@@ -83,6 +83,9 @@
   async function announce(host, name, lobby) {
     await fetch(`${API}/presence`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ host, name, lobby }) });
   }
+  async function leave(host) {
+    await fetch(`${API}/presence`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ host, leave: true }) });
+  }
   async function nearby() {
     const r = await fetch(`${API}/presence`, { cache: 'no-store' });
     if (!r.ok) throw new Error('presence ' + r.status);
@@ -107,5 +110,5 @@
   }
   const randomHex = (bytes = 16) => hex(crypto.getRandomValues(new Uint8Array(bytes)));
 
-  root.MaLink = { SIGNAL, ICE_SERVERS, randomId, randomHex, deriveLink, send, receive, gathered, announce, nearby, sendOpen, receiveOpen, sasCode };
+  root.MaLink = { SIGNAL, ICE_SERVERS, randomId, randomHex, deriveLink, send, receive, gathered, announce, leave, nearby, sendOpen, receiveOpen, sasCode };
 })(typeof window !== 'undefined' ? window : globalThis);

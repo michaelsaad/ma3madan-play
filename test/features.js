@@ -208,6 +208,26 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     await wait(1500);
     log('thumbnails over the link:', await pjs(`[...document.querySelectorAll('#list .th')].filter(e => e.style.backgroundImage).length`));
     fs.writeFileSync(path.join(dir, '52-phone-app.png'), (await phone.webContents.capturePage()).toPNG());
+    // More of the app from the phone: lists, countdown, speed, options, a YouTube link.
+    await pjs(`document.getElementById('cdBtn').click(); document.querySelector('#cdPanel [data-min="2"]').click()`); await wait(1200);
+    log('phone countdown:', await js(`out.countdown ? Math.round((out.countdown.until - Date.now()) / 1000) + ' s' : 'none'`), '| phone shows:', await pjs(`document.getElementById('cdLabel').textContent`));
+    await pjs(`document.getElementById('cdBtn').click(); document.getElementById('cdStop').click()`); await wait(1000);
+    await pjs(`document.querySelector('#speedSeg [data-r="1.25"]').click()`); await wait(800);
+    await pjs(`document.getElementById('loopBtn').click()`); await wait(800);
+    log('phone speed/loop:', await js(`rate + ' ' + $('loopChk').checked`), '| phone shows:', await pjs(`document.querySelector('#speedSeg .on')?.textContent + ' loop ' + document.getElementById('loopBtn').classList.contains('on')`));
+    await pjs(`document.querySelector('#speedSeg [data-r="1"]').click(); document.getElementById('loopBtn').click()`); await wait(800);
+    log('phone list chips:', await pjs(`[...document.querySelectorAll('#listChips button')].map(b => b.textContent).join(' | ')`));
+    await pjs(`[...document.querySelectorAll('#listChips button')][1]?.click()`); await wait(1000);
+    log('phone opened list:', await js(`activeList()?.name || 'Recents'`), '| phone list:', await pjs(`document.querySelectorAll('#list li').length + ' videos'`));
+    await pjs(`[...document.querySelectorAll('#listChips button')][0]?.click()`); await wait(800);
+    await pjs(`(i => { i.value = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ'; i.dispatchEvent(new Event('input')); })(document.getElementById('linkInput'))`);
+    log('link actions shown:', await pjs(`!document.getElementById('linkActions').hidden`));
+    fs.writeFileSync(path.join(dir, '56-phone-link.png'), (await phone.webContents.capturePage()).toPNG());
+    await pjs(`document.getElementById('linkPlay').click()`);
+    const tl = Date.now();
+    while (Date.now() - tl < 60000 && !(await js(`!!items.find(x => x.url === 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' && !x.loading) && playingId === items.find(x => x.url === 'https://www.youtube.com/watch?v=aqz-KE-bpKQ')?.id && out.loaded && out.time > 0.5`))) await wait(1000);
+    log('phone pasted a YouTube link → playing on the computer:', await js(`items.find(x => x.id === playingId)?.title`), 'in', Date.now() - tl, 'ms | phone shows:', await pjs(`document.getElementById('title').textContent`));
+    fs.writeFileSync(path.join(dir, '57-phone-more.png'), (await phone.webContents.capturePage()).toPNG());
     // Reopen the app without the QR link: it must find the laptop by itself.
     await phone.loadURL('https://ma3madan-remote.pages.dev/');
     const t1 = Date.now();
@@ -226,10 +246,10 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     const pjs = code => phone.webContents.executeJavaScript(code);
     await phone.loadURL('https://ma3madan-remote.pages.dev/');
     const t0 = Date.now();
-    while (Date.now() - t0 < 20000 && !(await pjs(`document.querySelectorAll('#nearbyList button').length`))) await wait(500);
+    while (Date.now() - t0 < 20000 && !(await pjs(`!!document.querySelector('#nearbyList button[data-host="${await js('settings.linkHostId')}"]')`))) await wait(500);
     log('nearby list:', await pjs(`[...document.querySelectorAll('#nearbyList button span')].map(s => s.textContent).join(', ')`), 'after', Date.now() - t0, 'ms');
     fs.writeFileSync(path.join(dir, '53-phone-nearby.png'), (await phone.webContents.capturePage()).toPNG());
-    await pjs(`document.querySelector('#nearbyList button').click()`);
+    await pjs(`document.querySelector('#nearbyList button[data-host="${await js('settings.linkHostId')}"]').click()`); // this test's own copy (the real app may be on too)
     const t1 = Date.now();
     while (Date.now() - t1 < 30000 && !(await js(`!!document.getElementById('linkRequest')`))) await wait(500);
     await wait(800);
@@ -255,8 +275,8 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     phone = mk();
     await phone.loadURL('https://ma3madan-remote.pages.dev/');
     const t3 = Date.now();
-    while (Date.now() - t3 < 20000 && !(await pjs(`document.querySelectorAll('#nearbyList button').length`))) await wait(500);
-    await pjs(`document.querySelector('#nearbyList button').click()`);
+    while (Date.now() - t3 < 20000 && !(await pjs(`!!document.querySelector('#nearbyList button[data-host="${await js('settings.linkHostId')}"]')`))) await wait(500);
+    await pjs(`document.querySelector('#nearbyList button[data-host="${await js('settings.linkHostId')}"]').click()`); // this test's own copy (the real app may be on too)
     const t4 = Date.now();
     while (Date.now() - t4 < 30000 && !(await js(`!!document.getElementById('linkRequest')`))) await wait(500);
     await js(`document.querySelector('#linkRequest [data-a="deny"]').click()`); await wait(1500);
