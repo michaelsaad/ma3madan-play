@@ -214,16 +214,26 @@ for (const [id, n] of [['frameBackBtn', -1], ['frameFwdBtn', 1]]) {
 // separate layer above this page, so it steps aside while a dialog or a menu covers the box, for
 // audio-only items, and while nothing is loaded (the page shows how to start there instead).
 let lastPlayerRect = '';
-function menuOverPreview() {
-  const m = document.getElementById('menu');
-  if (!m) return false;
-  const a = m.getBoundingClientRect(), b = document.querySelector('.preview').getBoundingClientRect();
-  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+// The page can't draw over the video layer, so a menu over the box would be hidden behind it.
+// Instead of hiding the video, it shrinks into the largest part of the box the menu leaves free.
+function uncoveredPart(box) {
+  const m = document.getElementById('menu')?.getBoundingClientRect();
+  if (!m || !(m.left < box.right && m.right > box.left && m.top < box.bottom && m.bottom > box.top)) return box;
+  const parts = [
+    { left: box.left, top: box.top, right: m.left - 6, bottom: box.bottom },
+    { left: m.right + 6, top: box.top, right: box.right, bottom: box.bottom },
+    { left: box.left, top: box.top, right: box.right, bottom: m.top - 6 },
+    { left: box.left, top: m.bottom + 6, right: box.right, bottom: box.bottom },
+  ].map(p => ({ ...p, area: Math.max(0, p.right - p.left) * Math.max(0, p.bottom - p.top) }));
+  const best = parts.sort((a, b) => b.area - a.area)[0];
+  return best.area > (box.right - box.left) * (box.bottom - box.top) * 0.12 ? best : null;
 }
-const videoCovered = () => !$('modal').hidden || menuOverPreview() || !out.loaded || out.audioOnly;
+const videoCovered = () => !$('modal').hidden || !out.loaded || out.audioOnly;
 function playerRectNow() {
   const r = document.querySelector('.preview').getBoundingClientRect();
-  return videoCovered() || !r.width ? null : { x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 };
+  if (videoCovered() || !r.width) return null;
+  const p = uncoveredPart({ left: r.left + 2, top: r.top + 2, right: r.right - 2, bottom: r.bottom - 2 });
+  return p ? { x: p.left, y: p.top, width: p.right - p.left, height: p.bottom - p.top } : null;
 }
 function sendPlayerRect() {
   if (modeState.mode !== 'player') return;
@@ -792,7 +802,6 @@ function renderState() {
   $('countdownBtn').classList.toggle('on', !!out.countdown);
   $('frozenBadge').hidden = !out.frozen;
 
-  document.querySelector('.preview').classList.toggle('live', out.loaded && !out.paused && (out.audioOnly || !out.black));
   $('audioBadge').hidden = !(out.loaded && out.audioOnly);
   if (!!out.audioOnly !== lastAudioOnly || out.loaded !== lastLoaded) {
     lastAudioOnly = !!out.audioOnly; lastLoaded = out.loaded;

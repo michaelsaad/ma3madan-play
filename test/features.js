@@ -46,7 +46,11 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
   log('standby text:', await ojs(`JSON.stringify({shown: !document.getElementById('standbyText').hidden, text: document.getElementById('standbyText').textContent, opacity: getComputedStyle(standby).opacity, cls: standby.className, blackOn})`));
   log('  view', JSON.stringify(getMode().viewBounds), 'visible', await ojs('document.visibilityState'), 'raf', await ojs('new Promise(r => { let n = 0; const f = () => (++n < 5 ? requestAnimationFrame(f) : r(n)); requestAnimationFrame(f); setTimeout(() => r(n), 500); })'));
   await shot('33-standby-text');
+  await js(`settings.standby = { kind: 'image', image: ${JSON.stringify(path.join(__dirname, 'media', 'sample-1.mp4'))} }; applyStandby()`); await wait(1500);
+  log('standby video:', await ojs(`(e => JSON.stringify({shown: !e.hidden, playing: !e.paused, muted: e.muted, loop: e.loop, t: +e.currentTime.toFixed(1)}))(document.getElementById('standbyVid'))`));
+  await shot('33b-standby-video');
   await js(`settings.standby = { kind: 'black' }; applyStandby(); cmd('black', { on: false })`);
+  log('preview border:', await js(`getComputedStyle(document.querySelector('.preview')).borderColor`));
 
   // ---------- countdown ----------
   await js(`showCountdown()`); await wait(300);
@@ -101,6 +105,7 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
   await js(`openPlaySettings()`); await wait(300);
   log('playback popover sections:', await js(`[...document.querySelectorAll('.ps-title')].map(x => x.textContent).join(' | ')`));
   await shot('39-playback-popover');
+  await wait(300); log('video while the popover is open:', JSON.stringify(getMode().viewBounds));
   await js(`document.querySelector('.seg[data-k=rate] button[data-v="1.5"]').click()`); await wait(300);
   log('speed chip:', await js(`$('activeChips').textContent`), '| engine rate', await ojs('rate'));
   await js(`closeMenu(); setRate(1)`);

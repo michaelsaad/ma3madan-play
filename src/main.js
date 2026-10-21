@@ -606,7 +606,7 @@ ipcMain.handle('pick-subs', async (_e, title) => {
   return r.canceled ? null : r.filePaths[0];
 });
 ipcMain.handle('pick-image', async (_e, title) => {
-  const r = await dialog.showOpenDialog(controlWin, { title, properties: ['openFile'], filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'] }] });
+  const r = await dialog.showOpenDialog(controlWin, { title, properties: ['openFile'], filters: [{ name: 'Pictures, GIFs and videos', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'mp4', 'm4v', 'webm', 'mov', 'mkv'] }] });
   return r.canceled ? null : r.filePaths[0];
 });
 ipcMain.handle('file-exists', (_e, p) => !!p && fs.existsSync(p));

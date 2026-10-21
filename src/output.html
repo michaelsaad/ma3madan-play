@@ -20,7 +20,7 @@
     transition: opacity var(--fade, .35s) ease; display: grid; place-items: center;
   }
   #standby.off { opacity: 0; }
-  #standby img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  #standby img, #standby video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 0; }
   #standby .text {
     position: relative; max-width: 80vw; text-align: center; color: #fff; white-space: pre-line;
     font: 600 6vh/1.5 "Segoe UI", Tahoma, sans-serif; text-shadow: 0 2px 12px rgba(0, 0, 0, .6);
@@ -54,7 +54,7 @@
 <audio id="a" preload="auto"></audio>
 <audio id="a2" preload="auto"></audio>
 <canvas id="freeze" hidden></canvas>
-<div id="standby"><img id="standbyImg" alt="" hidden><div id="standbyText" class="text" dir="auto" hidden></div></div>
+<div id="standby"><img id="standbyImg" alt="" hidden><video id="standbyVid" muted loop playsinline hidden></video><div id="standbyText" class="text" dir="auto" hidden></div></div>
 <div id="lyrics"><div dir="auto"></div></div>
 <div id="countdown"><div class="msg" dir="auto"></div><div class="time"></div></div>
 <script>
@@ -456,15 +456,27 @@
   }
 
   // ---------- standby, countdown, lyrics, subtitles ----------
-  function setBlack(on) { blackOn = on; standby.classList.toggle('off', !on); syncLyrics(); push(); }
+  function setBlack(on) {
+    blackOn = on; standby.classList.toggle('off', !on);
+    // A standby video only runs while it can be seen.
+    const sv = document.getElementById('standbyVid');
+    if (sv.src) { if (on) sv.play().catch(() => {}); else setTimeout(() => { if (!blackOn) sv.pause(); }, 2500); }
+    syncLyrics(); push();
+  }
   function setFade(sec) {
     fadeSec = Math.max(0, Math.min(5, Number(sec) || 0));
     document.body.style.setProperty('--fade', (fadeSec > 0 ? fadeSec : 0.2) + 's');
   }
   function setStandby({ kind, image, text } = {}) {
     const img = document.getElementById('standbyImg'), txt = document.getElementById('standbyText');
-    img.hidden = !(kind === 'image' && image);
+    // A picture (a GIF moves too), or a video that loops without sound.
+    const vid = document.getElementById('standbyVid');
+    const isVideo = kind === 'image' && /\.(mp4|m4v|webm|mov|mkv)(\?|$)/i.test(image || '');
+    img.hidden = !(kind === 'image' && image && !isVideo);
     if (!img.hidden) img.src = image; else img.removeAttribute('src');
+    vid.hidden = !isVideo;
+    if (isVideo) { if (vid.src !== image) vid.src = image; if (blackOn) vid.play().catch(() => {}); }
+    else { vid.pause(); vid.removeAttribute('src'); vid.load(); }
     txt.hidden = !(kind === 'text' && text);
     txt.textContent = kind === 'text' ? text || '' : '';
   }
