@@ -360,6 +360,7 @@ function showSettings() {
         <div id="sbTextRow" class="set-sub" ${sb.kind === 'text' ? '' : 'hidden'}>
           <textarea id="sbText" dir="auto" rows="2" placeholder="${escapeHtml(t('sbTextPh'))}">${escapeHtml(sb.text || '')}</textarea>
         </div>
+        ${sw('audioStandby', s.audioStandby !== false, t('sAudioStandby'), t('sAudioStandbyHint'))}
         ${sw('resume', s.resume !== false, t('sResume'), t('sResumeHint'))}
       </section>
       <section><h3>YouTube</h3>
@@ -389,7 +390,7 @@ function showSettings() {
       if (v === 'image' && !settings.standby.image) $('sbImagePick').click();
     }
   };
-  for (const c of box.querySelectorAll('.switch')) c.onchange = () => { settings[c.dataset.k] = c.checked; api.setSetting(c.dataset.k, c.checked); };
+  for (const c of box.querySelectorAll('.switch')) c.onchange = () => { settings[c.dataset.k] = c.checked; api.setSetting(c.dataset.k, c.checked); pushRemote(); };
   $('sbImagePick').onclick = async () => {
     const p = await api.pickImage(t('sbImage'));
     if (!p) return;
@@ -604,11 +605,29 @@ async function remoteCommand(c) {
     case 'subs': setSubsOn(!!c.on); break;
     case 'autoNext': $('autoNext').checked = !!c.on; api.setSetting('autoNext', !!c.on); break;
     case 'loop': $('loopChk').checked = !!c.on; cmd('loop', { on: !!c.on }); break;
+    case 'fullscreen': if (modeState.mode === 'player') api.playerFullscreen(!modeState.fullscreen); break;
+    // Screens: "window" (just this computer's window), "all", or one screen on/off.
+    case 'screens': {
+      const others = modeState.screens.filter(x => !x.here).map(x => x.id);
+      const s = modeState.showOn;
+      if (c.q === 'window') setShowOn([], false);
+      else if (c.q === 'all') setShowOn(others, true);
+      else if (others.includes(c.id)) setShowOn(s.screens.includes(c.id) ? s.screens.filter(x => x !== c.id) : [...s.screens, c.id], s.here);
+      break;
+    }
+    case 'mix': if (typeof c.music === 'number' && typeof c.vocals === 'number') setMix({ music: c.music, vocals: c.vocals }); break;
+    case 'audioStandby': setAudioStandby(!!c.on); break;
     case 'clients': remote = await api.remoteInfo(); renderRemoteBtn(); renderRemoteModal(); break;
   }
   pushRemote();
 }
 api.onRemoteCmd(remoteCommand);
+
+// "Standby screen for sound only" (main.js hides the projector for sound when it's off).
+function setAudioStandby(on) {
+  settings.audioStandby = on; api.setSetting('audioStandby', on);
+  pushRemote();
+}
 
 // ---------- keyboard shortcuts ----------
 function showShortcuts() {

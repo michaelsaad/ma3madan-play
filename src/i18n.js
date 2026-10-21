@@ -1,6 +1,8 @@
 // UI strings. English is the default; Arabic switches the layout to RTL.
 const STRINGS = {
   en: {
+    sAudioStandby: "Standby screen for sound only",
+    sAudioStandbyHint: "MP3s and voice notes show the standby screen. Off: the screens stay as they are (slides, the desktop…)",
     updateAvailableTip: "Version {v} is available. Click to see what’s new.",
     whatsNew: "What’s new in {v}",
     later: "Later",
@@ -371,6 +373,8 @@ const STRINGS = {
     pickTitle: 'Choose videos',
   },
   ar: {
+    sAudioStandby: "شاشة الانتظار مع الصوت فقط",
+    sAudioStandbyHint: "ملفات MP3 والرسائل الصوتية تعرض شاشة الانتظار. عند الإيقاف: تبقى الشاشات كما هي (الشرائح، سطح المكتب…)",
     updateAvailableTip: "الإصدار {v} متاح. اضغط لعرض الجديد.",
     whatsNew: "الجديد في {v}",
     later: "لاحقًا",

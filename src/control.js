@@ -111,8 +111,11 @@ function renderMode() {
   renderStatus();
   if (m.mode === 'presenter') startPreview();
 }
-api.onMode(m => { modeState = m; renderMode(); });
+api.onMode(m => { modeState = m; renderMode(); pushRemote(); });
 $('fullBtn').onclick = () => api.playerFullscreen(!modeState.fullscreen);
+document.querySelector('.preview').addEventListener('dblclick', e => {
+  if (modeState.mode === 'player' && out.loaded && !e.target.closest('button')) api.playerFullscreen(!modeState.fullscreen);
+});
 
 const screenNo = id => modeState.screens.find(x => x.id === id)?.n;
 const hereScreen = () => modeState.screens.find(x => x.here);
@@ -210,30 +213,13 @@ for (const [id, n] of [['frameBackBtn', -1], ['frameFwdBtn', 1]]) {
   b.addEventListener('keydown', e => { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); cmd('frame', { n }); } });
 }
 
-// Tell the main process where the preview box is, so the video sits exactly on it. The video is a
-// separate layer above this page, so it steps aside while a dialog or a menu covers the box, for
-// audio-only items, and while nothing is loaded (the page shows how to start there instead).
+// Tell the main process where the preview box is, so the video sits exactly under it. The video is
+// a layer under this page, which is transparent there: menus and dialogs open over the video while
+// it keeps playing at its full size.
 let lastPlayerRect = '';
-// The page can't draw over the video layer, so a menu over the box would be hidden behind it.
-// Instead of hiding the video, it shrinks into the largest part of the box the menu leaves free.
-function uncoveredPart(box) {
-  const m = document.getElementById('menu')?.getBoundingClientRect();
-  if (!m || !(m.left < box.right && m.right > box.left && m.top < box.bottom && m.bottom > box.top)) return box;
-  const parts = [
-    { left: box.left, top: box.top, right: m.left - 6, bottom: box.bottom },
-    { left: m.right + 6, top: box.top, right: box.right, bottom: box.bottom },
-    { left: box.left, top: box.top, right: box.right, bottom: m.top - 6 },
-    { left: box.left, top: m.bottom + 6, right: box.right, bottom: box.bottom },
-  ].map(p => ({ ...p, area: Math.max(0, p.right - p.left) * Math.max(0, p.bottom - p.top) }));
-  const best = parts.sort((a, b) => b.area - a.area)[0];
-  return best.area > (box.right - box.left) * (box.bottom - box.top) * 0.12 ? best : null;
-}
-const videoCovered = () => !$('modal').hidden || !out.loaded || out.audioOnly;
 function playerRectNow() {
   const r = document.querySelector('.preview').getBoundingClientRect();
-  if (videoCovered() || !r.width) return null;
-  const p = uncoveredPart({ left: r.left + 2, top: r.top + 2, right: r.right - 2, bottom: r.bottom - 2 });
-  return p ? { x: p.left, y: p.top, width: p.right - p.left, height: p.bottom - p.top } : null;
+  return r.width ? { x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 } : null;
 }
 function sendPlayerRect() {
   if (modeState.mode !== 'player') return;
@@ -1395,6 +1381,11 @@ function pushRemote() {
       countdown: out.countdown ? out.countdown.until : 0,
       karaoke: (() => { const k = karaokeState(); return { kind: k.kind, on: !!k.it?.stemsOn, progress: k.job ? Math.round((k.job.progress || 0) * 100) : null }; })(),
       speed: rate, subs: !!out.subs, subsOn: !!out.subsOn, autoNext: $('autoNext').checked, loop: $('loopChk').checked,
+      // Where the video shows, full screen, and the vocal remover's mix.
+      mode: modeState.mode, fullscreen: !!modeState.fullscreen,
+      screens: modeState.screens.map(x => ({ id: x.id, n: x.n, here: x.here, on: x.here ? !!modeState.showOn.here && modeState.showOn.screens.length > 0 : modeState.showOn.screens.includes(x.id) })),
+      mix: it?.stems && it.stemsOn && out.loaded ? (it.mix || { music: 1, vocals: 0 }) : null,
+      audioStandby: settings.audioStandby !== false,
     };
     api.remoteState(state);     // the Wi-Fi page (remote.js)
     LinkHost.broadcast(state);  // the phone app (link-host.js)

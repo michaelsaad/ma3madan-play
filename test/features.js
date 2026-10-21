@@ -228,6 +228,16 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     while (Date.now() - tl < 60000 && !(await js(`!!items.find(x => x.url === 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' && !x.loading) && playingId === items.find(x => x.url === 'https://www.youtube.com/watch?v=aqz-KE-bpKQ')?.id && out.loaded && out.time > 0.5`))) await wait(1000);
     log('phone pasted a YouTube link → playing on the computer:', await js(`items.find(x => x.id === playingId)?.title`), 'in', Date.now() - tl, 'ms | phone shows:', await pjs(`document.getElementById('title').textContent`));
     fs.writeFileSync(path.join(dir, '57-phone-more.png'), (await phone.webContents.capturePage()).toPNG());
+    // Screens, full screen and "standby for sound only" from the phone.
+    log('phone screens:', await pjs(`[...document.querySelectorAll('#screenChips button')].map(b => b.textContent + (b.classList.contains('on') ? '*' : '')).join(' | ') + ' | full screen button: ' + !document.getElementById('fullBtn').hidden`));
+    await pjs(`document.getElementById('fullBtn').click()`); await wait(1500);
+    log('phone → full screen:', JSON.stringify(getMode().playerFullscreen), '| phone shows on:', await pjs(`document.getElementById('fullBtn').classList.contains('on')`));
+    await pjs(`document.getElementById('fullBtn').click()`); await wait(1500);
+    log('phone → full screen off:', JSON.stringify(getMode().playerFullscreen));
+    await pjs(`document.getElementById('audioStandbyBtn').click()`); await wait(800);
+    log('phone → standby for sound only:', await js('settings.audioStandby'));
+    await pjs(`document.getElementById('audioStandbyBtn').click()`); await wait(800);
+    log('… back on:', await js('settings.audioStandby'));
     // Reopen the app without the QR link: it must find the laptop by itself.
     await phone.loadURL('https://ma3madan-remote.pages.dev/');
     const t1 = Date.now();

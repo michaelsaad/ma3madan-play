@@ -171,12 +171,12 @@ function setMode(next) {
   mode = next;
   outputView.__home?.contentView?.removeChildView(outputView);
   if (mode === 'presenter') {
-    if (playerFullscreen) { playerFullscreen = false; controlWin.setFullScreen(false); }
+    if (playerFullscreen) { playerFullscreen = false; controlView.setVisible(true); controlWin.setFullScreen(false); }
     outputWin.contentView.addChildView(outputView);
     outputView.__home = outputWin;
   } else {
     outputWin.hide();
-    controlWin.contentView.addChildView(outputView);
+    controlWin.contentView.addChildView(outputView, 0); // under the page
     outputView.__home = controlWin;
     fitViewToPlayer();
   }
@@ -198,7 +198,7 @@ function placeOutput() {
   const d = projectorDisplay();
   if (!d) { applyShowOn(); return; }
   fullscreenOn(outputWin, d);
-  outputWin.showInactive();
+  if (!hiddenForAudio) outputWin.showInactive();
   fitViewToOutputWin();
 }
 
@@ -233,7 +233,8 @@ function syncMirrors() {
       mirrors.set(id, w);
     }
     fullscreenOn(w, d);
-    if (id === here) { w.show(); w.focus(); } else w.showInactive();
+    if (hiddenForAudio) w.hide();
+    else if (id === here) { w.show(); w.focus(); } else w.showInactive();
   }
 }
 
@@ -329,10 +330,19 @@ nativeTheme.on('updated', () => {
 });
 ipcMain.on('set-theme', (_e, theme) => { settings.theme = theme; saveSettings(); applyTheme(); });
 
+// The control window is two layers: in Player mode the video engine at the bottom, and on top the
+// page (control.html) with a transparent background where the preview box is. So the video shows
+// through the box, and menus and dialogs open over it without stopping, hiding or shrinking it.
+let controlView = null;
+function fitControlView() {
+  if (!controlWin || !controlView) return;
+  const { width, height } = controlWin.getContentBounds();
+  controlView.setBounds({ x: 0, y: 0, width, height });
+}
 function createControl() {
   applyTheme();
   const colors = themeColors();
-  controlWin = new BrowserWindow({
+  controlWin = new BaseWindow({
     ...initialBounds(),
     minWidth: 640,
     minHeight: 480,
@@ -344,15 +354,20 @@ function createControl() {
     title: APP_NAME,
     icon: path.join(__dirname, 'assets', 'app-256.png'),
     show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      backgroundThrottling: false,
-    },
   });
+  controlView = new WebContentsView({
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
+  });
+  controlView.setBackgroundColor('#00000000');
+  controlWin.contentView.addChildView(controlView);
+  // The rest of this file talks to the page as controlWin.webContents.
+  Object.defineProperty(controlWin, 'webContents', { value: controlView.webContents });
+  fitControlView();
   controlWin.setMenu(null);
   if (settings.controlMaximized ?? true) controlWin.maximize();
-  controlWin.once('ready-to-show', () => controlWin.show());
-  controlWin.loadFile(path.join(__dirname, 'control.html'));
+  controlView.webContents.once('did-finish-load', () => { controlWin.show(); controlView.webContents.focus(); });
+  controlView.webContents.loadFile(path.join(__dirname, 'control.html'));
+  controlWin.on('focus', () => { if (!playerFullscreen) controlView.webContents.focus(); });
 
   let saveTimer;
   const rememberBounds = () => {
@@ -367,8 +382,11 @@ function createControl() {
   for (const ev of ['resize', 'move', 'maximize', 'unmaximize']) controlWin.on(ev, () => { if (!mini) rememberBounds(); });
   // Coming back to the app with a YouTube link copied (from WhatsApp, a browser…): offer to play it.
   controlWin.on('focus', checkClipboard);
-  controlWin.on('resize', fitViewToPlayer);
-  controlWin.on('leave-full-screen', () => { playerFullscreen = false; fitViewToPlayer(); sendMode(); });
+  controlWin.on('resize', () => { fitControlView(); fitViewToPlayer(); });
+  controlWin.on('maximize', fitControlView);
+  controlWin.on('unmaximize', fitControlView);
+  controlWin.on('enter-full-screen', () => { fitControlView(); fitViewToPlayer(); });
+  controlWin.on('leave-full-screen', () => { playerFullscreen = false; controlView.setVisible(true); fitControlView(); fitViewToPlayer(); controlView.webContents.focus(); sendMode(); });
   controlWin.on('closed', () => {
     controlWin = null;
     for (const w of mirrors.values()) w.destroy();
@@ -381,8 +399,13 @@ function createControl() {
 let mini = null; // { bounds, maximized } to restore
 function setMini(on) {
   if (!controlWin || !!on === !!mini) return;
+  // Leaving full screen restores the old size when it finishes: wait for that, or it undoes ours.
+  if (controlWin.isFullScreen()) {
+    controlWin.once('leave-full-screen', () => setTimeout(() => setMini(on), 100));
+    if (playerFullscreen) togglePlayerFullscreen(false); else controlWin.setFullScreen(false);
+    return;
+  }
   if (on) {
-    if (playerFullscreen) togglePlayerFullscreen(false);
     mini = { bounds: controlWin.getNormalBounds(), maximized: controlWin.isMaximized() };
     if (mini.maximized) controlWin.unmaximize();
     const a = screen.getDisplayMatching(controlWin.getBounds()).workArea;
@@ -429,8 +452,11 @@ function checkClipboard() {
 function togglePlayerFullscreen(on) {
   if (!controlWin || mode !== 'player') return;
   playerFullscreen = on ?? !playerFullscreen;
+  controlView.setVisible(!playerFullscreen);
   controlWin.setFullScreen(playerFullscreen);
+  fitControlView();
   fitViewToPlayer();
+  if (playerFullscreen) outputView.webContents.focus(); else controlView.webContents.focus();
   sendMode();
 }
 
@@ -514,7 +540,25 @@ app.on('second-instance', (_e, argv) => {
 // ---------- IPC ----------
 // The control window drives the engine by sending commands; the engine reports its state back.
 ipcMain.on('cmd', (_e, cmd) => outputView?.webContents.send('cmd', cmd));
-ipcMain.on('state', (_e, state) => controlWin?.webContents.send('state', state));
+let lastState = {};
+ipcMain.on('state', (_e, state) => { lastState = state; controlWin?.webContents.send('state', state); audioOnlyScreens(state); });
+
+// Sound only (an MP3, a voice note): by default the audience sees the standby screen. With
+// "Standby screen for sound only" off, the projector (and mirrors) step aside instead, so whatever
+// else is on those screens (slides, the desktop) stays in view. Lyrics or a countdown bring it back.
+let hiddenForAudio = false;
+function audioOnlyScreens(state) {
+  const hide = settings.audioStandby === false && mode === 'presenter' && state.loaded && state.audioOnly && !state.lyrics && !state.countdown;
+  if (hide === hiddenForAudio || !outputWin) return;
+  hiddenForAudio = hide;
+  if (hide) {
+    outputWin.hide();
+    for (const w of mirrors.values()) w.hide();
+  } else {
+    placeOutput();
+    syncMirrors();
+  }
+}
 ipcMain.on('output-key', (_e, key) => controlWin?.webContents.send('output-key', key));
 ipcMain.handle('output-is-ready', () => outputReady);
 // The live preview of the projector (Presenter mode only; in Player mode the video is right there).
@@ -544,7 +588,7 @@ ipcMain.on('player-rect', (_e, rect) => {
 ipcMain.on('player-fullscreen', (_e, on) => togglePlayerFullscreen(on));
 
 ipcMain.handle('get-settings', () => ({ ...settings, _selftest: !!process.env.VP_SELFTEST }));
-ipcMain.on('set-setting', (_e, key, value) => { settings[key] = value; saveSettings(); });
+ipcMain.on('set-setting', (_e, key, value) => { settings[key] = value; saveSettings(); if (key === 'audioStandby') audioOnlyScreens(lastState); });
 
 ipcMain.handle('playlist-load', () =>
   readJson(playlistFile(), []).map(({ stems, ...it }) => ({

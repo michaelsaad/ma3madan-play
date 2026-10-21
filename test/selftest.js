@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
-module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode }) => {
+module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode, setShowOn: setShowOnFn }) => {
   const dir = process.env.VP_SELFTEST_DIR;
   const log = (...a) => fs.appendFileSync(path.join(dir, 'log.txt'), a.join(' ') + '\n');
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -31,8 +31,10 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
       const load = src => { const i = new Image(); i.src = src; return i.decode().then(() => i); };
       const [a, b] = await Promise.all([load(${JSON.stringify(page.toDataURL())}), load(${JSON.stringify(video.toDataURL())})]);
       const c = document.createElement('canvas'); c.width = a.width; c.height = a.height;
-      const g = c.getContext('2d'); g.drawImage(a, 0, 0);
+      // The video is under the page (which is transparent over the preview box).
+      const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
       g.drawImage(b, ${at.x * k}, ${at.y * k}, ${at.width * k}, ${at.height * k});
+      g.drawImage(a, 0, 0);
       return c.toDataURL('image/png');
     })()`);
     w.destroy();
@@ -60,7 +62,7 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
     log('items:', await js(`JSON.stringify(items.map(i=>[i.title,i.duration&&+i.duration.toFixed(1)]))`));
     const features = () => require('./features')({ js, ojs, log, wait, shot, dir, getControl, getMode, getOutput });
     if (process.env.VP_FEATURES) { await features(); log('DONE'); app.quit(); return; }
-    if (process.env.VP_UI_ONLY) { await require('./ui')({ js, log, wait, shot }); log('DONE'); app.quit(); return; }
+    if (process.env.VP_UI_ONLY) { await require('./ui')({ js, log, wait, shot, getMode, getControl, getOutputWin, setShowOn: s => setShowOnFn(s) }); log('DONE'); app.quit(); return; }
     if (process.env.VP_STREAM_ONLY) { await require('./stream')({ js, ojs, log, wait }); log('DONE'); app.quit(); return; }
 
     await js(`playItem(items[0])`);

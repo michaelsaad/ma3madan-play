@@ -87,7 +87,7 @@ header {
   -webkit-app-region: drag;
 }
 /* Windows draws its own minimize/maximize/close on the right of the header (titleBarOverlay). */
-header, [dir=rtl] header { padding-left: 16px; padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 8px); }
+header, [dir=rtl] header { padding-left: 16px; padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 146px)) + 8px); }
 header [hidden] { display: none !important; }
 header button, header select, header .field { -webkit-app-region: no-drag; }
 .brand { display: flex; align-items: center; gap: 10px; }
@@ -814,3 +814,8 @@ body.mini .transport .grp button.big svg { width: 18px; height: 18px; }
 .upd-progress { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .upd-progress .bar { height: 6px; margin: 0; }
 #aboutStatus .small-btn { margin-inline-start: 6px; }
+
+/* The page is a layer over the video (Player mode): transparent where the preview box is. The
+   window itself paints the background colour behind everything. */
+html, body { background: transparent; }
+body.player-mode .preview { background: transparent; }
