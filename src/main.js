@@ -4,7 +4,7 @@
 // - Presenter mode: a full-screen window on the second screen (the projector).
 // - Player mode: inside the control window, over its preview box, like a normal video player.
 // Moving the view doesn't reload it, so switching modes doesn't interrupt the video.
-const { app, BrowserWindow, BaseWindow, WebContentsView, ipcMain, screen, dialog, shell, globalShortcut, nativeTheme } = require('electron');
+const { app, BrowserWindow, BaseWindow, WebContentsView, ipcMain, screen, dialog, shell, globalShortcut, nativeTheme, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -12,11 +12,15 @@ const youtube = require('./youtube');
 const streamProxy = require('./stream-proxy');
 const updater = require('./updater');
 const vocals = require('./vocals');
+const remote = require('./remote');
 
 const APP_NAME = 'Ma3madan Play';
 const OLD_APP_NAME = 'Ma3madan Video Presenter'; // the name before 1.4.0
 
 if (process.env.VP_SELFTEST) {
+  // The tests also run with the screen locked or off: keep painting windows Windows thinks are hidden.
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
   app.setPath('userData', process.env.VP_SELFTEST_DIR);
   app.setPath('videos', process.env.VP_SELFTEST_DIR);
 }
@@ -79,6 +83,8 @@ let playerFullscreen = false;
 // ---------- persistence ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 const playlistFile = () => path.join(app.getPath('userData'), 'playlist.json');
+const listsFile = () => path.join(app.getPath('userData'), 'lists.json');
+const thumbsDir = () => path.join(app.getPath('userData'), 'thumbs');
 const videosDir = () => path.join(app.getPath('videos'), APP_NAME);
 
 function readJson(file, fallback) {
@@ -306,8 +312,8 @@ function initialBounds() {
 // Light/dark: follows Windows unless the operator picked one (settings.theme). The page's CSS
 // follows nativeTheme by itself; the native title-bar buttons are told their colours here.
 const THEME_COLORS = {
-  dark: { bg: '#0f1115', bar: '#171a21', symbol: '#e8eaef' },
-  light: { bg: '#eef0f4', bar: '#ffffff', symbol: '#1b1f27' },
+  dark: { bg: '#0a101d', bar: '#111a2b', symbol: '#e9edf5' },
+  light: { bg: '#edf1f7', bar: '#ffffff', symbol: '#172033' },
 };
 const themeColors = () => THEME_COLORS[nativeTheme.shouldUseDarkColors ? 'dark' : 'light'];
 function applyTheme() {
@@ -356,7 +362,9 @@ function createControl() {
       saveSettings();
     }, 400);
   };
-  for (const ev of ['resize', 'move', 'maximize', 'unmaximize']) controlWin.on(ev, rememberBounds);
+  for (const ev of ['resize', 'move', 'maximize', 'unmaximize']) controlWin.on(ev, () => { if (!mini) rememberBounds(); });
+  // Coming back to the app with a YouTube link copied (from WhatsApp, a browser…): offer to play it.
+  controlWin.on('focus', checkClipboard);
   controlWin.on('resize', fitViewToPlayer);
   controlWin.on('leave-full-screen', () => { playerFullscreen = false; fitViewToPlayer(); sendMode(); });
   controlWin.on('closed', () => {
@@ -367,6 +375,55 @@ function createControl() {
   });
 }
 
+// ---------- mini mode: a small control bar that stays on top of other programs ----------
+let mini = null; // { bounds, maximized } to restore
+function setMini(on) {
+  if (!controlWin || !!on === !!mini) return;
+  if (on) {
+    if (playerFullscreen) togglePlayerFullscreen(false);
+    mini = { bounds: controlWin.getNormalBounds(), maximized: controlWin.isMaximized() };
+    if (mini.maximized) controlWin.unmaximize();
+    const a = screen.getDisplayMatching(controlWin.getBounds()).workArea;
+    const w = 560, h = 200;
+    controlWin.setMinimumSize(420, 160);
+    controlWin.setBounds({ x: a.x + a.width - w - 16, y: a.y + a.height - h - 16, width: w, height: h });
+    controlWin.setAlwaysOnTop(true, 'floating');
+  } else {
+    const back = mini;
+    mini = null;
+    controlWin.setAlwaysOnTop(false);
+    controlWin.setMinimumSize(640, 480);
+    controlWin.setBounds(back.bounds);
+    if (back.maximized) controlWin.maximize();
+  }
+  controlWin.webContents.send('mini', !!mini);
+}
+
+// ---------- links from outside: ma3madan:// and the clipboard ----------
+// ma3madan://play?url=<link> (or ma3madan://<link>) opens a YouTube link in the app, e.g. from a
+// browser bookmarklet. Copying a link and switching to the app does the same with one click.
+const YT_RE = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/(?:watch\?|shorts\/|live\/|embed\/)|youtu\.be\/)\S+$/i;
+function linkFromProtocol(arg) {
+  if (!/^ma3madan:/i.test(arg || '')) return null;
+  let rest = arg.replace(/^ma3madan:\/*/i, '');
+  try {
+    const u = new URL('ma3madan://' + rest);
+    if (u.searchParams.get('url')) rest = u.searchParams.get('url');
+  } catch {}
+  rest = decodeURIComponent(rest).replace(/^(https?):\/*(?!\/)/i, '$1://');
+  return YT_RE.test(rest) ? rest : null;
+}
+let pendingLink = process.argv.map(linkFromProtocol).find(Boolean) || null;
+let lastClipboard = '';
+function checkClipboard() {
+  if (process.env.VP_SELFTEST && !process.env.VP_CLIPBOARD_TEST) return;
+  if (settings.clipboardLinks === false) return;
+  const text = clipboard.readText().trim();
+  if (!text || text === lastClipboard) return;
+  lastClipboard = text;
+  if (YT_RE.test(text)) controlWin?.webContents.send('clipboard-link', text);
+}
+
 function togglePlayerFullscreen(on) {
   if (!controlWin || mode !== 'player') return;
   playerFullscreen = on ?? !playerFullscreen;
@@ -375,11 +432,24 @@ function togglePlayerFullscreen(on) {
   sendMode();
 }
 
+// The installer registers ma3madan:// too; this keeps it pointing at the current copy (portable).
+if (app.isPackaged && !process.env.VP_SELFTEST) app.setAsDefaultProtocolClient('ma3madan');
+
 app.whenReady().then(async () => {
   await streamProxy.start();
   createControl();
   createOutput();
   registerMediaKeys();
+  if (settings.remoteOn && !process.env.VP_SELFTEST) startRemote().catch(() => {});
+  // yt-dlp has to keep up with YouTube's changes: update it quietly once a week.
+  if (!process.env.VP_SELFTEST) {
+    setTimeout(() => {
+      const week = 7 * 24 * 60 * 60 * 1000;
+      if (!youtube.isInstalled() || Date.now() - (settings.ytdlpCheckedAt || 0) < week) return;
+      settings.ytdlpCheckedAt = Date.now(); saveSettings();
+      youtube.updateYtdlp().catch(() => {});
+    }, 60 * 1000);
+  }
   // Look for a newer release a little after startup, then every 6 hours.
   if (!process.env.VP_SELFTEST || process.env.VP_FAKE_VERSION) {
     const checkForUpdate = () => updater.check()
@@ -429,6 +499,8 @@ app.on('second-instance', (_e, argv) => {
   if (!controlWin) return;
   if (controlWin.isMinimized()) controlWin.restore();
   controlWin.focus();
+  const link = argv.map(linkFromProtocol).find(Boolean);
+  if (link) controlWin.webContents.send('open-link', link);
   const files = filesFromArgv(argv);
   if (files.length) {
     // A video opened from Explorer while the app runs: play it like a normal player.
@@ -446,6 +518,10 @@ ipcMain.handle('output-is-ready', () => outputReady);
 // The live preview of the projector (Presenter mode only; in Player mode the video is right there).
 ipcMain.handle('output-source-id', () => (mode === 'presenter' ? outputWin?.getMediaSourceId() ?? null : null));
 ipcMain.handle('take-open-files', () => { const files = pendingOpen; pendingOpen = []; return files; });
+ipcMain.handle('take-open-link', () => { const l = pendingLink; pendingLink = null; return l; });
+ipcMain.handle('stream-speed', () => streamProxy.lastSpeed());
+ipcMain.on('set-mini', (_e, on) => setMini(on));
+ipcMain.on('clipboard-seen', (_e, text) => { lastClipboard = text; });
 
 ipcMain.handle('get-displays', () => { sendMode(); return true; });
 ipcMain.on('set-show-on', (_e, s) => {
@@ -465,7 +541,7 @@ ipcMain.on('player-rect', (_e, rect) => {
 });
 ipcMain.on('player-fullscreen', (_e, on) => togglePlayerFullscreen(on));
 
-ipcMain.handle('get-settings', () => settings);
+ipcMain.handle('get-settings', () => ({ ...settings, _selftest: !!process.env.VP_SELFTEST }));
 ipcMain.on('set-setting', (_e, key, value) => { settings[key] = value; saveSettings(); });
 
 ipcMain.handle('playlist-load', () =>
@@ -474,9 +550,92 @@ ipcMain.handle('playlist-load', () =>
     // Separated tracks that were deleted outside the app are simply forgotten.
     ...(stems && fs.existsSync(stems.music) && fs.existsSync(stems.vocals) ? { stems } : {}),
     missing: it.source !== 'stream' && (!fs.existsSync(it.path) || (it.audioPath && !fs.existsSync(it.audioPath))),
+    thumbUrl: fs.existsSync(thumbFile(it.id)) ? pathToFileURL(thumbFile(it.id)).href : null,
   })));
-ipcMain.on('playlist-save', (_e, items) => writeJson(playlistFile(), items.map(({ missing, ...rest }) => rest)));
+ipcMain.on('playlist-save', (_e, items) => writeJson(playlistFile(), items.map(({ missing, thumbUrl, loading, ...rest }) => rest)));
 ipcMain.handle('file-url', (_e, p) => pathToFileURL(p).href);
+
+// Saved lists ("Sunday meeting"…): names and the ids of their items, which live in Recents.
+ipcMain.handle('lists-load', () => readJson(listsFile(), []));
+ipcMain.on('lists-save', (_e, lists) => writeJson(listsFile(), lists));
+
+// Thumbnails: a small JPEG per item in userData/thumbs, made by the control window from a frame
+// (local files) or downloaded from YouTube (streams).
+const thumbFile = id => path.join(thumbsDir(), String(id).replace(/[^\w-]/g, '') + '.jpg');
+ipcMain.handle('thumb-save', (_e, id, bytes) => {
+  fs.mkdirSync(thumbsDir(), { recursive: true });
+  fs.writeFileSync(thumbFile(id), Buffer.from(bytes));
+  return pathToFileURL(thumbFile(id)).href + '?v=' + Date.now();
+});
+ipcMain.handle('thumb-fetch', async (_e, id, url) => {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' || !/(^|\.)(ytimg\.com|ggpht\.com|googleusercontent\.com)$/.test(u.hostname)) return null;
+    const r = await fetch(u);
+    if (!r.ok) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 2e6 || buf[0] !== 0xff || buf[1] !== 0xd8) return null; // JPEG only
+    fs.mkdirSync(thumbsDir(), { recursive: true });
+    fs.writeFileSync(thumbFile(id), buf);
+    return pathToFileURL(thumbFile(id)).href + '?v=' + Date.now();
+  } catch { return null; }
+});
+ipcMain.handle('thumb-url', (_e, id) => (fs.existsSync(thumbFile(id)) ? pathToFileURL(thumbFile(id)).href : null));
+ipcMain.on('thumb-delete', (_e, id) => fs.rm(thumbFile(id), { force: true }, () => {}));
+
+// Subtitles: a .srt or .vtt next to the video with the same name is found by itself.
+const SUB_RE = /\.(srt|vtt)$/i;
+ipcMain.handle('find-subs', (_e, videoPath) => {
+  try {
+    const dir = path.dirname(videoPath), base = path.basename(videoPath).replace(/\.[^.]+$/, '').toLowerCase();
+    const found = fs.readdirSync(dir).filter(f => SUB_RE.test(f) && f.toLowerCase().startsWith(base + '.'));
+    return found.length ? path.join(dir, found.sort((a, b) => a.length - b.length)[0]) : null;
+  } catch { return null; }
+});
+ipcMain.handle('read-subs', (_e, p) => {
+  try {
+    if (!SUB_RE.test(p) || fs.statSync(p).size > 5e6) return null;
+    const buf = fs.readFileSync(p);
+    // UTF-8 most of the time; old Arabic .srt files are often Windows-1256.
+    const utf8 = buf.toString('utf8');
+    return utf8.includes('�') ? new TextDecoder('windows-1256').decode(buf) : utf8;
+  } catch { return null; }
+});
+ipcMain.handle('pick-subs', async (_e, title) => {
+  const r = await dialog.showOpenDialog(controlWin, { title, properties: ['openFile'], filters: [{ name: 'Subtitles', extensions: ['srt', 'vtt'] }] });
+  return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.handle('pick-image', async (_e, title) => {
+  const r = await dialog.showOpenDialog(controlWin, { title, properties: ['openFile'], filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'] }] });
+  return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.handle('file-exists', (_e, p) => !!p && fs.existsSync(p));
+
+// ---------- phone remote ----------
+function startRemote() {
+  return remote.start({
+    port: 8790,
+    key: settings.remoteKey,
+    onCommand: c => controlWin?.webContents.send('remote-cmd', c),
+    thumbPath: id => thumbFile(id),
+  }).then(info => {
+    settings.remoteKey = remote.key(); settings.remoteOn = true; saveSettings();
+    return info;
+  });
+}
+ipcMain.handle('remote-start', async () => {
+  try { return { ok: true, ...(await startRemote()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('remote-stop', () => { remote.stop(); settings.remoteOn = false; saveSettings(); return remote.info(); });
+ipcMain.handle('remote-info', () => remote.info());
+// A new key makes the old QR code useless (someone who shouldn't have it is locked out).
+ipcMain.handle('remote-new-key', async () => {
+  remote.stop();
+  settings.remoteKey = null;
+  try { return { ok: true, ...(await startRemote()) }; } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.on('remote-state', (_e, s) => remote.setState(s));
 
 ipcMain.handle('pick-files', async (_e, title) => {
   const r = await dialog.showOpenDialog(controlWin, {
@@ -505,7 +664,7 @@ ipcMain.handle('stream-resolve', async (_e, url, force) => {
   try { return { ok: true, ...(await youtube.resolveStream(url, force)) }; }
   catch (e) { return { ok: false, error: e.message }; }
 });
-ipcMain.handle('ytdlp-update', () => youtube.updateYtdlp());
+ipcMain.handle('ytdlp-update', async () => { settings.ytdlpCheckedAt = Date.now(); saveSettings(); return youtube.updateYtdlp(); });
 
 // Vocal remover
 vocals.setSetupListener((tool, progress) => controlWin?.webContents.send('tool-setup', { tool, progress }));

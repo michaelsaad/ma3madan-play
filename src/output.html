@@ -8,12 +8,15 @@
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   body.idle, body.idle * { cursor: none; } /* the pointer hides after 2 s without moving */
   video { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
-  video.waiting { visibility: hidden; } /* the next quality, loading behind the one on screen */
+  /* The next quality loads behind the one on screen. Covered rather than hidden: Chrome buffers
+     only a little for a video it thinks nobody sees, even after it is shown. */
+  video { z-index: 1; }
+  video.waiting { z-index: 0; }
   video::cue { font: 600 4.2vh/1.35 "Segoe UI", Tahoma, sans-serif; background: rgba(0, 0, 0, .62); color: #fff; }
-  #freeze { position: absolute; background: #000; }
+  #freeze { position: absolute; background: #000; z-index: 2; }
   /* Standby: what the audience sees between videos. Black, or a picture, or a short text. */
   #standby {
-    position: absolute; inset: 0; background: #000; opacity: 1; pointer-events: none;
+    position: absolute; inset: 0; background: #000; opacity: 1; pointer-events: none; z-index: 3;
     transition: opacity var(--fade, .35s) ease; display: grid; place-items: center;
   }
   #standby.off { opacity: 0; }
@@ -24,7 +27,7 @@
   }
   /* Countdown before the meeting starts */
   #countdown {
-    position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 2vh;
+    position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 2vh; z-index: 5;
     background: rgba(0, 0, 0, .78); color: #fff; font-family: "Segoe UI", Tahoma, sans-serif; text-align: center;
     opacity: 0; transition: opacity .5s ease; pointer-events: none;
   }
@@ -33,7 +36,7 @@
   #countdown .time { font: 700 22vh/1 "Segoe UI", Tahoma, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .02em; direction: ltr; }
   /* Lyrics: a band at the bottom over the video; centred and large over standby */
   #lyrics {
-    position: absolute; left: 0; right: 0; bottom: 5vh; display: flex; justify-content: center; pointer-events: none;
+    position: absolute; left: 0; right: 0; bottom: 5vh; display: flex; justify-content: center; pointer-events: none; z-index: 4;
     opacity: 0; transform: translateY(1vh); transition: opacity .3s ease, transform .3s ease;
   }
   #lyrics.on { opacity: 1; transform: none; }
@@ -139,7 +142,7 @@
   }
   const tracks = () => [v, ...followers];
   let pauseTimer = null;   // a short sound fade before the elements actually pause
-  function holdAll() { if (pauseTimer) return; for (const el of tracks()) if (!el.paused) el.pause(); }
+  function holdAll() { if (pauseTimer) return; abandonUpgrade(); for (const el of tracks()) if (!el.paused) el.pause(); }
   let fadeInNext = 0;      // fade the sound in over this long when playback actually starts
 
   function tick() {
@@ -155,6 +158,11 @@
         holdAll(); push();
       } else if (canStepDown() && now - stallSince > (loadingPhase ? STEP_DOWN_LOADING_MS : STEP_DOWN_AFTER_MS)) {
         stepDown();
+      } else if (canStepDown() && now - stallSince > 2000 && tooSlowFor(qIndex)) {
+        // The measured speed clearly can't carry this quality: go straight to one it can.
+        let i = qIndex + 1;
+        while (i < ladder.length - 1 && tooSlowFor(i)) i++;
+        stepDown(i);
       }
       return;
     }
@@ -183,9 +191,14 @@
 
   // ---------- the end (of the video, or of its trimmed part) ----------
   const endTime = () => (trim.end > 0 ? Math.min(trim.end, isFinite(v.duration) ? v.duration : trim.end) : (isFinite(v.duration) ? v.duration : 0));
+  // The end point only counts when playback reaches it from before: setting it at the current
+  // spot (O while playing) marks it without stopping there and then.
+  let endArmed = false;
   function checkEnd() {
     const end = endTime();
     if (!end || stalled) return;
+    if (v.currentTime < end - 0.1) endArmed = true;
+    if (trim.end > 0 && !endArmed) return;
     const left = (end - v.currentTime) / rate;
     // Fade out just before the end, so the last frame melts into standby instead of cutting.
     if (!loopOn && blackOnEnd && fadeSec > 0 && !endFading && left > 0 && left <= fadeSec && !audioOnly) {
@@ -206,7 +219,15 @@
 
   // ---------- quality ----------
   const canStepDown = () => autoQuality && ladder && qIndex < ladder.length - 1;
-  function stepDown() { abandonUpgrade(); setQuality(qIndex + 1, true); }
+  // Measured lately, and below what this quality needs.
+  const tooSlowFor = i => speed.age != null && speed.age < 3000 && speed.samples >= 3 && ladder[i].kbps && speed.bps < ladder[i].kbps * 1000 * 1.1;
+  function stepDown(to) {
+    // Stepping down soon after a step up: that quality was too much; wait longer before trying again.
+    const now = performance.now();
+    if (now - qualityChangedAt < 40000) { upgradeFailedAt = now; upgradeBackoff = Math.min(upgradeBackoff * 2, 5 * 60000); }
+    abandonUpgrade();
+    setQuality(to ?? qIndex + 1, true);
+  }
 
   function setSources(videoUrl, audioUrl, at, vocalsUrl) {
     abandonUpgrade();
@@ -250,60 +271,101 @@
     push();
   }, 1000);
 
-  let upgrade = null; // { i, at, since, tries }
+  // Two ways up:
+  // - the measured speed comfortably carries the next quality, or
+  // - nothing is being measured because the buffer is full (the player stops downloading), and a lot
+  //   is buffered: the connection is clearly keeping up, so try.
+  // Either way the next quality first loads behind the picture, and it only takes over if it
+  // downloads faster than it plays. If not, nothing changes on screen and we wait longer next time.
+  let upgrade = null;      // { i, at, since, seekedAt, tries }
+  const upLog = window.upLog = []; // what happened with the last step-ups (for the self-test)
+  const note = (...x) => { upLog.push([+(v.currentTime.toFixed(2)), ...x]); if (upLog.length > 40) upLog.shift(); };
+  let upgradeBackoff = 20000, upgradeFailedAt = 0;
   function upgradeTick() {
     if (!ladder || !autoQuality || stalled || loadingPhase) { goodSince = 0; return; }
     const now = performance.now();
     if (upgrade) return finishUpgrade(now);
     if (qIndex === 0) return;
     const up = ladder[qIndex - 1];
-    const fresh = speed.age != null && speed.age < 4000;
     const recentStall = stallLog.some(t => now - t < NO_STEP_UP_AFTER_STALL);
-    if (!(fresh && fits(up, speed.bps) && !recentStall && now - qualityChangedAt > 4000)) { goodSince = 0; return; }
+    if (recentStall || now - qualityChangedAt < 6000 || now - upgradeFailedAt < upgradeBackoff) { goodSince = 0; return; }
+    const fresh = speed.age != null && speed.age < 4000;
+    const measuredFast = fresh && fits(up, speed.bps);
+    const plenty = bufferedAhead(v) >= 25 && now - qualityChangedAt > 15000;
+    if (!measuredFast && !plenty) { goodSince = 0; return; }
     if (!goodSince) goodSince = now;
-    if (now - goodSince < STEP_UP_AFTER_MS) return;
+    if (measuredFast && !plenty && now - goodSince < STEP_UP_AFTER_MS) return;
     // Seamless when only the picture changes; the single-file fallback (or a different sound
     // track) needs a plain switch, done only with plenty buffered.
     const swappable = up.audio && ladder[qIndex].audio && up.audio === ladder[qIndex].audio;
-    if (swappable && bufferedAhead(v) >= 3) startUpgrade(qIndex - 1);
-    else if (!swappable && bufferedAhead(v) > 10) setQuality(qIndex - 1, true);
+    if (swappable && bufferedAhead(v) >= 2) startUpgrade(qIndex - 1);
+    else if (!swappable && bufferedAhead(v) > 15) setQuality(qIndex - 1, true);
   }
-  function startUpgrade(i) {
-    // Jump to a point a few seconds ahead, load the new picture there, and switch when we arrive.
-    const lead = 4 * rate;
-    const at = v.currentTime + lead;
-    if (endTime() && at > endTime() - 2) return;
-    upgrade = { i, at, since: performance.now(), tries: (upgrade?.tries || 0) + 1 };
+  // The new quality plays hidden, in step with the one on screen (a paused video barely buffers),
+  // and takes over once it has run smoothly for a few seconds with a good buffer.
+  const UPGRADE_SETTLE_MS = 5000, UPGRADE_MIN_AHEAD = 6, UPGRADE_TIMEOUT_MS = 25000;
+  function startUpgrade(i, tries = 1) {
+    if (endTime() && v.currentTime > endTime() - 20) return;
+    upgrade = { i, since: performance.now(), playingSince: 0, resyncs: 0, tries };
     vNext.src = ladder[i].video;
     vNext.playbackRate = rate;
-    vNext.addEventListener('loadedmetadata', () => { vNext.currentTime = at; }, { once: true });
+    vNext.addEventListener('loadedmetadata', () => { if (upgrade) vNext.currentTime = v.currentTime + 1.5 * rate; }, { once: true });
     vNext.load();
+    note('start', ladder[i].label, tries);
   }
   function abandonUpgrade() {
     if (!upgrade) return;
     upgrade = null;
     vNext.pause(); vNext.removeAttribute('src'); vNext.load();
   }
+  function upgradeFailed(now, why) {
+    note('failed', why);
+    abandonUpgrade();
+    upgradeFailedAt = now; goodSince = 0;
+    upgradeBackoff = Math.min(upgradeBackoff * 2, 5 * 60000);
+  }
   function finishUpgrade(now) {
-    const ready = vNext.readyState >= 3 && Math.abs(vNext.currentTime - upgrade.at) < 0.5 && bufferedAhead(vNext) >= 3;
-    if (v.currentTime >= upgrade.at - 0.04) {
-      if (!ready) {
-        // Too slow: we're past the switch point. Try once more from further ahead, then give up for a while.
-        const tries = upgrade.tries, i = upgrade.i;
-        abandonUpgrade();
-        if (tries < 2) { upgrade = { tries }; startUpgrade(i); } else { qualityChangedAt = now; goodSince = 0; }
-        return;
-      }
-      swapToNext();
+    const u = upgrade;
+    if (!u.playingSince) {
+      if (now - u.since > UPGRADE_TIMEOUT_MS) return upgradeFailed(now, 'no start');
+      if (vNext.readyState < 3) return;
+      // Ready ahead of the picture on screen: start it the moment the screen gets there.
+      if (vNext.currentTime < v.currentTime - 0.05) { vNext.currentTime = v.currentTime + 1 * rate; return; }
+      if (v.currentTime < vNext.currentTime - 0.05) return;
+      vNext.playbackRate = rate;
+      vNext.play().catch(() => {});
+      u.playingSince = now;
       return;
     }
-    if (now - upgrade.since > 25000) { abandonUpgrade(); qualityChangedAt = now; }
+    // Keep it in step with the screen, like the separate sound track.
+    const drift = vNext.currentTime - v.currentTime;
+    if (Math.abs(drift) > 0.5 || vNext.paused) {
+      if (++u.resyncs > 3) return upgradeFailed(now, 'cannot keep up');
+      u.playingSince = 0;
+      vNext.pause();
+      vNext.currentTime = v.currentTime + 1.5 * rate;
+      return;
+    }
+    vNext.playbackRate = Math.abs(drift) > 0.04 ? rate * (drift > 0 ? 0.97 : 1.03) : rate;
+    const ahead = bufferedAhead(vNext);
+    // Starved while hidden: count it; a little is normal right after starting, more means too slow.
+    if (vNext.readyState < 3) { u.starved = (u.starved || 0) + 150; if (u.starved > 1500) return upgradeFailed(now, 'starved'); }
+    // Chrome keeps only a small buffer for a video nobody sees, so a big buffer can't be the test.
+    // It must play in step without starving, and the measured speed must comfortably carry it
+    // (or it has managed to build a good buffer anyway).
+    const speedOk = speed.age != null && speed.age < 10000 && fits(ladder[u.i], speed.bps);
+    if (now - u.playingSince >= UPGRADE_SETTLE_MS && (ahead >= UPGRADE_MIN_AHEAD || (speedOk && ahead >= 1.5)) && Math.abs(drift) < 0.08 && vNext.readyState >= 3) {
+      note('ready', 'ahead ' + ahead.toFixed(1), 'drift ' + drift.toFixed(3), 'mbps ' + (speed.bps / 1e6).toFixed(1));
+      swapToNext();
+    } else if (now - u.since > UPGRADE_TIMEOUT_MS + UPGRADE_SETTLE_MS) {
+      upgradeFailed(now, 'slow, ahead ' + ahead.toFixed(1));
+    }
   }
   function swapToNext() {
     const old = v, i = upgrade.i;
     upgrade = null;
-    vNext.currentTime = old.currentTime;
-    vNext.play().catch(() => {});
+    // vNext is already playing at this frame: just show it instead.
+    vNext.playbackRate = rate;
     v = vNext; vNext = old;
     v.classList.remove('waiting');
     old.classList.add('waiting');
@@ -312,6 +374,8 @@
     qIndex = i;
     qualityChangedAt = performance.now();
     goodSince = 0;
+    upgradeBackoff = 20000;
+    note('swapped', ladder[i].label, 'a@' + a.currentTime.toFixed(2));
     if (frozen) syncFreezeBox();
     push({ qualityChanged: 'up' });
   }
@@ -604,7 +668,7 @@
     black({ on }) { setBlack(audioOnly || (on ?? !blackOn)); },
     rate({ r }) { rate = r; for (const el of allEls()) el.playbackRate = r; push(); },
     loop({ on }) { loopOn = on; push(); },
-    trim({ start, end }) { trim = { start: start || 0, end: end || 0 }; endFading = false; push(); },
+    trim({ start, end }) { trim = { start: start || 0, end: end || 0 }; endFading = false; endArmed = false; push(); },
     aspect({ mode }) { aspect = mode; layout(); push(); },
     quality({ q }) {
       if (!ladder) return;

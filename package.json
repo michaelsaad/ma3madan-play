@@ -1,6 +1,6 @@
 {
   "name": "ma3madan-play",
-  "version": "1.5.0",
+  "version": "2.0.0",
   "description": "Video player for churches and events: controls on your screen, clean full-screen video on the projector. Plays local files and YouTube.",
   "main": "src/main.js",
   "scripts": {
@@ -90,6 +90,14 @@
     "compression": "maximum",
     "asarUnpack": [
       "src/vocals/worker.js"
+    ],
+    "protocols": [
+      {
+        "name": "Ma3madan Play link",
+        "schemes": [
+          "ma3madan"
+        ]
+      }
     ]
   },
   "homepage": "https://github.com/michaelsaad/ma3madan-video-presenter",

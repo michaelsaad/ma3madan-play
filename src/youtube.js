@@ -185,6 +185,10 @@ function buildLadder(formats) {
     .sort((a, b) => (b.abr || b.tbr || 0) - (a.abr || a.tbr || 0));
   const bestAudio = audios[0];
   const lightAudio = audios[audios.length - 1] || bestAudio;
+  // One proxy address per sound track, shared by every quality that uses it: the player can then
+  // tell that two qualities share the sound, and switch only the picture.
+  const audioUrls = new Map();
+  const audioUrl = f => { if (!audioUrls.has(f)) audioUrls.set(f, proxyUrl(f)); return audioUrls.get(f); };
   const ladder = [];
   if (bestAudio) {
     for (const h of LADDER_HEIGHTS) {
@@ -195,7 +199,7 @@ function buildLadder(formats) {
       const audio = h <= 240 ? lightAudio : bestAudio;
       // The pair's bitrate (kbit/s), so the player can tell whether the connection can carry it.
       const kbps = Math.round((video.tbr || video.vbr || h * 3) + (audio.abr || audio.tbr || 128));
-      ladder.push({ label: h + 'p', height: h, kbps, video: proxyUrl(video), audio: proxyUrl(audio) });
+      ladder.push({ label: h + 'p', height: h, kbps, video: proxyUrl(video), audio: audioUrl(audio) });
     }
   }
   // A single file with both tracks is the most robust fallback when YouTube still offers one.
@@ -227,10 +231,9 @@ async function resolveStream(url, force) {
         if (info.is_live) return reject(new Error('LIVE'));
         const ladder = buildLadder(info.formats || []);
         if (!ladder.length) return reject(new Error('No playable format'));
-        // A small JPEG thumbnail for the list (YouTube also offers WebP, which is bigger to keep).
-        const thumbnail = (info.thumbnails || [])
-          .filter(x => x.url && /\.jpe?g(\?|$)/.test(x.url) && (x.width || 0) <= 640)
-          .sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url || null;
+        // A small 16:9 JPEG for the list. YouTube's listed thumbnails often come back as WebP even
+        // when the address says .jpg; the standard mqdefault.jpg is always a 320×180 JPEG.
+        const thumbnail = /^[\w-]{11}$/.test(info.id || '') ? `https://i.ytimg.com/vi/${info.id}/mqdefault.jpg` : null;
         const result = { title: info.title, duration: info.duration || 0, ladder, thumbnail };
         streamCache.set(url, { at: Date.now(), info: result });
         resolve(result);
@@ -252,4 +255,6 @@ async function updateYtdlp() {
   });
 }
 
-module.exports = { download, cancelDownload, resolveStream, updateYtdlp, setSetupListener, ensureFfmpeg };
+const isInstalled = () => fs.existsSync(binPath('yt-dlp.exe'));
+
+module.exports = { download, cancelDownload, resolveStream, updateYtdlp, setSetupListener, ensureFfmpeg, isInstalled };

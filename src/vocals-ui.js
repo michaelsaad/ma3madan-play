@@ -11,9 +11,7 @@ const jobFor = it => [...vocalJobs.values()].find(j => j.itemId === it.id && !['
 // ---------- engine choice ----------
 function showVocalSettings(onDone) {
   const engine = settings.vocalEngine || 'online';
-  const box = $('modal');
-  box.innerHTML = `
-    <div class="modal-box" role="dialog" aria-modal="true">
+  const box = openModal(`
       <h2>${escapeHtml(t('vdTitle'))}</h2>
       <p class="muted">${escapeHtml(t('vdIntro'))}</p>
       <label class="choice"><input type="radio" name="veng" value="online" ${engine === 'online' ? 'checked' : ''}>
@@ -25,30 +23,27 @@ function showVocalSettings(onDone) {
       <label class="choice"><input type="radio" name="veng" value="local" ${engine === 'local' ? 'checked' : ''}>
         <span><b>${escapeHtml(t('vdLocal'))}</b><small>${escapeHtml(t('vdLocalDesc'))}</small></span></label>
       <div class="modal-actions">
-        <button id="vdCancel" class="ghost">${escapeHtml(t('vdCancel'))}</button>
-        <button id="vdOk" class="primary">${escapeHtml(t(onDone ? 'vdStart' : 'vdSave'))}</button>
-      </div>
-    </div>`;
-  box.hidden = false;
-  const close = () => { box.hidden = true; box.innerHTML = ''; };
+        <button id="vdCancel" class="ghost" data-close>${escapeHtml(t('vdCancel'))}</button>
+        <button id="vdOk" class="primary" data-primary>${escapeHtml(t(onDone ? 'vdStart' : 'vdSave'))}</button>
+      </div>`);
   $('mvsepGetKey').onclick = () => api.openExternal(MVSEP_KEY_PAGE);
-  $('vdCancel').onclick = close;
-  box.onmousedown = e => { if (e.target === box) close(); };
   $('vdOk').onclick = () => {
     const choice = box.querySelector('input[name=veng]:checked').value;
     const key = $('mvsepKey').value.trim();
     if (choice === 'online' && !key) { toast(t('vdNeedKey')); $('mvsepKey').focus(); return; }
     settings.vocalEngine = choice; api.setSetting('vocalEngine', choice);
     settings.mvsepToken = key; api.setSetting('mvsepToken', key);
-    close();
+    closeModal();
     onDone?.();
   };
   (engine === 'online' ? $('mvsepKey') : box.querySelector('input[value=local]')).focus();
 }
+// Dialog keys: Esc closes, Enter in a text box presses the main button. The player's shortcuts
+// must not fire while typing in a dialog.
 $('modal').addEventListener('keydown', e => {
-  e.stopPropagation(); // the player's shortcuts must not fire while typing a key
-  if (e.key === 'Escape') { $('modal').hidden = true; $('modal').innerHTML = ''; }
-  if (e.key === 'Enter' && e.target.tagName === 'INPUT') $('vdOk')?.click();
+  e.stopPropagation();
+  if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+  if (e.key === 'Enter' && e.target.tagName === 'INPUT') $('modal').querySelector('[data-primary]')?.click();
 });
 
 // ---------- jobs ----------
@@ -102,6 +97,7 @@ function jobText(j) {
 function renderVocalJobs() {
   const box = $('vocalJobs');
   if (!box) return;
+  renderKaraokeBtn();
   box.innerHTML = '';
   for (const [id, j] of vocalJobs) {
     const el = document.createElement('div');
@@ -128,7 +124,6 @@ const vocalEngineReady = () => settings.vocalEngine === 'local' || (settings.voc
 function removeVocalsFromStream(it) {
   if (!vocalEngineReady()) { showVocalSettings(() => removeVocalsFromStream(it)); return; }
   startDownload(it.url, 'video', { replaceId: it.id, title: it.title, then: 'vocals' });
-  toast(t('vocalsAfterDownload'));
 }
 
 function vocalMenuEntries(it) {
@@ -166,7 +161,6 @@ async function saveMix(it, gains = it.mix || { music: 1, vocals: 0 }) {
   const name = gains.vocals === 0 ? `${it.title} (${t('presetKaraoke')})`
     : gains.music === 0 ? `${it.title} (${t('presetVocals')})`
     : `${it.title} (${t('mixLabel')})`;
-  toast(t('savingMix'));
   const r = await api.saveMix({ music: it.stems.music, vocals: it.stems.vocals, gains, title: name, dialogTitle: t('menuSaveMix') });
   if (r.ok) toast(t('mixSaved', { f: r.path.split(/[\\/]/).pop() }));
   else if (!r.canceled) toast(t('vjError', { e: r.error }));
@@ -206,3 +200,53 @@ $('mixMusic').addEventListener('input', e => setMix({ ...(playingItem()?.mix || 
 for (const input of [$('mixVocals'), $('mixMusic')]) input.addEventListener('change', e => e.target.blur());
 for (const b of document.querySelectorAll('#mixer [data-preset]')) b.addEventListener('click', () => setMix(PRESETS[b.dataset.preset]));
 $('mixSave').onclick = () => { const it = playingItem(); if (it?.stems) saveMix(it); };
+
+// ---------- the karaoke button (Sound group) ----------
+// One button for the whole feature, like the other controls:
+// - a separated video: karaoke on / off (lit when on)
+// - not separated yet: remove the vocals (an online video is downloaded first)
+// - separating: shows the progress around the icon; a click offers to cancel
+function karaokeState() {
+  const it = playingItem();
+  if (!it || !out.loaded || it.missing) return { kind: 'none' };
+  if (it.source === 'stream') return { kind: 'stream', it };
+  const job = jobFor(it);
+  if (job) return { kind: 'job', it, job };
+  if (it.stems) return { kind: 'stems', it };
+  return { kind: 'plain', it };
+}
+function renderKaraokeBtn() {
+  const b = $('karaokeBtn'), s = karaokeState();
+  b.disabled = s.kind === 'none';
+  b.classList.toggle('on', s.kind === 'stems' && !!s.it.stemsOn);
+  b.classList.toggle('busy', s.kind === 'job');
+  const p = s.kind === 'job' ? (s.job.stage === 'processing' && s.job.progress != null ? s.job.progress : s.job.stage === 'downloading' ? 0.95 : 0.05) : 0;
+  b.style.setProperty('--p', Math.round(p * 100) + '%');
+  const tip = s.kind === 'stems' ? t(s.it.stemsOn ? 'menuKaraokeOff' : 'menuKaraokeOn')
+    : s.kind === 'job' ? jobText(s.job)
+    : s.kind === 'stream' ? t('tKaraokeStream')
+    : s.kind === 'plain' ? t('menuRemoveVocals') : t('tKaraoke');
+  if (b.dataset.tip !== undefined) b.dataset.tip = tip; else b.title = tip;
+}
+$('karaokeBtn').onclick = () => {
+  const s = karaokeState();
+  if (s.kind === 'stems') setStemsOn(s.it, !s.it.stemsOn);
+  else if (s.kind === 'plain') removeVocals(s.it);
+  else if (s.kind === 'stream') removeVocalsFromStream(s.it);
+  else if (s.kind === 'job') {
+    const r = $('karaokeBtn').getBoundingClientRect();
+    showMenu(r.left, r.top - 90, [
+      { heading: jobText(s.job) },
+      { label: t('menuCancelVocals'), icon: 'i-x', danger: true, action: () => api.vocalsCancel([...vocalJobs].find(([, j]) => j === s.job)[0]) },
+      { label: t('menuVocalSettings'), icon: 'i-gear', action: () => showVocalSettings() },
+    ]);
+  }
+  renderKaraokeBtn();
+};
+$('karaokeBtn').addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const s = karaokeState();
+  const entries = [{ label: t('menuVocalSettings'), icon: 'i-gear', action: () => showVocalSettings() }];
+  if (s.kind === 'stems') entries.unshift({ label: t('menuSaveMix'), icon: 'i-music', action: () => saveMix(s.it) });
+  showMenu(e.clientX, e.clientY - 80, entries);
+});

@@ -36,24 +36,38 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 ## Features
 
 - **Presenter mode (two screens).** The projector shows a clean, full-screen video: no controls, no pop-ups, and the mouse only shows while you move it there. Your laptop shows the controls and a live preview of the projector.
-- **Player mode (one screen).** The video plays inside the window like a normal player. Full screen with `F` or a double-click, `Esc` to leave. The app picks the mode by itself: Presenter when a second screen is connected, Player when there isn't one or when you open a video from Explorer. The **Player / Presenter** button switches any time.
+- **Player mode (one screen).** The video plays inside the window like a normal player. Full screen with `F` or a double-click, `Esc` to leave. The app picks the mode by itself: Presenter when a second screen is connected, Player when there isn't one or when you open a video from Explorer. **Show on** changes it any time.
 - **Local files.** MP4, MKV, WebM and MOV video. Drag files in or use **Add videos**.
 - **Audio too.** MP3, WAV, M4A/AAC, FLAC, and WhatsApp voice notes (`.opus`/`.ogg`). Audio plays with sound only: the projector stays black.
 - **Vocal remover (karaoke).** Split any song or video into music and vocals, then mix them live while it plays: karaoke, vocals only, or anything in between. Save any mix as an MP3.
 - **YouTube.**
-  - **Stream** plays a link right away without downloading it. Quality drops automatically when the internet is slow, like on YouTube.
+  - **Stream** plays a link right away without downloading it. Quality follows the connection, like on YouTube: it goes up to 1080p when the internet is fast and down when it's slow, without interrupting the picture.
   - **Download** saves the video to your PC as a single MP4 (up to 1080p) so it plays offline, or just the sound as an **MP3**.
   - Streamed something and want to keep it? Use the item's **⋯** menu (or right-click) → **Download video** or **Download as MP3**. The same menu opens the file's folder or the YouTube link.
 - **Show on any screens.** The **Show on** button opens a map of your screens: the projector only, this window, or several screens at once (for example a projector and a TV), all showing the same video in sync with one sound.
-- **Black screen** (`B`) fades the projector to black at any moment.
+- **Standby screen** (`B`): between videos the audience sees black, a picture (your church's logo, a welcome slide) or a short text such as a verse. Choose it in **Settings**.
+- **Fades.** Picture and sound fade in from standby, fade out at the end, and cross through standby from one video to the next. Choose 0.5, 1 or 2 seconds, or turn them off.
+- **Saved lists.** Make a list for each meeting ("Thursday meeting"), fill it from Recents, and reorder it by dragging. **Next** follows the list you started from.
+- **Check before the meeting** (the ✓ button above the list): what's ready on this PC, what still plays from the internet (with **Download all**), and which files are missing.
+- **Start and end points.** Play only part of a video: set them in **Video settings…** or press `I` / `O` while it plays. The seek bar shows the part in gold.
+- **Continue where you stopped.** Videos longer than 3 minutes pick up where they were left, with a **start over** button next to the title.
+- **Volume per video**, for the one clip that's always too quiet.
+- **Subtitles.** A `.srt` or `.vtt` file with the same name as the video is used by itself, or pick one in **Video settings…**. `C` turns them on and off.
+- **Lyrics on screen.** Write a song's lyrics in its **Video settings…**, one slide per paragraph. While it plays, the slides line up under the controls: click one (or `Shift + N` / `Shift + P`) to show it over the video, or full screen over the standby screen for a song with no picture.
+- **Countdown** (`T`): a big "We start in 5:00" on the audience's screen before the meeting.
+- **Phone remote.** Turn it on, scan the QR code with a phone on the same Wi-Fi, and change videos, pause, put up the standby screen or show lyrics while you walk around. No app to install; only phones that scanned the code can connect.
 - **Freeze** (`Z`) holds the picture on the audience's screens while the video keeps running underneath, sound included. Your preview keeps showing the running video, marked *Frozen*.
 - **Frame by frame** (`[` and `]`): one click moves one frame; hold the button to keep stepping.
+- **Always know what the audience sees**: a status next to the title says *On screen*, *Standby*, *Paused*, *Frozen* or *Countdown*, and on which screens.
+- **Thumbnails** in the list, and a picture preview when you hover over the seek bar.
 - **Volume up to 200%**, like VLC, for quiet videos in a big hall.
-- **Aspect ratio** (`A`): 16:9, 4:3, 2.35:1, stretch, zoom and more.
-- **Recents**: your videos stay listed between sessions, with auto-play next, loop, speed control and black-at-end.
-- **Audio output picker** to send the sound to the projector's HDMI or to the hall's speakers.
+- **Playback settings** in one place: speed, aspect ratio (`A`), stream quality, subtitles and the **audio output** (the projector's HDMI or the hall's speakers). Anything that isn't the usual shows as a chip next to the button.
+- **Recents**: your videos stay listed between sessions, with search (`Ctrl + F`), auto-play next, loop and standby-at-end.
+- **Mini player** (`Ctrl + M`): a small bar that stays on top of other programs, for when you present from PowerPoint or a browser too.
+- **Links from WhatsApp.** Copy a YouTube link anywhere, come back to the app, and it offers to play it. `ma3madan://` links open it straight away.
 - **English and Arabic** interface (Arabic is right-to-left).
-- **Light and dark themes** that follow Windows, or pick one with the sun/moon button.
+- **Light and dark themes** that follow Windows, or pick one in **Settings**.
+- **A welcome tour** the first time, and every shortcut one `?` away.
 - **A flexible window.** Resize it or snap it to half the screen. Drag the side panel's edge to make it wider or narrower, or hide it with `Ctrl + B`.
 - **Opens videos from Explorer** and can be set as the default video player.
 
@@ -86,7 +100,7 @@ When a new version is out, an **Update to x.y.z** button appears in the top bar.
 
 1. Connect the projector and press **`Win + P`**, then choose **Extend**. Don't choose Duplicate.
 2. Open the app. It switches to Presenter mode and puts the video on the second screen by itself. To use another screen, or several at once, click **Show on** in the Screen group under the video and pick the screens on the map. Their numbers show on the screens themselves for a moment, so you know which is which.
-3. Optional: under **Audio output**, choose where the sound should come out (for example the projector's HDMI).
+3. Optional: under **Playback** → **Audio output**, choose where the sound should come out (for example the projector's HDMI).
 4. Double-click a video in **Recents** to play it on the projector.
 
 With only one screen (for example, rehearsing on a laptop), the app works in Player mode: the video plays inside the window, and **Full screen** (or `F`, or a double-click) fills the screen.
@@ -97,18 +111,18 @@ With only one screen (for example, rehearsing on a laptop), the app works in Pla
 |---|---|---|
 | Starts | in a few seconds | after the download finishes |
 | Needs internet while playing | yes | no |
-| Quality | adapts to your connection (starts at 720p) | up to 1080p |
+| Quality | follows your connection, up to 1080p | up to 1080p |
 | Best for | a good, steady connection | anything important, or weak Wi-Fi |
 
 Downloads are saved to `Videos\Ma3madan Play` as one ordinary `.mp4` file each, so they play in any other player too.
 
-You can change a stream's quality from the **Quality** menu while it plays. **Auto** lowers it on its own when the connection can't keep up.
+**Auto quality** starts at 720p (or straight at 1080p when the connection was fast lately) and keeps measuring the connection while it plays. When it's fast enough for the next quality up, that quality loads in the background and takes over at the same frame, so the picture never stops. When the connection can't keep up, it steps down. You can also pick a fixed quality under **Playback**.
 
-If YouTube links stop working one day, click **Update yt-dlp**. YouTube changes things from time to time and yt-dlp keeps up with them. Live streams aren't supported.
+yt-dlp keeps up with YouTube's changes and updates itself once a week. If links stop working one day, open **Settings** → **Update yt-dlp**. Live streams aren't supported.
 
 ## Vocal remover
 
-Open a video's or song's **⋯** menu (or right-click it) → **Remove vocals (karaoke)**. The sound is split once into two tracks, music and vocals, saved under `Videos\Ma3madan Play\Separated`. From then on, that item plays with a **mixer**:
+While a song or video plays, click the **microphone** in the Sound group (or use the item's **⋯** menu → **Remove vocals (karaoke)**). The sound is split once into two tracks, music and vocals, saved under `Videos\Ma3madan Play\Separated`; the microphone shows the progress. From then on the microphone turns karaoke on and off, and that item plays with a **mixer** under the controls:
 
 - **Vocals** and **Music** sliders, 0–100%, that you can move live while it plays
 - Presets: **Karaoke** (music only), **Original**, **Vocals only**
@@ -136,20 +150,28 @@ Online, the song's sound is uploaded to MVSEP, separated on their servers, downl
 | `J` `L` | Back / forward 10 s |
 | `↑` `↓` | Volume (up to 200%) |
 | `M` | Mute |
-| `B` | Black screen |
+| `B` | Standby screen |
 | `Z` | Freeze the picture |
+| `T` | Countdown |
+| `C` | Subtitles on / off |
 | `[` `]` | Previous / next frame |
 | `N` / `P` | Next / previous video |
+| `Shift + N` / `Shift + P` | Next / previous lyrics slide |
+| `I` / `O` | Set the start / end point here |
 | `A` | Cycle aspect ratio |
 | `0`–`9` | Jump to 0%–90% |
 | `Home` / `End` | Start / end |
 | `Enter` | Play the selected video |
-| `Shift` + `↑` `↓` | Move the selection in Recents |
+| `Shift` + `↑` `↓` | Move the selection in the list |
 | `Delete` | Remove the selected video from the list |
 | `F` / double-click | Full screen (Player mode) |
-| `Esc` | Leave full screen, or take the video off the laptop's screen |
+| `Esc` | Leave full screen, take the video off the laptop's screen, or hide the lyrics |
 | `Ctrl + B` | Show or hide the side panel |
 | `Ctrl + O` | Add videos |
+| `Ctrl + F` | Search the list |
+| `Ctrl + M` | Mini player |
+| `Ctrl + ,` | Settings |
+| `?` | All shortcuts |
 
 Shortcuts also work while the video has focus.
 
@@ -185,9 +207,11 @@ Other scripts:
 |---|---|
 | `src/main.js` | Electron main process: windows, screens, Player/Presenter modes, theme, settings, Recents, IPC |
 | `src/control.html` · `control.js` · `control.css` | The operator window |
-| `src/output.html` | The video engine (on the projector in Presenter mode, inside the main window in Player mode): playback, Web Audio volume boost, aspect ratio, stream buffering and automatic quality |
+| `src/features.js` | Saved lists, search, the list check, video settings, lyrics, standby, countdown, settings, the phone remote, shortcuts, the welcome tour, copied links, mini mode |
+| `src/output.html` | The video engine (on the projector in Presenter mode, inside the main window in Player mode): playback, fades, standby screen, countdown, lyrics, subtitles, Web Audio volume boost, aspect ratio, stream buffering and automatic quality (two video elements, so a higher quality takes over at the same frame) |
 | `src/youtube.js` | yt-dlp: downloads, and resolving stream formats into a quality ladder |
-| `src/stream-proxy.js` | Local proxy that fetches YouTube streams in chunks, so they aren't throttled to playback speed |
+| `src/stream-proxy.js` | Local proxy that fetches YouTube streams in chunks, so they aren't throttled to playback speed, and measures the connection speed for auto quality |
+| `src/remote.js` · `remote.html` | The phone remote: a small web page on the local network, protected by the key in the QR code |
 | `src/i18n.js` | English and Arabic strings |
 | `build/installer.nsh` | Registers the app under Windows Default apps |
 
@@ -210,7 +234,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 Only files built by this repository's GitHub Actions workflow from its public source code are signed. Each signing request is approved by hand.
 
-**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. Settings and the list of recent videos stay on your computer.
+**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. The phone remote, when you turn it on, is a web page served only on your local network to phones that scanned its code. Settings, lists and the list of recent videos stay on your computer.
 
 ## Third-party software
 
@@ -220,6 +244,7 @@ Only files built by this repository's GitHub Actions workflow from its public so
 - [ONNX Runtime](https://onnxruntime.ai/) 1.22 (MIT) with DirectML, downloaded for the on-PC vocal remover
 - The UVR-MDX-NET Inst HQ 3 model from [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui), downloaded from its official model repository
 - [MVSEP](https://mvsep.com), an online service used only if you choose it, under its own terms
+- [QR Code Generator](https://github.com/kazuhikoarase/qrcode-generator) by Kazuhiko Arase (MIT), bundled for the phone remote's QR code
 
 Only use YouTube content you have the right to show, and follow YouTube's Terms of Service.
 

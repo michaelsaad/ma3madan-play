@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'">
+<meta name="theme-color" content="#0d1424">
+<title>Ma3madan Play — Remote</title>
+<style>
+  :root { --bg: #0b1120; --panel: #141c2e; --panel-2: #1b2539; --line: #26324a; --text: #eef2f8; --muted: #8e9ab0; --accent: #3b82f6; --gold: #f2b84b; --live: #e5484d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, "Segoe UI", Tahoma, sans-serif; }
+  body { padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; min-height: 100vh; user-select: none; }
+  header { display: flex; align-items: center; gap: 10px; }
+  header b { flex: 1; font-size: 15px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: #30a46c; box-shadow: 0 0 0 4px rgba(48,164,108,.2); }
+  .status { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
+  .status.live { background: var(--live); color: #fff; }
+  .status.standby { background: #2b3446; color: #fff; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .title { font-size: 19px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .next { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
+  .bar { height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .times { display: flex; justify-content: space-between; font: 600 12px ui-monospace, Consolas, monospace; color: var(--muted); direction: ltr; }
+  .row { display: flex; align-items: center; justify-content: center; gap: 8px; direction: ltr; }
+  .row button { min-width: 0; width: 54px; padding: 0; flex: none; }
+  button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px; min-height: 56px; min-width: 56px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  button:active { transform: scale(.96); background: var(--line); }
+  button svg { width: 26px; height: 26px; }
+  button.play { width: 78px !important; height: 78px; border-radius: 50%; background: var(--accent); border-color: var(--accent); }
+  button.play svg { width: 38px; height: 38px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .grid button { flex-direction: column; gap: 4px; font-size: 12.5px; min-height: 72px; color: var(--muted); }
+  .grid button svg { color: var(--text); }
+  .grid button.on { background: var(--live); border-color: var(--live); color: #fff; }
+  .grid button.on.freeze { background: #38bdf8; border-color: #38bdf8; color: #04263b; }
+  .grid button.on svg { color: inherit; }
+  .card.vol { flex-direction: row; align-items: center; gap: 12px; direction: ltr; padding: 10px 14px; }
+  .vol button { min-height: 48px; min-width: 48px; border-radius: 14px; }
+  .vol input { flex: 1; accent-color: var(--accent); height: 32px; }
+  .vol span { min-width: 46px; text-align: end; font: 600 13px ui-monospace, Consolas, monospace; color: var(--muted); }
+  h3 { margin: 4px 2px 0; font-size: 14px; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; }
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  li { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+  li:active { background: var(--panel-2); }
+  li.playing { border-color: var(--accent); background: #16274a; }
+  li.missing { opacity: .45; }
+  li .th { width: 72px; height: 40px; border-radius: 8px; background: #000 center/cover no-repeat; flex: none; display: grid; place-items: center; color: var(--muted); }
+  li .th svg { width: 20px; height: 20px; }
+  li .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; }
+  li .d { font: 12px ui-monospace, Consolas, monospace; color: var(--muted); direction: ltr; }
+  .lyrics { display: flex; flex-direction: column; gap: 6px; }
+  .lyrics button { justify-content: flex-start; text-align: start; white-space: pre-line; font-size: 14px; min-height: 48px; padding: 10px 14px; line-height: 1.45; }
+  .lyrics button.on { border-color: var(--gold); background: #2b2412; }
+  .off { color: var(--muted); text-align: center; padding: 40px 10px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z" fill="currentColor"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5v14l10-7zM16 5h3v14h-3z" fill="currentColor"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M19 5v14L9 12zM5 5h3v14H5z" fill="currentColor"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z" fill="currentColor"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M12 5V2l5 4-5 4V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z" fill="currentColor"/></symbol>
+  <symbol id="i-black" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" fill="currentColor"/><path d="M9 20.5h6M12 17v3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-freeze" viewBox="0 0 24 24"><path d="M12 2.5v19M3.8 7.25l16.4 9.5M3.8 16.75l16.4-9.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="17.5" cy="16" r="2.5" fill="currentColor"/></symbol>
+</svg>
+
+<header><span id="dot" class="dot"></span><b id="appName">Ma3madan Play</b><span id="status" class="status"></span></header>
+<div id="offline" class="off" hidden></div>
+
+<section class="card">
+  <div id="title" class="title" dir="auto"></div>
+  <div id="next" class="next" dir="auto"></div>
+  <div class="bar"><i id="fill"></i></div>
+  <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+  <div class="row">
+    <button data-a="prev" aria-label="Previous"><svg><use href="#i-prev"/></svg></button>
+    <button data-a="back" aria-label="Back 10 s"><svg><use href="#i-back"/></svg></button>
+    <button data-a="toggle" class="play" id="playBtn" aria-label="Play"><svg><use href="#i-play"/></svg></button>
+    <button data-a="fwd" aria-label="Forward 10 s"><svg><use href="#i-fwd"/></svg></button>
+    <button data-a="next" aria-label="Next"><svg><use href="#i-next"/></svg></button>
+  </div>
+</section>
+
+<div class="grid">
+  <button data-a="black" id="blackBtn"><svg><use href="#i-black"/></svg><span data-s="standby"></span></button>
+  <button data-a="freeze" id="freezeBtn" class="freeze"><svg><use href="#i-freeze"/></svg><span data-s="freeze"></span></button>
+  <button data-a="stop"><svg><use href="#i-stop"/></svg><span data-s="stop"></span></button>
+</div>
+
+<div class="vol card">
+  <button data-a="mute" id="muteBtn"><svg><use href="#i-vol"/></svg></button>
+  <input id="vol" type="range" min="0" max="200" step="5">
+  <span id="volPct"></span>
+</div>
+
+<section id="lyricsBox" hidden>
+  <h3><span data-s="lyrics"></span><button data-a="lyricsOff" style="min-height:32px;padding:0 10px;font-size:12px" data-s="hide"></button></h3>
+  <div id="lyrics" class="lyrics"></div>
+</section>
+
+<h3><span id="listName"></span><span id="count"></span></h3>
+<ul id="list"></ul>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const key = new URLSearchParams(location.search).get('k');
+  const S = {
+    en: { standby: 'Standby', freeze: 'Freeze', stop: 'Stop', lyrics: 'Lyrics', hide: 'Hide', next: 'Next: ', nothing: 'Nothing playing', live: 'LIVE', standbyOn: 'Standby', paused: 'Paused', off: 'Lost connection to the laptop. Trying again…', videos: '{n} videos', recents: 'Recents' },
+    ar: { standby: 'شاشة الانتظار', freeze: 'تثبيت', stop: 'إيقاف', lyrics: 'الكلمات', hide: 'إخفاء', next: 'التالي: ', nothing: 'لا يوجد تشغيل', live: 'مباشر', standbyOn: 'انتظار', paused: 'متوقف', off: 'انقطع الاتصال باللابتوب. جارٍ إعادة المحاولة…', videos: '{n} فيديو', recents: 'الأخيرة' },
+  };
+  let lang = 'en', st = {}, at = 0;
+  const t = (k, v = {}) => (S[lang][k] || S.en[k] || k).replace(/\{(\w+)\}/g, (_, x) => v[x] ?? '');
+  const fmt = s => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+  async function send(cmd) {
+    try { await fetch('/cmd?k=' + encodeURIComponent(key), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cmd) }); } catch {}
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-a]');
+    if (b) send({ action: b.dataset.a });
+  });
+  let volTimer;
+  $('vol').addEventListener('input', e => { clearTimeout(volTimer); volTimer = setTimeout(() => send({ action: 'volume', v: e.target.value / 100 }), 60); $('volPct').textContent = e.target.value + '%'; });
+
+  function render() {
+    if (st.lang && st.lang !== lang) { lang = st.lang; document.documentElement.lang = lang; document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'; }
+    for (const el of document.querySelectorAll('[data-s]')) el.textContent = t(el.dataset.s);
+    $('appName').textContent = st.appName || 'Ma3madan Play';
+    $('title').textContent = st.title || t('nothing');
+    $('next').textContent = st.next ? t('next') + st.next : '';
+    $('playBtn').querySelector('use').setAttribute('href', st.paused === false ? '#i-pause' : '#i-play');
+    $('blackBtn').classList.toggle('on', !!st.black);
+    $('freezeBtn').classList.toggle('on', !!st.frozen);
+    const status = $('status');
+    status.className = 'status' + (st.loaded && !st.paused && !st.black ? ' live' : st.black ? ' standby' : '');
+    status.textContent = st.loaded && !st.paused && !st.black ? t('live') : st.black ? t('standbyOn') : st.loaded ? t('paused') : '';
+    if (document.activeElement !== $('vol')) { $('vol').value = Math.round((st.volume ?? 1) * 100); $('volPct').textContent = st.muted ? '—' : Math.round((st.volume ?? 1) * 100) + '%'; }
+    $('muteBtn').querySelector('use').setAttribute('href', st.muted ? '#i-mute' : '#i-vol');
+    $('listName').textContent = st.listName || t('recents');
+    $('count').textContent = st.items ? t('videos', { n: st.items.length }) : '';
+    const list = $('list');
+    // Rebuild the list only when it changed (the state arrives several times a second while playing).
+    const listKey = JSON.stringify([st.items, st.playingId]);
+    if (list.dataset.key !== listKey) {
+    list.dataset.key = listKey;
+    list.innerHTML = (st.items || []).map(it => `
+      <li data-id="${esc(it.id)}" class="${it.id === st.playingId ? 'playing' : ''} ${it.missing ? 'missing' : ''}">
+        <span class="th" ${it.thumb ? `style="background-image:url('/thumb/${encodeURIComponent(it.id)}?k=${encodeURIComponent(key)}&v=${esc(it.thumb)}')"` : ''}>${it.thumb ? '' : '<svg><use href="#i-music"/></svg>'}</span>
+        <span class="t" dir="auto">${esc(it.title)}</span><span class="d">${it.duration ? fmt(it.duration) : ''}</span></li>`).join('');
+    for (const li of list.querySelectorAll('li')) li.onclick = () => send({ action: 'play', id: li.dataset.id });
+    }
+    const slides = st.lyrics?.slides || [];
+    $('lyricsBox').hidden = !slides.length;
+    $('lyrics').innerHTML = slides.map((s, i) => `<button data-i="${i}" class="${st.lyrics.current === i ? 'on' : ''}" dir="auto">${esc(s)}</button>`).join('');
+    for (const b of $('lyrics').querySelectorAll('button')) b.onclick = () => send({ action: 'lyric', i: Number(b.dataset.i) });
+    tickTime();
+  }
+  function tickTime() {
+    const now = (st.time || 0) + (st.loaded && !st.paused && !st.buffering ? (Date.now() - at) / 1000 * (st.rate || 1) : 0);
+    const d = st.duration || 0;
+    $('cur').textContent = fmt(Math.min(now, d || now));
+    $('dur').textContent = fmt(d);
+    $('fill').style.width = d ? Math.min(100, now / d * 100) + '%' : '0';
+  }
+  setInterval(tickTime, 250);
+
+  function connect() {
+    const es = new EventSource('/events?k=' + encodeURIComponent(key));
+    es.onmessage = e => { st = JSON.parse(e.data); at = Date.now(); $('dot').classList.add('on'); $('offline').hidden = true; render(); };
+    es.onerror = () => { $('dot').classList.remove('on'); $('offline').hidden = false; $('offline').textContent = t('off'); };
+  }
+  render();
+  connect();
+</script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 const $ = id => document.getElementById(id);
 
-let items = [];            // { id, title, path, source: 'file'|'youtube', url?, duration?, missing? }
+// { id, title, path, source: 'file'|'youtube'|'stream', url?, duration?, missing?, thumbUrl?,
+//   trim?: { start, end }, volume?, subs?, lyrics?, resumeAt? }
+let items = [];
 let selectedId = null;
 let playingId = null;
 let out = { loaded: false, paused: true, time: 0, duration: 0, volume: 1, muted: false, black: true };
@@ -10,7 +12,10 @@ const downloads = new Map(); // id -> { url, title, status, percent, speed, eta,
 
 const MAX_VOLUME = 2;      // 200%, like VLC
 const ASPECTS = ['default', '16:9', '4:3', '16:10', '1:1', '5:4', '2.21:1', '2.35:1', '2.39:1', 'fill', 'crop'];
+const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 let aspect = 'default';
+let rate = 1;
+let sinks = [];            // audio outputs: [{ id, label }]
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const cmd = (type, data = {}) => api.sendCmd({ type, ...data });
@@ -22,47 +27,36 @@ function fmt(s) {
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(sec).padStart(2, '0');
 }
 function baseName(p) { return p.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''); }
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 function aspectLabel(a) {
   return a === 'default' ? t('aspectDefault') : a === 'fill' ? t('aspectFill') : a === 'crop' ? t('aspectCrop') : a;
 }
 
+// Toasts are kept for errors and the few things that finish in the background.
 let toastTimer;
 function toast(msg) {
   const el = $('toast');
   el.textContent = msg; el.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
 // ---------- language ----------
 function setLang(lang) {
   applyLang(lang);
   settings.lang = LANG; api.setSetting('lang', LANG);
-  $('langBtn').title = t('otherLang');
   document.querySelector('.tip')?.classList.remove('show'); // a tooltip in the old language
-  renderTheme();
-  $('aspectSel').innerHTML = ASPECTS.map(a => `<option value="${a}">${escapeHtml(aspectLabel(a))}</option>`).join('');
-  $('aspectSel').value = aspect;
   renderMode(); loadSinks(); renderList(); renderState(); renderDownloads(); renderUpdate(); renderVocalJobs?.();
 }
-$('langBtn').onclick = () => setLang(LANG === 'en' ? 'ar' : 'en');
 
-// ---------- theme: same as Windows → light → dark ----------
+// ---------- theme: same as Windows, light or dark ----------
 const THEMES = ['system', 'light', 'dark'];
-function renderTheme() {
-  const th = THEMES.includes(settings.theme) ? settings.theme : 'system';
-  $('themeBtn').querySelector('use').setAttribute('href', '#i-theme-' + th);
-  $('themeBtn').title = t('theme' + th[0].toUpperCase() + th.slice(1));
-}
-$('themeBtn').onclick = () => {
-  const cur = THEMES.includes(settings.theme) ? settings.theme : 'system';
-  settings.theme = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+function setTheme(th) {
+  settings.theme = THEMES.includes(th) ? th : 'system';
   api.setTheme(settings.theme);
-  renderTheme();
-};
+}
 
 // ---------- side panel: drag the edge to resize, Ctrl+B or the button to hide ----------
-const SIDE_MIN = 260, SIDE_MAX = 560, SIDE_DEFAULT = 400;
+const SIDE_MIN = 260, SIDE_MAX = 560;
 const clampSide = w => Math.max(SIDE_MIN, Math.min(SIDE_MAX, Math.round(w)));
 function applySide() {
   document.body.classList.toggle('side-hidden', !!settings.sidebarHidden);
@@ -114,6 +108,7 @@ function renderMode() {
   $('showOnLabel').textContent = showOnLabel();
   if (document.querySelector('#menu.showon')) renderShowOnMenu();
   sendPlayerRect();
+  renderStatus();
   if (m.mode === 'presenter') startPreview();
 }
 api.onMode(m => { modeState = m; renderMode(); });
@@ -216,22 +211,29 @@ for (const [id, n] of [['frameBackBtn', -1], ['frameFwdBtn', 1]]) {
 }
 
 // Tell the main process where the preview box is, so the video sits exactly on it. The video is a
-// separate layer above this page, so it steps aside while a dialog or the screen map is open, and
-// for audio-only items.
+// separate layer above this page, so it steps aside while a dialog or a menu covers the box, for
+// audio-only items, and while nothing is loaded (the page shows how to start there instead).
 let lastPlayerRect = '';
-const videoCovered = () => !$('modal').hidden || !!document.querySelector('#menu.showon') || (out.loaded && out.audioOnly);
+function menuOverPreview() {
+  const m = document.getElementById('menu');
+  if (!m) return false;
+  const a = m.getBoundingClientRect(), b = document.querySelector('.preview').getBoundingClientRect();
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+const videoCovered = () => !$('modal').hidden || menuOverPreview() || !out.loaded || out.audioOnly;
+function playerRectNow() {
+  const r = document.querySelector('.preview').getBoundingClientRect();
+  return videoCovered() || !r.width ? null : { x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 };
+}
 function sendPlayerRect() {
   if (modeState.mode !== 'player') return;
-  const r = document.querySelector('.preview').getBoundingClientRect();
-  const rect = videoCovered() ? null : { x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 };
+  const rect = playerRectNow();
   lastPlayerRect = JSON.stringify(rect);
   api.playerRect(rect);
 }
 // The box can also move without changing size (language switch, side panel): catch any move.
 setInterval(() => {
-  if (modeState.mode !== 'player' || videoCovered()) return;
-  const r = document.querySelector('.preview').getBoundingClientRect();
-  if (JSON.stringify({ x: r.left + 2, y: r.top + 2, width: r.width - 4, height: r.height - 4 }) !== lastPlayerRect) sendPlayerRect();
+  if (modeState.mode === 'player' && JSON.stringify(playerRectNow()) !== lastPlayerRect) sendPlayerRect();
 }, 200);
 new ResizeObserver(sendPlayerRect).observe(document.querySelector('.preview'));
 window.addEventListener('resize', sendPlayerRect);
@@ -252,32 +254,44 @@ function renderUpdate(progress) {
 }
 api.onUpdateAvailable(info => { update = info; renderUpdate(); });
 
+// ---------- dialogs ----------
+// openModal(html) shows a dialog; Esc, a click on the backdrop and [data-close] buttons close it.
+function openModal(html, { cls = '', onClose } = {}) {
+  const box = $('modal');
+  box.innerHTML = `<div class="modal-box ${cls}" role="dialog" aria-modal="true">${html}</div>`;
+  box.hidden = false;
+  box._onClose = onClose || null;
+  box.onmousedown = e => { if (e.target === box) closeModal(); };
+  for (const b of box.querySelectorAll('[data-close]')) b.onclick = closeModal;
+  return box.firstElementChild;
+}
+function closeModal() {
+  const box = $('modal');
+  if (box.hidden) return;
+  const fn = box._onClose;
+  box.hidden = true; box.innerHTML = ''; box._onClose = null;
+  fn?.();
+}
+
 // ---------- About (the ⓘ next to the name) ----------
 const REPO_URL = 'https://github.com/michaelsaad/ma3madan-video-presenter';
 async function showAbout() {
   const version = await api.appVersion();
-  const box = $('modal');
-  box.innerHTML = `
-    <div class="modal-box about" role="dialog" aria-modal="true">
+  openModal(`
       <img src="assets/app-128.png" alt="" class="about-icon">
       <h2>${escapeHtml(t('appName'))}</h2>
       <div class="muted" dir="ltr">${escapeHtml(t('versionN', { v: version }))}</div>
       <p>${escapeHtml(t('aboutName'))}</p>
       <div class="about-features">
         <p>${escapeHtml(t('aboutText'))}</p>
-        <ul>${['aboutF1', 'aboutF2', 'aboutF3'].map(k => `<li>${escapeHtml(t(k))}</li>`).join('')}</ul>
+        <ul>${['aboutF1', 'aboutF4', 'aboutF2', 'aboutF3'].map(k => `<li>${escapeHtml(t(k))}</li>`).join('')}</ul>
       </div>
       <div class="about-actions">
         <button id="aboutGithub" class="primary"><svg><use href="#i-github"/></svg><span>${escapeHtml(t('aboutGithub'))}</span></button>
         <button id="aboutCheck"><svg><use href="#i-download"/></svg><span>${escapeHtml(t('checkUpdates'))}</span></button>
       </div>
       <div id="aboutStatus" class="muted small" aria-live="polite"></div>
-      <div class="modal-actions"><button id="aboutClose" class="ghost">${escapeHtml(t('close'))}</button></div>
-    </div>`;
-  box.hidden = false;
-  const close = () => { box.hidden = true; box.innerHTML = ''; };
-  box.onmousedown = e => { if (e.target === box) close(); };
-  $('aboutClose').onclick = close;
+      <div class="modal-actions"><button id="aboutClose" class="ghost" data-close>${escapeHtml(t('close'))}</button></div>`, { cls: 'about' });
   $('aboutGithub').onclick = () => api.openExternal(REPO_URL);
   $('aboutCheck').onclick = async () => {
     const b = $('aboutCheck'), status = $('aboutStatus');
@@ -302,34 +316,65 @@ $('updateBtn').onclick = async () => {
 };
 
 // ---------- playlist ----------
-const save = () => api.savePlaylist(items);
+const save = () => { api.savePlaylist(items); pushRemote(); };
 
 function addPaths(paths) {
-  const existing = new Set(items.map(i => i.path.toLowerCase()));
-  let added = 0;
+  const existing = new Map(items.map(i => [i.path.toLowerCase(), i]));
+  const added = [];
   for (const p of paths) {
-    if (existing.has(p.toLowerCase())) continue;
-    items.push({ id: uid(), title: baseName(p), path: p, source: 'file' });
-    added++;
+    const found = existing.get(p.toLowerCase());
+    if (found) { added.push(found); continue; }
+    const it = { id: uid(), title: baseName(p), path: p, source: 'file' };
+    items.push(it); existing.set(p.toLowerCase(), it);
+    added.push(it);
   }
-  if (added) { save(); renderList(); probeDurations(); toast(t('added', { n: added })); }
+  if (added.length) {
+    addToActiveList(added.map(x => x.id)); // features.js
+    save(); renderList(); probeDurations();
+  }
+  return added;
+}
+
+const AUDIO_RE = /\.(mp3|m4a|wav|aac|ogg|oga|opus|flac|weba)$/i;
+const isAudio = it => it.source !== 'stream' && AUDIO_RE.test(it.path);
+const lyricSlides = it => (it?.lyrics || '').replace(/\r/g, '').split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+
+function itemSub(it) {
+  if (it.loading) return escapeHtml(t('loading'));
+  if (it.missing) return escapeHtml(t('fileMissing'));
+  const kind = it.source === 'stream' ? t('streamOnline') : it.source === 'youtube' ? t('youtube') : '';
+  const bits = [kind, isAudio(it) ? t('audioLabel') : '', it.stems && it.stemsOn ? t('karaokeLabel') : ''].filter(Boolean).map(escapeHtml);
+  const tags = [];
+  if (it.trim && (it.trim.start || it.trim.end)) tags.push(`<i class="tag" title="${escapeHtml(t('trimmed'))}" dir="ltr">${fmt(it.trim.start || 0)}–${it.trim.end ? fmt(it.trim.end) : fmt(it.duration)}</i>`);
+  if (it.volume && it.volume !== 1) tags.push(`<i class="tag" dir="ltr">${Math.round(it.volume * 100)}%</i>`);
+  if (lyricSlides(it).length) tags.push(`<i class="tag ico" title="${escapeHtml(t('lyrics'))}"><svg><use href="#i-lyrics"/></svg></i>`);
+  if (it.subs) tags.push(`<i class="tag ico" title="${escapeHtml(t('subtitles'))}"><svg><use href="#i-cc"/></svg></i>`);
+  return bits.join(' · ') + (tags.length ? ' ' + tags.join('') : '');
+}
+
+function thumbHtml(it) {
+  if (it.thumbUrl) return `<span class="item-thumb" style="background-image:url('${escapeHtml(it.thumbUrl)}')"></span>`;
+  const icon = isAudio(it) ? 'i-music' : it.source === 'stream' ? 'i-yt' : 'i-play';
+  return `<span class="item-thumb empty"><svg><use href="#${icon}"/></svg></span>`;
 }
 
 function renderList() {
   const ol = $('playlist');
+  const all = viewItems(); // features.js: the open list, or Recents
+  const q = (searchQuery || '').trim().toLowerCase();
+  const shown = q ? all.filter(it => it.title.toLowerCase().includes(q)) : all;
   ol.innerHTML = '';
-  items.forEach((it, i) => {
+  shown.forEach(it => {
     const li = document.createElement('li');
+    const i = all.indexOf(it);
     li.className = 'item' + (it.id === selectedId ? ' selected' : '') + (it.id === playingId ? ' playing' : '') + (it.missing ? ' missing' : '');
-    li.draggable = true;
+    li.draggable = !q;
     li.dataset.id = it.id;
-    const idx = it.id === playingId ? '<svg><use href="#i-play"/></svg>' : (i + 1);
-    const kind = it.source === 'stream' ? t('streamOnline') : it.source === 'youtube' ? t('youtube') : '';
-    const sub = it.loading ? t('loading') : it.missing ? t('fileMissing')
-      : [kind, isAudio(it) ? t('audioLabel') : '', it.stems && it.stemsOn ? t('karaokeLabel') : ''].filter(Boolean).join(' · ');
+    const idx = it.id === playingId ? `<svg><use href="#${out.paused ? 'i-pause' : 'i-play'}"/></svg>` : (i + 1);
     li.innerHTML = `
       <span class="item-idx">${idx}</span>
-      <span style="min-width:0"><div class="item-title" dir="auto" title="${escapeHtml(it.path)}">${escapeHtml(it.title)}</div>${sub ? `<div class="item-sub">${sub}</div>` : ''}</span>
+      ${thumbHtml(it)}
+      <span class="item-main"><div class="item-title" dir="auto" title="${escapeHtml(it.source === 'stream' ? it.url : it.path)}">${escapeHtml(it.title)}</div><div class="item-sub">${itemSub(it)}</div></span>
       <span class="item-dur" dir="ltr">${it.duration ? fmt(it.duration) : ''}</span>
       <button class="item-more" title="${escapeHtml(t('more'))}"><svg><use href="#i-more"/></svg></button>`;
     li.addEventListener('click', e => {
@@ -356,33 +401,34 @@ function renderList() {
       li.classList.remove('drag-over');
       if (!from || from === it.id) return;
       e.preventDefault(); e.stopPropagation();
-      const moving = items.find(x => x.id === from);
-      items = items.filter(x => x.id !== from);
-      items.splice(items.findIndex(x => x.id === it.id), 0, moving);
-      save(); renderList();
+      moveItem(from, it.id); // features.js: within the open list, or Recents
+      renderList();
     });
     ol.appendChild(li);
   });
-  $('emptyList').style.display = items.length ? 'none' : 'block';
-  $('listCount').textContent = items.length ? (items.length === 1 ? t('videoOne') : t('videosCount', { n: items.length })) : '';
+  $('emptyList').style.display = shown.length ? 'none' : '';
+  $('emptyListText').textContent = q ? t('noMatches') : activeList() ? t('emptyListList') : t('emptyList');
+  $('listCount').textContent = all.length ? (all.length === 1 ? t('videoOne') : t('videosCount', { n: all.length })) : '';
   renderNow();
+  renderEmptyState();
+  renderListHead(); // features.js
+  pushRemote();
 }
 
-const AUDIO_RE = /\.(mp3|m4a|wav|aac|ogg|oga|opus|flac|weba)$/i;
-const isAudio = it => it.source !== 'stream' && AUDIO_RE.test(it.path);
-
-// ---------- pop-up menu (playlist items, Download button) ----------
-// entries: [{ label, icon?, action, danger? }] with '-' for a divider.
-function showMenu(x, y, entries) {
+// ---------- pop-up menu (playlist items, Download button, lists) ----------
+// entries: [{ label, icon?, action, danger?, checked?, hint? }], '-' for a divider and
+// { heading } for a small title.
+function showMenu(x, y, entries, { cls = '' } = {}) {
   closeMenu();
   const menu = document.createElement('div');
-  menu.className = 'menu';
+  menu.className = 'menu ' + cls;
   menu.id = 'menu';
   for (const e of entries) {
-    if (e === '-') { menu.appendChild(Object.assign(document.createElement('hr'), {})); continue; }
+    if (e === '-') { menu.appendChild(document.createElement('hr')); continue; }
+    if (e.heading) { const h = document.createElement('div'); h.className = 'menu-head'; h.textContent = e.heading; menu.appendChild(h); continue; }
     const b = document.createElement('button');
-    b.className = e.danger ? 'danger' : '';
-    b.innerHTML = `${e.icon ? `<svg><use href="#${e.icon}"/></svg>` : '<i></i>'}<span>${escapeHtml(e.label)}</span>`;
+    b.className = (e.danger ? 'danger' : '') + (e.checked ? ' checked' : '');
+    b.innerHTML = `${e.icon ? `<svg><use href="#${e.icon}"/></svg>` : '<i></i>'}<span>${escapeHtml(e.label)}</span>${e.hint ? `<kbd>${escapeHtml(e.hint)}</kbd>` : ''}`;
     b.onclick = () => { closeMenu(); e.action(); };
     menu.appendChild(b);
   }
@@ -391,26 +437,33 @@ function showMenu(x, y, entries) {
   menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
   menu.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
   menu.querySelector('button')?.focus();
+  sendPlayerRect();
 }
 function closeMenu() {
   const menu = document.getElementById('menu');
   if (!menu) return;
   menu.remove();
-  if (menu.classList.contains('showon')) sendPlayerRect();
+  sendPlayerRect();
 }
 document.addEventListener('mousedown', e => { if (!e.target.closest('#menu')) closeMenu(); });
 window.addEventListener('blur', closeMenu);
 window.addEventListener('resize', closeMenu);
 
 function showItemMenu(it, x, y) {
-  const entries = [{ label: t('menuPlay'), icon: 'i-play', action: () => playItem(it) }, '-'];
+  const entries = [{ label: t('menuPlay'), icon: 'i-play', action: () => playItem(it) },
+    { label: t('menuItemSettings'), icon: 'i-sliders', action: () => showItemSettings(it) }];
+  if (it.id === playingId && out.loaded) {
+    entries.push({ label: t('menuStartHere'), icon: 'i-frame-fwd', hint: 'I', action: () => setTrimHere('start') },
+      { label: t('menuEndHere'), icon: 'i-frame-back', hint: 'O', action: () => setTrimHere('end') });
+  }
+  entries.push('-', ...listMenuEntries(it)); // features.js
   if (it.source === 'stream') {
-    entries.push(
+    entries.push('-',
       { label: t('menuDownloadVideo'), icon: 'i-download', action: () => startDownload(it.url, 'video', { replaceId: it.id, title: it.title }) },
       { label: t('menuDownloadMp3'), icon: 'i-music', action: () => startDownload(it.url, 'mp3', { afterId: it.id, title: it.title }) },
       { label: t('menuOpenLink'), icon: 'i-yt', action: () => api.openExternal(it.url) });
   } else {
-    entries.push({ label: t('menuShowFile'), icon: 'i-folder', action: () => api.showInFolder(it.path) });
+    entries.push('-', { label: t('menuShowFile'), icon: 'i-folder', action: () => api.showInFolder(it.path) });
     if (it.url) {
       if (!isAudio(it)) entries.push({ label: t('menuDownloadMp3'), icon: 'i-music', action: () => startDownload(it.url, 'mp3', { afterId: it.id, title: it.title }) });
       entries.push({ label: t('menuOpenLink'), icon: 'i-yt', action: () => api.openExternal(it.url) });
@@ -423,18 +476,22 @@ function showItemMenu(it, x, y) {
 
 function removeItem(id) {
   items = items.filter(x => x.id !== id);
+  forgetInLists(id); // features.js
+  api.thumbDelete(id);
   if (selectedId === id) selectedId = null;
   save(); renderList();
 }
 
-// Read durations one at a time with a hidden <video>.
+// Read durations (and make thumbnails) one at a time with a hidden <video>.
 let probing = false;
 async function probeDurations() {
   if (probing) return;
   probing = true;
   const probe = $('probe');
-  for (const it of items) {
-    if (it.duration || it.missing || it.source === 'stream') continue;
+  for (const it of [...items]) {
+    if (it.missing || it.source === 'stream') continue;
+    const needThumb = !it.thumbUrl && !isAudio(it);
+    if (it.duration && !needThumb) continue;
     probe.src = await api.fileUrl(it.path);
     const d = await new Promise(res => {
       const done = v => { probe.onloadedmetadata = probe.onerror = null; res(v); };
@@ -442,21 +499,67 @@ async function probeDurations() {
       probe.onerror = () => done(0);
       setTimeout(() => done(0), 8000);
     });
-    if (d && isFinite(d)) { it.duration = d; renderList(); }
+    if (d && isFinite(d) && !it.duration) { it.duration = d; renderList(); }
+    if (needThumb && d && probe.videoWidth) await makeThumb(it, probe, d);
   }
   probe.removeAttribute('src'); probe.load();
   probing = false;
   save();
 }
+// A frame a little way in (the very first frame is often black).
+async function makeThumb(it, video, duration) {
+  const at = Math.min(duration * 0.12, 25);
+  const ok = await new Promise(res => {
+    const done = v => { video.onseeked = video.onerror = null; res(v); };
+    video.onseeked = () => done(true);
+    video.onerror = () => done(false);
+    video.currentTime = at;
+    setTimeout(() => done(false), 6000);
+  });
+  if (!ok || !video.videoWidth) return;
+  const c = document.createElement('canvas');
+  c.width = 192; c.height = Math.round(192 * video.videoHeight / video.videoWidth);
+  c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.8));
+  if (!blob) return;
+  it.thumbUrl = await api.thumbSave(it.id, new Uint8Array(await blob.arrayBuffer()));
+  renderList();
+}
 
 // ---------- playback ----------
 let streamRetried = null;  // item id already re-resolved after a playback error
-async function playItem(it, { autoplay = true, force = false, startAt = 0 } = {}) {
+let playingListId = null;  // the list the playing video was started from (Next follows it)
+let resumedFrom = null;    // { id, at } when the last start picked up where it was left
+const srtToVtt = text => (/^\uFEFF?WEBVTT/.test(text) ? text
+  : 'WEBVTT\n\n' + text.replace(/\r/g, '').replace(/^\uFEFF/, '').replace(/(\d\d:\d\d:\d\d),(\d{3})/g, '$1.$2'));
+
+const RESUME_MIN_DURATION = 180; // only longer videos pick up where they were left
+function canResume(it) { return settings.resume !== false && (it.duration || 0) >= RESUME_MIN_DURATION; }
+// Remember where the playing video is, so it can continue there next time. True when it changed.
+function rememberPosition() {
+  const it = items.find(x => x.id === playingId);
+  if (!it || !out.loaded || !canResume(it)) return false;
+  const start = it.trim?.start || 0, end = it.trim?.end || it.duration || 0;
+  const at = out.time;
+  const keep = at > start + 15 && (!end || at < end - 15) && !out.ended;
+  const next = keep ? Math.floor(at) : 0;
+  if ((it.resumeAt || 0) === next) return false;
+  it.resumeAt = next;
+  return true;
+}
+setInterval(() => { if (out.loaded && !out.paused && rememberPosition()) api.savePlaylist(items); }, 15000);
+window.addEventListener('beforeunload', () => { rememberPosition(); api.savePlaylist(items); });
+
+async function playItem(it, { autoplay = true, force = false, startAt = null } = {}) {
   if (!it) return;
   if (it.missing) { toast(t('fileMissing')); return; }
   if (it.loading) return;
-  playingId = it.id; selectedId = it.id;
+  if (playingId && playingId !== it.id && rememberPosition()) save();
+  const listCtx = activeList()?.itemIds.includes(it.id) ? activeList().id : null;
+  playingId = it.id; selectedId = it.id; playingListId = listCtx;
   if (!force) streamRetried = null;
+  resumedFrom = null;
+  if (startAt == null && canResume(it) && it.resumeAt) { startAt = it.resumeAt; resumedFrom = { id: it.id, at: it.resumeAt }; }
   let src;
   if (it.source === 'stream') {
     it.loading = true; renderList();
@@ -464,8 +567,9 @@ async function playItem(it, { autoplay = true, force = false, startAt = 0 } = {}
     it.loading = false;
     if (!r.ok) { renderList(); toast(r.error === 'LIVE' ? t('liveNotSupported') : t('streamFailed', { e: r.error })); return; }
     if (it.title !== r.title || it.duration !== r.duration) { it.title = r.title; it.duration = r.duration; save(); }
+    if (!it.thumbUrl && r.thumbnail) api.thumbFetch(it.id, r.thumbnail).then(u => { if (u) { it.thumbUrl = u; renderList(); } });
     if (playingId !== it.id) return; // something else was started meanwhile
-    src = { path: it.path, ladder: r.ladder, quality: settings.streamQuality || 'auto' };
+    src = { path: it.path, ladder: r.ladder, quality: settings.streamQuality || 'auto', speed: await api.streamSpeed() };
   } else {
     src = { path: it.path, url: await api.fileUrl(it.path), audioUrl: it.audioPath ? await api.fileUrl(it.audioPath) : null };
     if (it.stems && it.stemsOn) {
@@ -473,28 +577,42 @@ async function playItem(it, { autoplay = true, force = false, startAt = 0 } = {}
       src.stems = { music: await api.fileUrl(it.stems.music), vocals: await api.fileUrl(it.stems.vocals) };
       src.mix = it.mix || { music: 1, vocals: 0 };
     }
+    // Subtitles: the file chosen for this video, or a .srt/.vtt with the same name next to it.
+    const subsPath = it.subs === false || isAudio(it) ? null : it.subs || await api.findSubs(it.path);
+    const text = subsPath ? await api.readSubs(subsPath) : null;
+    if (text) src.subs = srtToVtt(text);
+    if (playingId !== it.id) return;
   }
-  cmd('load', { ...src, audio: isAudio(it), autoplay, startAt, volume: settings.volume ?? 1, muted: !!settings.muted });
-  cmd('rate', { r: parseFloat($('rateSel').value) });
+  cmd('lyrics', { text: null });
+  currentLyric = -1; // features.js
+  cmd('load', { ...src, audio: isAudio(it), autoplay, startAt, trim: it.trim || null, itemVolume: it.volume || 1, volume: settings.volume ?? 1, muted: !!settings.muted });
+  cmd('rate', { r: rate });
   cmd('loop', { on: $('loopChk').checked });
+  cmd('subs', { on: settings.subsOn !== false });
   renderList();
+  renderResume();
 }
 
-function indexOfPlaying() { return items.findIndex(x => x.id === playingId); }
+// The order Next and Previous follow: the list the video was started from, or Recents.
+function queueItems() {
+  const l = playingListId && lists.find(x => x.id === playingListId);
+  return l ? l.itemIds.map(id => items.find(x => x.id === id)).filter(Boolean) : items;
+}
 function nextItem() {
-  const i = indexOfPlaying();
-  const n = items.slice(i + 1).find(x => !x.missing);
+  const q = queueItems(), i = q.findIndex(x => x.id === playingId);
+  const n = q.slice(i + 1).find(x => !x.missing);
   if (n) playItem(n); else toast(t('lastVideo'));
 }
 function prevItem() {
-  const i = indexOfPlaying();
-  if (out.time > 3 && i >= 0) { cmd('seek', { t: 0 }); return; }
-  const p = items.slice(0, Math.max(i, 0)).reverse().find(x => !x.missing);
-  if (p) playItem(p); else cmd('seek', { t: 0 });
+  const q = queueItems(), i = q.findIndex(x => x.id === playingId);
+  const start = out.trim?.start || 0;
+  if (out.time - start > 3 && i >= 0) { cmd('seek', { t: start }); return; }
+  const p = q.slice(0, Math.max(i, 0)).reverse().find(x => !x.missing);
+  if (p) playItem(p); else cmd('seek', { t: start });
 }
 function togglePlay() {
   if (!out.loaded) {
-    const it = items.find(x => x.id === selectedId) || items.find(x => !x.missing);
+    const it = items.find(x => x.id === selectedId) || viewItems().find(x => !x.missing);
     if (it) playItem(it); else toast(t('addFirst'));
     return;
   }
@@ -512,11 +630,35 @@ function toggleMute() {
   settings.muted = !out.muted; api.setSetting('muted', settings.muted);
   cmd('mute', { m: settings.muted });
 }
-function setAspect(a, announce) {
+function setAspect(a) {
   aspect = a;
-  $('aspectSel').value = a;
   cmd('aspect', { mode: a });
-  if (announce) toast(t('aspectToast', { a: aspectLabel(a) }));
+  renderChips();
+}
+function setRate(r) {
+  rate = r;
+  cmd('rate', { r });
+  renderChips();
+}
+function setSubsOn(on) {
+  settings.subsOn = on; api.setSetting('subsOn', on);
+  cmd('subs', { on });
+}
+
+// Start and end points for the playing video ("I" and "O", like video editors).
+function setTrimHere(which) {
+  const it = items.find(x => x.id === playingId);
+  if (!it || !out.loaded) return;
+  const trim = { start: it.trim?.start || 0, end: it.trim?.end || 0 };
+  const at = Math.round(out.time * 10) / 10;
+  if (which === 'start') { trim.start = at; if (trim.end && trim.end <= at) trim.end = 0; }
+  else { trim.end = at; if (trim.start >= at) trim.start = 0; }
+  setTrim(it, trim);
+}
+function setTrim(it, trim) {
+  it.trim = trim && (trim.start || trim.end) ? { start: trim.start || 0, end: trim.end || 0 } : null;
+  if (it.id === playingId && out.loaded) cmd('trim', it.trim || { start: 0, end: 0 });
+  save(); renderList();
 }
 
 // Swap a button's icon in place. Rebuilding the button's contents on every state update (4× a second
@@ -568,16 +710,73 @@ $('nowTitle').addEventListener('mouseleave', () => {
 });
 window.addEventListener('resize', () => { const box = $('nowTitle'), s = box.firstElementChild; box.classList.toggle('overflowing', s.scrollWidth > box.clientWidth + 1); });
 
+function nextUp() {
+  const q = queueItems(), i = q.findIndex(x => x.id === playingId);
+  return i >= 0 ? q.slice(i + 1).find(x => !x.missing) : null;
+}
 function renderNow() {
   const it = items.find(x => x.id === playingId);
   setNowTitle(out.loaded && it ? it.title : t('nothingPlaying'));
-  const i = indexOfPlaying();
-  const n = i >= 0 ? items.slice(i + 1).find(x => !x.missing) : null;
+  const n = nextUp();
   // <bdi> keeps an Arabic (or mixed) title from flipping the "Next:" label around it.
-  $('nextTitle').innerHTML = (out.buffering || it?.loading) ? escapeHtml(t('loading')) : (n ? `<span>${escapeHtml(t('next'))}</span><bdi>${escapeHtml(n.title)}</bdi>` : '');
+  const html = (out.buffering || it?.loading) ? escapeHtml(t('loading'))
+    : (n ? `<span>${escapeHtml(t('next'))}</span>${n.thumbUrl ? `<i class="next-thumb" style="background-image:url('${escapeHtml(n.thumbUrl)}')"></i>` : ''}<bdi>${escapeHtml(n.title)}</bdi>` : '');
+  if ($('nextTitle').innerHTML !== html) $('nextTitle').innerHTML = html;
 }
 
-let lastAudioOnly = false;
+// "Resumed from 12:30 · Start over" next to the title, instead of a toast.
+let resumeTimer;
+function renderResume() {
+  const chip = $('resumeChip');
+  clearTimeout(resumeTimer);
+  chip.hidden = !(resumedFrom && resumedFrom.id === playingId);
+  if (chip.hidden) return;
+  chip.querySelector('span').textContent = t('resumedFrom', { t: fmt(resumedFrom.at) });
+  resumeTimer = setTimeout(() => { resumedFrom = null; chip.hidden = true; }, 12000);
+}
+$('resumeChip').onclick = () => {
+  const it = items.find(x => x.id === playingId);
+  cmd('seek', { t: it?.trim?.start || 0 });
+  if (it) { it.resumeAt = 0; save(); }
+  resumedFrom = null; renderResume();
+};
+
+// What the audience sees right now, in a word, next to the title.
+function renderStatus() {
+  const pill = $('statusPill');
+  let cls, text;
+  const where = modeState.mode === 'presenter' ? showOnLabel() : '';
+  if (out.countdown) { cls = 'cd'; text = t('stCountdown', { t: fmt(Math.ceil((out.countdown.until - Date.now()) / 1000)) }); }
+  else if (!out.loaded) { cls = 'idle'; text = t('stStandby'); }
+  else if (out.buffering) { cls = 'wait'; text = t('loading'); }
+  else if (out.frozen) { cls = 'frozen'; text = t('stFrozen'); }
+  else if (out.lyrics && (out.black || out.audioOnly)) { cls = 'lyr'; text = t('stLyrics'); }
+  else if (out.black && !out.audioOnly) { cls = 'standby'; text = t('stStandby'); }
+  else if (out.ended) { cls = 'idle'; text = t('stEnded'); }
+  else if (out.paused) { cls = 'paused'; text = t('stPaused'); }
+  else { cls = 'live'; text = out.audioOnly ? t('stAudio') : t('stLive'); }
+  pill.className = 'status-pill ' + cls;
+  const label = where ? `${text} · ${where}` : text;
+  if (pill.querySelector('span').textContent !== label) pill.querySelector('span').textContent = label;
+  if (!pill.dataset.tip) pill.title = t('tStatus');
+}
+setInterval(() => { if (out.countdown) renderStatus(); }, 500);
+
+// What the preview box shows while nothing is playing: how to start.
+function renderEmptyState() {
+  const box = $('emptyState');
+  box.hidden = out.loaded;
+  if (out.loaded) return;
+  const first = items.find(x => x.id === selectedId && !x.missing) || viewItems().find(x => !x.missing);
+  $('esTitle').textContent = first ? t('esReadyTitle') : t('esStartTitle');
+  $('esText').textContent = first ? t('esReadyText', { t: first.title }) : t('esStartText');
+  $('esPaste').hidden = !!first;
+  $('esAdd').hidden = !!first;
+}
+$('esAdd').onclick = () => $('addFilesBtn').click();
+$('esPaste').onclick = () => { if (settings.sidebarHidden) toggleSide(); $('ytUrl').focus(); };
+
+let lastAudioOnly = false, lastLoaded = false;
 function renderState() {
   setIcon($('playBtn'), out.paused ? 'i-play' : 'i-pause');
   if (!seeking) {
@@ -585,41 +784,117 @@ function renderState() {
     $('tCur').textContent = fmt(out.time);
   }
   setFill($('seek'));
+  renderTrimMarks();
   $('tDur').textContent = fmt(out.duration);
   renderVolume(out.volume, out.muted);
-  renderQuality();
-  $('blackBtn').classList.toggle('on', out.black);
+  $('blackBtn').classList.toggle('on', !!out.black && !out.audioOnly);
   $('freezeBtn').classList.toggle('on', !!out.frozen);
+  $('countdownBtn').classList.toggle('on', !!out.countdown);
   $('frozenBadge').hidden = !out.frozen;
 
   document.querySelector('.preview').classList.toggle('live', out.loaded && !out.paused && (out.audioOnly || !out.black));
   $('audioBadge').hidden = !(out.loaded && out.audioOnly);
-  if (out.audioOnly !== lastAudioOnly) { lastAudioOnly = out.audioOnly; sendPlayerRect(); }
+  if (!!out.audioOnly !== lastAudioOnly || out.loaded !== lastLoaded) {
+    lastAudioOnly = !!out.audioOnly; lastLoaded = out.loaded;
+    sendPlayerRect(); renderEmptyState();
+  }
   renderMixer(); // vocals-ui.js
+  renderKaraokeBtn(); // vocals-ui.js
+  renderLyricsBar(); // features.js
   renderNow();
+  renderStatus();
+  renderChips();
+  if (document.querySelector('#menu.playset')) renderPlaySettings();
+  const idx = document.querySelector('.item.playing .item-idx use');
+  if (idx) idx.setAttribute('href', out.paused ? '#i-pause' : '#i-play');
+  pushRemote();
 }
 
-// Stream quality picker; only shown while a YouTube stream is on screen.
-let qualityKey = '';
-function renderQuality() {
-  const field = $('qualityField'), sel = $('qualitySel');
-  field.style.display = out.loaded && out.qualities ? '' : 'none';
-  if (!out.qualities) return;
-  const key = [LANG, out.autoQuality, out.quality, ...out.qualities].join('|');
-  if (key === qualityKey || document.activeElement === sel) return;
-  qualityKey = key;
-  sel.innerHTML = `<option value="auto">${escapeHtml(t('qualityAuto'))}${out.autoQuality ? ' (' + out.quality + ')' : ''}</option>`
-    + out.qualities.map(q => `<option value="${q}">${q}</option>`).join('');
-  sel.value = out.autoQuality ? 'auto' : out.quality;
+// The seek bar dims what lies outside the start and end points.
+function renderTrimMarks() {
+  let mask = document.querySelector('.trim-mask');
+  if (!mask) { mask = document.createElement('div'); mask.className = 'trim-mask'; document.querySelector('.seek-track').prepend(mask); }
+  const d = out.duration, tr = out.trim || {};
+  const on = !!(d && (tr.start || tr.end));
+  mask.hidden = !on;
+  if (!on) return;
+  mask.style.setProperty('--a', (tr.start / d) * 100 + '%');
+  mask.style.setProperty('--b', (Math.min(tr.end || d, d) / d) * 100 + '%');
 }
-$('qualitySel').addEventListener('change', e => {
-  settings.streamQuality = e.target.value; api.setSetting('streamQuality', e.target.value);
-  cmd('quality', { q: e.target.value });
-  e.target.blur();
-});
+
+// ---------- playback settings: one popover instead of four dropdowns ----------
+// Only what differs from the usual shows as a chip next to the button.
+function renderChips() {
+  const chips = [];
+  if (rate !== 1) chips.push({ k: 'rate', icon: 'i-speed', text: rate + '×' });
+  if (aspect !== 'default') chips.push({ k: 'aspect', icon: 'i-aspect', text: aspectLabel(aspect) });
+  if (out.loaded && out.qualities) {
+    const q = out.upgrading ? `${out.quality} → ${out.upgrading}` : out.quality;
+    chips.push({ k: 'quality', icon: 'i-hd', text: out.autoQuality ? `${t('qualityAuto')} · ${q}` : q, title: out.speedMbps ? t('speedNow', { n: out.speedMbps }) : '' });
+  }
+  if (out.loaded && out.subs) chips.push({ k: 'subs', icon: 'i-cc', text: out.subsOn ? t('subsOnShort') : t('subsOffShort'), off: !out.subsOn, title: t('tSubs') });
+  const sink = sinks.find(s => s.id === settings.sinkId);
+  if (sink) chips.push({ k: 'sink', icon: 'i-speaker', text: sink.label });
+  const box = $('activeChips');
+  const html = chips.map(c => `<button class="chip ${c.off ? 'off' : ''}" data-k="${c.k}" ${c.title ? `title="${escapeHtml(c.title)}"` : ''}><svg><use href="#${c.icon}"/></svg><span dir="auto">${escapeHtml(c.text)}</span></button>`).join('');
+  if (box.dataset.html !== html) {
+    box.dataset.html = html;
+    box.innerHTML = html;
+    for (const b of box.querySelectorAll('.chip')) b.onclick = () => (b.dataset.k === 'subs' ? setSubsOn(!out.subsOn) : openPlaySettings());
+  }
+}
+function openPlaySettings() {
+  if (document.querySelector('#menu.playset')) { closeMenu(); return; }
+  closeMenu();
+  const menu = document.createElement('div');
+  menu.className = 'menu playset';
+  menu.id = 'menu';
+  document.body.appendChild(menu);
+  renderPlaySettings();
+  placePlaySettings();
+  sendPlayerRect();
+}
+function placePlaySettings() {
+  const menu = document.querySelector('#menu.playset');
+  if (!menu) return;
+  const b = $('playSetBtn').getBoundingClientRect(), r = menu.getBoundingClientRect();
+  const rtl = document.documentElement.dir === 'rtl';
+  menu.style.left = Math.max(8, Math.min(rtl ? b.left : b.right - r.width, innerWidth - r.width - 8)) + 'px';
+  menu.style.top = Math.max(8, b.top - r.height - 8) + 'px';
+}
+function renderPlaySettings() {
+  const menu = document.querySelector('#menu.playset');
+  if (!menu) return;
+  const seg = (k, opts, cur) => `<div class="seg wrap" data-k="${k}">${opts.map(([v, label]) => `<button data-v="${escapeHtml(v)}" class="${String(v) === String(cur) ? 'on' : ''}" dir="auto">${escapeHtml(label)}</button>`).join('')}</div>`;
+  const section = (icon, title, body) => `<div class="ps-sec"><div class="ps-title"><svg><use href="#${icon}"/></svg><span>${escapeHtml(title)}</span></div>${body}</div>`;
+  let html = section('i-speed', t('speed'), seg('rate', RATES.map(r => [r, r + '×']), rate));
+  html += section('i-aspect', t('aspectRatio'), seg('aspect', ASPECTS.map(a => [a, aspectLabel(a)]), aspect));
+  if (out.loaded && out.qualities) {
+    const cur = out.autoQuality ? 'auto' : out.quality;
+    html += section('i-hd', t('quality') + (out.speedMbps ? ` · ${t('speedNow', { n: out.speedMbps })}` : ''),
+      seg('quality', [['auto', t('qualityAuto') + (out.autoQuality ? ` (${out.quality})` : '')], ...out.qualities.map(q => [q, q])], cur)
+      + `<div class="ps-hint">${escapeHtml(t('qualityHint'))}</div>`);
+  }
+  if (out.loaded && out.subs) html += section('i-cc', t('subtitles'), seg('subs', [['on', t('on')], ['off', t('off')]], out.subsOn ? 'on' : 'off'));
+  html += section('i-speaker', t('audioOut'), seg('sink', [['', t('defaultDevice')], ...sinks.map(s => [s.id, s.label])], settings.sinkId || ''));
+  if (menu.dataset.html === html) return;
+  const first = !menu.dataset.html;
+  menu.dataset.html = html;
+  menu.innerHTML = html;
+  for (const s of menu.querySelectorAll('.seg')) for (const b of s.querySelectorAll('button')) b.onclick = () => {
+    const v = b.dataset.v;
+    if (s.dataset.k === 'rate') setRate(parseFloat(v));
+    else if (s.dataset.k === 'aspect') setAspect(v);
+    else if (s.dataset.k === 'quality') { settings.streamQuality = v; api.setSetting('streamQuality', v); cmd('quality', { q: v }); }
+    else if (s.dataset.k === 'subs') setSubsOn(v === 'on');
+    else if (s.dataset.k === 'sink') { settings.sinkId = v; api.setSetting('sinkId', v); cmd('sink', { id: v }); renderChips(); }
+    renderPlaySettings();
+  };
+  if (!first) placePlaySettings();
+}
+$('playSetBtn').onclick = openPlaySettings;
 
 api.onState(s => {
-  if (s.qualityChanged === 'auto') toast(t('qualityLowered', { q: s.quality }));
   const wasEnded = out.ended;
   const hadError = out.error;
   out = s;
@@ -629,9 +904,52 @@ api.onState(s => {
     if (it?.source === 'stream' && streamRetried !== it.id) { streamRetried = it.id; playItem(it, { force: true, startAt: s.time }); }
     else toast(t('playError'));
   }
+  if (s.ended && !wasEnded) {
+    // Watched to the end: next time it starts from the beginning.
+    const it = items.find(x => x.id === playingId);
+    if (it?.resumeAt) { it.resumeAt = 0; save(); }
+  }
   renderState();
   if (s.ended && !wasEnded && !s.loop && $('autoNext').checked) nextItem();
 });
+
+// ---------- seek bar: hover shows the time and, for files on this PC, the picture there ----------
+{
+  const track = document.querySelector('.seek-track'), tip = $('scrubTip'), scrub = $('scrub'), cv = $('scrubCanvas');
+  let scrubPath = null, want = null, busy = false;
+  const draw = () => {
+    if (busy || want == null) return;
+    busy = true;
+    const at = want; want = null;
+    const finish = () => { scrub.onseeked = null; busy = false; draw(); };
+    scrub.onseeked = () => {
+      if (scrub.videoWidth) {
+        cv.height = Math.round(cv.width * scrub.videoHeight / scrub.videoWidth);
+        cv.getContext('2d').drawImage(scrub, 0, 0, cv.width, cv.height);
+      }
+      finish();
+    };
+    scrub.currentTime = at;
+    setTimeout(() => { if (busy) finish(); }, 800);
+  };
+  track.addEventListener('pointermove', async e => {
+    if (!out.duration) { tip.hidden = true; return; }
+    const r = $('seek').getBoundingClientRect();
+    const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    const at = f * out.duration;
+    tip.hidden = false;
+    tip.querySelector('span').textContent = fmt(at);
+    const tr = track.getBoundingClientRect();
+    tip.style.left = Math.max(0, Math.min(tr.width, e.clientX - tr.left)) + 'px';
+    const it = items.find(x => x.id === playingId);
+    const local = !!(it && it.source !== 'stream' && !isAudio(it) && !out.audioOnly);
+    tip.classList.toggle('pic', local);
+    if (!local) return;
+    if (scrubPath !== it.path) { scrubPath = it.path; scrub.src = await api.fileUrl(it.path); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); }
+    want = at; draw();
+  });
+  track.addEventListener('pointerleave', () => { tip.hidden = true; });
+}
 
 // ---------- preview: live capture of the output window ----------
 let previewStream = null;
@@ -668,8 +986,7 @@ api.onOutputReady(() => {
 // Files opened from Explorer: add them and play the first one.
 function openFiles(paths) {
   if (!paths.length) return;
-  addPaths(paths);
-  const first = items.find(x => x.path.toLowerCase() === paths[0].toLowerCase());
+  const first = addPaths(paths)[0];
   if (!first) return;
   if (outputReady) playItem(first); else { playWhenReady = first; selectedId = first.id; renderList(); }
 }
@@ -680,6 +997,8 @@ function applyOutputSettings() {
   cmd('volume', { v: settings.volume ?? 1 });
   cmd('mute', { m: !!settings.muted });
   cmd('aspect', { mode: aspect });
+  cmd('fade', { sec: settings.fadeSec ?? 1 });
+  applyStandby(); // features.js
   if (settings.sinkId) cmd('sink', { id: settings.sinkId });
 }
 
@@ -687,16 +1006,11 @@ function applyOutputSettings() {
 async function loadSinks() {
   try {
     const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audiooutput' && d.deviceId !== 'default' && d.deviceId !== 'communications');
-    const sel = $('sinkSel');
-    sel.innerHTML = `<option value="">${escapeHtml(t('defaultDevice'))}</option>` + devs.map((d, i) => `<option value="${d.deviceId}">${escapeHtml(d.label || t('audioDevice', { n: i + 1 }))}</option>`).join('');
-    sel.value = devs.some(d => d.deviceId === settings.sinkId) ? settings.sinkId : '';
+    sinks = devs.map((d, i) => ({ id: d.deviceId, label: d.label || t('audioDevice', { n: i + 1 }) }));
+    renderChips();
   } catch (e) { console.warn(e); }
 }
 navigator.mediaDevices.addEventListener('devicechange', loadSinks);
-$('sinkSel').addEventListener('change', e => {
-  settings.sinkId = e.target.value; api.setSetting('sinkId', e.target.value);
-  cmd('sink', { id: e.target.value });
-});
 
 // ---------- controls ----------
 $('playBtn').onclick = togglePlay;
@@ -720,37 +1034,35 @@ $('seek').addEventListener('change', e => {
   seeking = false; e.target.blur();
 });
 
-$('rateSel').addEventListener('change', e => { cmd('rate', { r: parseFloat(e.target.value) }); e.target.blur(); });
-$('aspectSel').addEventListener('change', e => { setAspect(e.target.value); e.target.blur(); });
 $('loopChk').addEventListener('change', e => cmd('loop', { on: e.target.checked }));
 $('autoNext').addEventListener('change', e => api.setSetting('autoNext', e.target.checked));
 $('blackOnEnd').addEventListener('change', e => { api.setSetting('blackOnEnd', e.target.checked); cmd('blackOnEnd', { on: e.target.checked }); });
 
 $('addFilesBtn').onclick = async () => addPaths(await api.pickFiles(t('pickTitle')));
 $('folderBtn').onclick = () => api.openVideosFolder();
-$('ytUpdateBtn').onclick = async () => {
-  const b = $('ytUpdateBtn');
-  b.disabled = true; b.textContent = t('updating');
-  const msg = await api.updateYtdlp();
-  b.disabled = false; b.textContent = t('updateYtdlp');
-  toast(msg);
-};
 
-// ---------- YouTube downloads ----------
-async function addStream(url) {
-  if (items.some(x => x.source === 'stream' && x.url === url)) { toast(t('alreadyInList')); return; }
+// ---------- YouTube ----------
+async function addStream(url, { play = false } = {}) {
+  const existing = items.find(x => x.url === url);
+  if (existing) {
+    addToActiveList([existing.id]); selectedId = existing.id; renderList();
+    if (play) playItem(existing); else toast(t('alreadyInList'));
+    return existing;
+  }
   const it = { id: uid(), source: 'stream', url, path: url, title: url, loading: true };
-  items.push(it); selectedId = it.id; renderList();
+  items.push(it); selectedId = it.id; addToActiveList([it.id]); renderList();
   const r = await api.resolveStream(url);
   it.loading = false;
   if (!r.ok) {
-    items = items.filter(x => x !== it); renderList();
+    items = items.filter(x => x !== it); forgetInLists(it.id); renderList();
     toast(r.error === 'LIVE' ? t('liveNotSupported') : t('streamFailed', { e: r.error }));
-    return;
+    return null;
   }
   it.title = r.title; it.duration = r.duration;
   save(); renderList();
-  toast(t('streamAdded', { t: r.title }));
+  if (r.thumbnail) api.thumbFetch(it.id, r.thumbnail).then(u => { if (u) { it.thumbUrl = u; renderList(); } });
+  if (play) playItem(it);
+  return it;
 }
 
 // kind: 'video' or 'mp3'. replaceId turns a stream item into the downloaded file in place;
@@ -776,14 +1088,17 @@ $('ytForm').addEventListener('submit', e => {
   const url = takeLink();
   if (url) addStream(url);
 });
+function downloadMenu(anchor, getUrl) {
+  const r = anchor.getBoundingClientRect();
+  showMenu(r.left, r.bottom + 4, [
+    { label: t('downloadVideoOpt'), icon: 'i-download', action: () => { const url = getUrl(); if (url) startDownload(url, 'video'); } },
+    { label: t('downloadMp3Opt'), icon: 'i-music', action: () => { const url = getUrl(); if (url) startDownload(url, 'mp3'); } },
+  ]);
+}
 $('downloadBtn').addEventListener('click', e => {
   e.preventDefault();
   if (!/^https?:\/\//i.test($('ytUrl').value.trim())) { toast(t('invalidLink')); return; }
-  const r = e.currentTarget.getBoundingClientRect();
-  showMenu(r.left, r.bottom + 4, [
-    { label: t('downloadVideoOpt'), icon: 'i-download', action: () => { const url = takeLink(); if (url) startDownload(url, 'video'); } },
-    { label: t('downloadMp3Opt'), icon: 'i-music', action: () => { const url = takeLink(); if (url) startDownload(url, 'mp3'); } },
-  ]);
+  downloadMenu(e.currentTarget, takeLink);
 });
 
 api.onDownload(d => {
@@ -795,29 +1110,43 @@ api.onDownload(d => {
     const file = { title: d.title, path: d.path, audioPath: d.audioPath, source: 'youtube', url: cur.url };
     const at = items.findIndex(x => x.id === (cur.replaceId || cur.afterId));
     if (cur.replaceId && at >= 0) {
-      items[at] = { ...file, id: items[at].id };
+      // Same item, now a file: it keeps its id, its place in lists, thumbnail and settings.
+      const old = items[at];
+      items[at] = { ...old, ...file, id: old.id };
+      delete items[at].loading;
     } else if (!items.some(x => x.path.toLowerCase() === d.path.toLowerCase())) {
-      items.splice(at >= 0 ? at + 1 : items.length, 0, { ...file, id: uid() });
+      const added = { ...file, id: uid() };
+      items.splice(at >= 0 ? at + 1 : items.length, 0, added);
+      addToActiveList([added.id], cur.afterId);
     }
     save(); renderList(); probeDurations();
-    toast(t('downloaded', { t: d.title }));
     // "Remove vocals" on an online video downloads it first, then carries on here.
     if (cur.then === 'vocals') { const it = items.find(x => x.id === cur.replaceId) || items.find(x => x.path === d.path); if (it) removeVocals(it); }
   }
   if (d.status === 'canceled') downloads.delete(d.id);
   renderDownloads();
+  if (cur.then === 'all') renderCheck?.(); // features.js: "Download all" in the list check
 });
 
-// yt-dlp (~17 MB, first YouTube use) and FFmpeg (~28 MB, first MP3) download on demand; show it.
+// yt-dlp (~17 MB, first YouTube use) and FFmpeg (~28 MB, first MP3) download on demand: shown as
+// a row with the downloads, not as a toast.
+const toolSetup = new Map(); // tool -> fraction
 api.onToolSetup(({ tool, progress }) => {
-  const done = progress >= 1;
-  const keys = { ffmpeg: ['mp3Setup', 'mp3SetupDone'], engine: ['engineSetup', 'engineSetupDone'], model: ['modelSetup', 'modelSetupDone'] }[tool] || ['ytSetup', 'ytSetupDone'];
-  toast(done ? t(keys[1]) : t(keys[0], { n: Math.round(progress * 100) }));
+  if (progress >= 1) toolSetup.delete(tool); else toolSetup.set(tool, progress);
+  renderDownloads();
 });
 
 function renderDownloads() {
   const box = $('downloads');
   box.innerHTML = '';
+  for (const [tool, p] of toolSetup) {
+    const keys = { ffmpeg: 'mp3Setup', engine: 'engineSetup', model: 'modelSetup' };
+    const el = document.createElement('div');
+    el.className = 'dl';
+    el.innerHTML = `<div class="dl-top"><svg class="mic-ico"><use href="#i-gear"/></svg><span class="dl-title">${escapeHtml(t(keys[tool] || 'ytSetup', { n: Math.round(p * 100) }))}</span></div>
+      <div class="bar"><i style="width:${Math.round(p * 100)}%"></i></div>`;
+    box.appendChild(el);
+  }
   for (const [id, d] of downloads) {
     const el = document.createElement('div');
     el.className = 'dl' + (d.status === 'error' ? ' error' : '');
@@ -861,20 +1190,27 @@ function handleKey(k) {
     case 'ArrowLeft': cmd('seekBy', { d: k.shift ? -30 : -5 }); break;
     case 'KeyL': cmd('seekBy', { d: 10 }); break;
     case 'KeyJ': cmd('seekBy', { d: -10 }); break;
-    case 'ArrowUp': toast(t('volumeToast', { n: Math.round(setVolume(vol + 0.05) * 100) })); break;
-    case 'ArrowDown': toast(t('volumeToast', { n: Math.round(setVolume(vol - 0.05) * 100) })); break;
+    case 'ArrowUp': setVolume(vol + 0.05); break;
+    case 'ArrowDown': setVolume(vol - 0.05); break;
     case 'KeyM': toggleMute(); break;
     case 'KeyB': case 'Period': cmd('black', { on: !out.black }); break;
-    case 'KeyN': case 'PageDown': nextItem(); break;
-    case 'KeyP': case 'PageUp': prevItem(); break;
-    case 'KeyA': setAspect(ASPECTS[(ASPECTS.indexOf(aspect) + 1) % ASPECTS.length], true); break;
-    case 'Home': cmd('seek', { t: 0 }); break;
-    case 'End': if (out.duration) cmd('seek', { t: out.duration - 0.1 }); break;
+    case 'KeyN': if (k.shift) stepLyric(1); else nextItem(); break;
+    case 'KeyP': if (k.shift) stepLyric(-1); else prevItem(); break;
+    case 'PageDown': nextItem(); break;
+    case 'PageUp': prevItem(); break;
+    case 'KeyA': setAspect(ASPECTS[(ASPECTS.indexOf(aspect) + 1) % ASPECTS.length]); break;
+    case 'KeyC': if (out.subs) setSubsOn(!out.subsOn); break;
+    case 'KeyT': showCountdown(); break;
+    case 'KeyI': setTrimHere('start'); break;
+    case 'KeyO': setTrimHere('end'); break;
+    case 'Home': cmd('seek', { t: out.trim?.start || 0 }); break;
+    case 'End': if (out.duration) cmd('seek', { t: (out.trim?.end || out.duration) - 0.1 }); break;
     case 'KeyF': case 'DblClick': if (modeState.mode === 'player') api.playerFullscreen(!modeState.fullscreen); break;
     case 'Escape':
       // Leave full screen; or, when the video also covers this screen, give the screen back.
       if (modeState.fullscreen) api.playerFullscreen(false);
       else if (modeState.showOn.here) setShowOn(modeState.showOn.screens, false);
+      else if (out.lyrics) hideLyrics();
       else return false;
       break;
     case 'KeyZ': cmd('freeze', { on: !out.frozen }); break;
@@ -882,6 +1218,7 @@ function handleKey(k) {
     case 'BracketRight': cmd('frame', { n: 1 }); break;
     case 'Enter': case 'NumpadEnter': playItem(items.find(x => x.id === selectedId)); break;
     case 'Delete': if (selectedId) removeItem(selectedId); break;
+    case 'Slash': if (k.shift) showShortcuts(); else return false; break;
     default: {
       const m = /^(?:Digit|Numpad)(\d)$/.exec(k.code);
       if (m && out.duration) { cmd('seek', { t: out.duration * Number(m[1]) / 10 }); return true; }
@@ -891,10 +1228,11 @@ function handleKey(k) {
   return true;
 }
 function moveSelection(delta) {
-  if (!items.length) return;
-  const i = items.findIndex(x => x.id === selectedId);
-  const n = Math.max(0, Math.min(items.length - 1, (i < 0 ? (delta > 0 ? -1 : items.length) : i) + delta));
-  selectedId = items[n].id; renderList();
+  const view = viewItems();
+  if (!view.length) return;
+  const i = view.findIndex(x => x.id === selectedId);
+  const n = Math.max(0, Math.min(view.length - 1, (i < 0 ? (delta > 0 ? -1 : view.length) : i) + delta));
+  selectedId = view[n].id; renderList();
   document.querySelector('.item.selected')?.scrollIntoView({ block: 'nearest' });
 }
 
@@ -904,18 +1242,22 @@ window.addEventListener('keydown', e => {
     const buttons = [...menu.querySelectorAll('button')];
     const i = buttons.indexOf(document.activeElement);
     if (e.key === 'Escape') closeMenu();
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') buttons[(i + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length].focus();
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') buttons[(i + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
     else if (e.key === 'Enter' && i >= 0) buttons[i].click();
     e.preventDefault();
     return;
   }
+  if (!$('modal').hidden) return; // dialogs handle their own keys
   const tag = e.target.tagName;
   if (e.code.startsWith('Media')) return; // handled once, through the media session (see output.html)
-  if (tag === 'INPUT' && e.target.type === 'text') { if (e.key === 'Escape') e.target.blur(); return; }
+  if ((tag === 'INPUT' && !['range', 'checkbox'].includes(e.target.type)) || tag === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
   if (tag === 'SELECT') return;
   if (e.ctrlKey || e.altKey || e.metaKey) {
     if (e.ctrlKey && e.code === 'KeyO') { e.preventDefault(); $('addFilesBtn').click(); }
     if (e.ctrlKey && e.code === 'KeyB') { e.preventDefault(); toggleSide(); }
+    if (e.ctrlKey && e.code === 'KeyF') { e.preventDefault(); openSearch(); }
+    if (e.ctrlKey && e.code === 'KeyM') { e.preventDefault(); toggleMini(); }
+    if (e.ctrlKey && e.code === 'Comma') { e.preventDefault(); showSettings(); }
     return;
   }
   // Up/Down with Shift moves the playlist selection; plain Up/Down is volume.
@@ -924,9 +1266,9 @@ window.addEventListener('keydown', e => {
 });
 api.onOutputKey(k => handleKey(k));
 // A focused button would also "click" on Space/Enter, toggling twice. Shortcuts own those keys.
-window.addEventListener('keyup', e => { if (e.target.tagName === 'BUTTON' && (e.code === 'Space' || e.code === 'Enter')) e.preventDefault(); });
+window.addEventListener('keyup', e => { if (e.target.tagName === 'BUTTON' && $('modal').hidden && (e.code === 'Space' || e.code === 'Enter')) e.preventDefault(); });
 // Mouse clicks shouldn't leave buttons focused.
-document.addEventListener('click', e => { if (e.detail > 0) e.target.closest('button')?.blur(); });
+document.addEventListener('click', e => { if (e.detail > 0 && $('modal').hidden) e.target.closest('button')?.blur(); });
 
 // ---------- drag & drop files ----------
 let dragDepth = 0;
@@ -944,12 +1286,33 @@ window.addEventListener('drop', e => {
   else if (/youtu/.test(text)) { $('ytUrl').value = text.trim(); $('ytUrl').focus(); }
 });
 
+// ---------- phone remote: the state the phone shows ----------
+let remoteTimer = null;
+function pushRemote() {
+  if (remoteTimer) return;
+  remoteTimer = setTimeout(() => {
+    remoteTimer = null;
+    const it = items.find(x => x.id === playingId);
+    const slides = out.loaded ? lyricSlides(it) : [];
+    api.remoteState({
+      lang: LANG, appName: t('appName'),
+      title: out.loaded && it ? it.title : '', next: nextUp()?.title || '',
+      loaded: out.loaded, paused: out.paused, buffering: out.buffering, time: out.time, duration: out.duration, rate: out.rate,
+      black: !!out.black && !out.audioOnly, frozen: !!out.frozen, volume: out.volume, muted: out.muted,
+      playingId, listName: activeList()?.name || '',
+      items: viewItems().map(x => ({ id: x.id, title: x.title, duration: x.duration || 0, missing: !!x.missing, thumb: x.thumbUrl ? (x.thumbUrl.split('?v=')[1] || '1') : '' })),
+      lyrics: slides.length ? { slides, current: out.lyrics ? currentLyric : -1 } : null,
+    });
+  }, 200);
+}
+
 // ---------- init ----------
-(async function init() {
+async function init() {
   settings = await api.getSettings();
   $('autoNext').checked = !!settings.autoNext;
   $('blackOnEnd').checked = settings.blackOnEnd ?? true;
   items = (await api.loadPlaylist()).map(({ loading, ...it }) => it);
+  await loadLists(); // features.js
   applySide();
   setLang(settings.lang || 'en');
   renderVolume(settings.volume ?? 1, !!settings.muted);
@@ -959,7 +1322,11 @@ window.addEventListener('drop', e => {
   startPreview();
   applyOutputSettings();
   openFiles(await api.takeOpenFiles());
-})();
+  const link = await api.takeOpenLink();
+  if (link) openLink(link); // features.js
+  if (!settings.onboarded && !settings._selftest) showOnboarding(); // features.js
+}
+window.addEventListener('DOMContentLoaded', init);
 
 // ---------- quick tooltips ----------
 // Buttons show their label right away on hover. The text lives in data-tip so the slow native
@@ -971,7 +1338,7 @@ window.addEventListener('drop', e => {
   let target = null, timer;
   const hide = () => { clearTimeout(timer); tip.classList.remove('show'); target = null; };
   document.addEventListener('pointerover', e => {
-    const el = e.target.closest('button[title], label[title], button[data-tip], label[data-tip]');
+    const el = e.target.closest('button[title], label[title], button[data-tip], label[data-tip], .status-pill');
     if (el === target) return;
     hide();
     if (!el || el.closest('.menu, .modal')) return;

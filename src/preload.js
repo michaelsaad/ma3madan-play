@@ -60,5 +60,34 @@ contextBridge.exposeInMainWorld('api', {
   updateYtdlp: () => ipcRenderer.invoke('ytdlp-update'),
   onToolSetup: fn => on('tool-setup', fn),
   resolveStream: (url, force) => ipcRenderer.invoke('stream-resolve', url, force),
+  streamSpeed: () => ipcRenderer.invoke('stream-speed'),
   openExternal: url => ipcRenderer.send('open-external', url),
+
+  // saved lists, thumbnails, subtitles, pictures
+  loadLists: () => ipcRenderer.invoke('lists-load'),
+  saveLists: lists => ipcRenderer.send('lists-save', lists),
+  thumbSave: (id, bytes) => ipcRenderer.invoke('thumb-save', id, bytes),
+  thumbFetch: (id, url) => ipcRenderer.invoke('thumb-fetch', id, url),
+  thumbDelete: id => ipcRenderer.send('thumb-delete', id),
+  findSubs: p => ipcRenderer.invoke('find-subs', p),
+  readSubs: p => ipcRenderer.invoke('read-subs', p),
+  pickSubs: title => ipcRenderer.invoke('pick-subs', title),
+  pickImage: title => ipcRenderer.invoke('pick-image', title),
+  fileExists: p => ipcRenderer.invoke('file-exists', p),
+
+  // links from outside, mini mode
+  takeOpenLink: () => ipcRenderer.invoke('take-open-link'),
+  onOpenLink: fn => on('open-link', fn),
+  onClipboardLink: fn => on('clipboard-link', fn),
+  clipboardSeen: text => ipcRenderer.send('clipboard-seen', text),
+  setMini: on => ipcRenderer.send('set-mini', on),
+  onMini: fn => on('mini', fn),
+
+  // phone remote
+  remoteStart: () => ipcRenderer.invoke('remote-start'),
+  remoteStop: () => ipcRenderer.invoke('remote-stop'),
+  remoteInfo: () => ipcRenderer.invoke('remote-info'),
+  remoteNewKey: () => ipcRenderer.invoke('remote-new-key'),
+  remoteState: s => ipcRenderer.send('remote-state', s),
+  onRemoteCmd: fn => on('remote-cmd', fn),
 });

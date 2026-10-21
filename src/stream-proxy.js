@@ -24,6 +24,9 @@ let activeMs = 0, bytes = 0; // since the last sample
 let bps = 0;                 // smoothed bits per second (0 = not measured yet)
 let samples = 0;
 let measuredAt = 0;
+let testLimit = 0, limitFreeAt = 0;
+let openResponses = 0;
+const sleepers = new Set();
 const startActive = () => { if (active++ === 0) activeSince = Date.now(); };
 const stopActive = () => { if (--active === 0) activeMs += Date.now() - activeSince; };
 setInterval(() => {
@@ -87,7 +90,8 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'HEAD') return res.end();
 
   const abort = new AbortController();
-  res.on('close', () => abort.abort());
+  openResponses++;
+  res.on('close', () => { openResponses--; abort.abort(); });
   let pos = start, first = true;
   try {
     while (pos <= end && !abort.signal.aborted) {
@@ -100,6 +104,17 @@ const server = http.createServer(async (req, res) => {
         for await (const chunk of upstream.body) {
           if (abort.signal.aborted) break;
           pos += chunk.length; bytes += chunk.length;
+          // Self-test only: act like a slow connection (bits per second).
+          if (testLimit) {
+            // One limit shared by all transfers, like a real slow line.
+            const now = Date.now();
+            limitFreeAt = Math.max(limitFreeAt, now) + (chunk.length * 8 * 1000) / testLimit;
+            await new Promise(ok => {
+              const wake = () => { clearTimeout(timer); sleepers.delete(wake); ok(); };
+              const timer = setTimeout(wake, limitFreeAt - now);
+              sleepers.add(wake);
+            });
+          }
           if (!res.write(chunk)) {
             // The player is full: waiting here is not network time.
             stopActive(); pulling = false;
@@ -119,7 +134,7 @@ const server = http.createServer(async (req, res) => {
 
 // The smoothed speed and how old it is, so the player (and the next stream) can pick a quality.
 function lastSpeed() {
-  return { bps: Math.round(bps), samples, age: measuredAt ? Date.now() - measuredAt : null };
+  return { bps: Math.round(bps), samples, age: measuredAt ? Date.now() - measuredAt : null, open: openResponses };
 }
 
 function start() {
@@ -137,4 +152,10 @@ function proxyUrl(fmt) {
   return `http://127.0.0.1:${port}/${token}`;
 }
 
-module.exports = { start, proxyUrl, lastSpeed };
+// Self-test only: limit the speed, like a slow connection (0 = no limit).
+const setTestLimit = bps => {
+  testLimit = bps; limitFreeAt = 0;
+  if (!bps) for (const wake of [...sleepers]) wake();
+};
+
+module.exports = { start, proxyUrl, lastSpeed, setTestLimit };

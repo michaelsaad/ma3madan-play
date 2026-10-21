@@ -7,8 +7,8 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
   const dir = process.env.VP_SELFTEST_DIR;
   const log = (...a) => fs.appendFileSync(path.join(dir, 'log.txt'), a.join(' ') + '\n');
   const wait = ms => new Promise(r => setTimeout(r, ms));
-  const js = code => getControl().webContents.executeJavaScript(code);
-  const ojs = code => getOutput().webContents.executeJavaScript(code);
+  const js = code => getControl().webContents.executeJavaScript(code).catch(e => { throw new Error('in control: ' + code.slice(0, 120) + ' → ' + (e?.message || JSON.stringify(e))); });
+  const ojs = code => getOutput().webContents.executeJavaScript(code).catch(e => { throw new Error('in output: ' + code.slice(0, 120) + ' → ' + (e?.message || JSON.stringify(e))); });
   const outState = async () => log('  output:', await ojs(`JSON.stringify({t:+v.currentTime.toFixed(2),split:followers.length>0,at:+a.currentTime.toFixed(2),paused:v.paused,vol:v.volume,muted:v.muted,black:blackOn,src:decodeURI(v.src).split('/').pop()})`));
   const shot = async name => {
     const imgs = {};
@@ -18,7 +18,7 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
     }
     // In Player mode the video is a separate layer over the page: paint it in, as the user sees it.
     const m = getMode();
-    if (m.mode === 'player' && m.viewBounds.width > 0) await composite(imgs.control, imgs.output, m.viewBounds, path.join(dir, `${name}-window.png`));
+    if (m.mode === 'player' && m.viewBounds.width > 0) await composite(imgs.control, imgs.output, m.viewBounds, path.join(dir, `${name}-window.png`)).catch(e => log('  (no composite for', name + ':', e?.message || 'image', ')'));
   };
   const composite = async (page, video, at, file) => {
     const { BrowserWindow } = require('electron');
@@ -58,6 +58,9 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
     await js(`addPaths(${JSON.stringify(files)})`);
     await wait(1500);
     log('items:', await js(`JSON.stringify(items.map(i=>[i.title,i.duration&&+i.duration.toFixed(1)]))`));
+    const features = () => require('./features')({ js, ojs, log, wait, shot, dir, getControl, getMode, getOutput });
+    if (process.env.VP_FEATURES) { await features(); log('DONE'); app.quit(); return; }
+    if (process.env.VP_STREAM_ONLY) { await require('./stream')({ js, ojs, log, wait }); log('DONE'); app.quit(); return; }
 
     await js(`playItem(items[0])`);
     await wait(3000);
@@ -143,16 +146,17 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
       for (let i = 0; i < 4; i++) { await wait(10000); log('  normal net:', await snap()); }
       log('stream rms:', await rms());
       await shot('5-stream');
-      // throttle the projector window to ~1 Mbps
-      const dbg = getOutput().webContents.debugger;
-      dbg.attach('1.3');
-      await dbg.sendCommand('Network.enable');
-      await dbg.sendCommand('Network.emulateNetworkConditions', { offline: false, latency: 80, downloadThroughput: 1000000 / 8, uploadThroughput: 500000 / 8 });
+      // A slow connection (~1.5 Mbit/s): quality must step down.
+      const proxy = require('../src/stream-proxy');
+      proxy.setTestLimit(1.5e6);
       await js('cmd("seek",{t:400})');  // jump past the buffer so the slow link has to keep up
-      for (let i = 0; i < 9; i++) { await wait(10000); log('  1 Mbps:', await snap()); }
-      log('control toast:', await js(`$('toast').textContent`), '| quality ui:', await js(`$('qualitySel').selectedOptions[0]?.textContent`));
+      for (let i = 0; i < 9; i++) { await wait(10000); log('  1.5 Mbps:', await snap(), '| speed', JSON.stringify(proxy.lastSpeed())); }
+      log('quality chip:', await js("$('activeChips').textContent"));
       await shot('6-throttled');
-      dbg.detach();
+      // The connection gets good again: quality must climb back up without a pause.
+      proxy.setTestLimit(0);
+      for (let i = 0; i < 9; i++) { await wait(10000); log('  fast again:', await snap(), '| speed', JSON.stringify(proxy.lastSpeed()), '| upgrading', await ojs('upgrade ? ladder[upgrade.i].label : "-"')); }
+      log('quality chip:', await js("$('activeChips').textContent"));
     }
     // Real mouse clicks on play/pause while a video plays (each press held ~150 ms, like a person).
     await js('playItem(items[0])'); await wait(1500);
@@ -341,10 +345,10 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
       const { nativeTheme } = require('electron');
       const startTheme = await js('settings.theme || "system"');
       for (let i = 0; i < 3; i++) {
-        await js(`$('themeBtn').click()`); await wait(700);
+        await js(`setTheme(['light','dark','system'][${i}])`); await wait(700);
         log('theme', await js('settings.theme'), '| source', nativeTheme.themeSource, '| dark', nativeTheme.shouldUseDarkColors,
           '| --bg', await js(`getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()`),
-          '| icon', await js(`$('themeBtn').querySelector('use').getAttribute('href')`), '| tip', await js(`$('themeBtn').title`));
+          '');
         await shot(`20-theme-${await js('settings.theme')}`);
       }
       log('theme back to', await js('settings.theme'), '(started', startTheme + ')');
@@ -514,21 +518,22 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
     // playing in Player mode, English dark and light, Arabic dark.
     if (process.env.VP_README_SHOTS) {
       const url = process.env.VP_STREAM;
-      await js(`items = items.filter(x => !x.id?.startsWith?.('fill')); renderList()`);
+      await js(`closeModal(); closeMenu(); items = items.filter(x => !x.id?.startsWith?.('fill')); renderList()`);
       if (url) await js(`playItem(items.find(x => x.url === ${JSON.stringify(url)}), { startAt: 40 })`);
       await wait(8000);
       getControl().webContents.sendInputEvent({ type: 'mouseMove', x: 1000, y: 735 }); // no tooltip in the pictures
       for (const [lang, theme] of [['en', 'dark'], ['en', 'light'], ['ar', 'dark']]) {
-        await js(`setLang('${lang}'); settings.theme = '${theme}'; api.setTheme('${theme}'); renderTheme()`); await wait(1500);
+        await js(`setLang('${lang}'); settings.theme = '${theme}'; api.setTheme('${theme}'); 0`); await wait(1500);
         await shot(`readme-${lang}-${theme}`);
         log(`readme ${lang}-${theme}:`, JSON.stringify(getMode().viewBounds), getMode().mode, "| modal hidden", await js("$(\x27modal\x27).hidden"), "| menu", await js("!!document.getElementById(\x27menu\x27)"), "| audioOnly", await js("!!(out.loaded && out.audioOnly)"));
       }
-      await js(`setLang('en'); settings.theme = 'system'; api.setTheme('system'); renderTheme()`);
+      await js(`setLang('en'); settings.theme = 'system'; api.setTheme('system'); 0`);
     }
 
+    await features();
     log('DONE');
   } catch (e) {
-    log('FAIL', e.stack);
+    log('FAIL', e?.stack || e?.message || JSON.stringify(e) || String(e));
   }
   app.quit();
 };
