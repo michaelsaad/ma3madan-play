@@ -797,3 +797,20 @@ body.mini .transport .grp button.big svg { width: 18px; height: 18px; }
 .link-request code { font: 700 22px Consolas, monospace; letter-spacing: .12em; color: var(--gold); flex: none; }
 .lr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .lr-actions button { flex: 1 1 auto; }
+
+/* What's new in the update */
+.modal-box.update-modal { width: min(560px, calc(100vw - 32px)); }
+.upd-head { display: flex; align-items: center; gap: 14px; }
+.upd-head img { width: 56px; height: 56px; }
+.upd-head h2 { margin: 0 0 2px; }
+.upd-notes { max-height: min(46vh, 420px); overflow: auto; padding: 4px 16px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); line-height: 1.6; font-size: 13.5px; user-select: text; }
+.upd-notes h4 { margin: 12px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+.upd-notes p { margin: 6px 0; }
+.upd-notes ul { margin: 4px 0; padding-inline-start: 20px; }
+.upd-notes li { margin: 3px 0; }
+.upd-notes li::marker { color: var(--gold); }
+.upd-notes code { font: 12px Consolas, monospace; padding: 1px 5px; border-radius: 4px; background: var(--kbd-bg); border: 1px solid var(--line); }
+.upd-notes a { color: var(--accent); }
+.upd-progress { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.upd-progress .bar { height: 6px; margin: 0; }
+#aboutStatus .small-btn { margin-inline-start: 6px; }

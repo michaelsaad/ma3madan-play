@@ -60,6 +60,7 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
     log('items:', await js(`JSON.stringify(items.map(i=>[i.title,i.duration&&+i.duration.toFixed(1)]))`));
     const features = () => require('./features')({ js, ojs, log, wait, shot, dir, getControl, getMode, getOutput });
     if (process.env.VP_FEATURES) { await features(); log('DONE'); app.quit(); return; }
+    if (process.env.VP_UI_ONLY) { await require('./ui')({ js, log, wait, shot }); log('DONE'); app.quit(); return; }
     if (process.env.VP_STREAM_ONLY) { await require('./stream')({ js, ojs, log, wait }); log('DONE'); app.quit(); return; }
 
     await js(`playItem(items[0])`);
@@ -503,7 +504,9 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode 
       while (Date.now() - t0 < 30000 && await js(`$('updateBtn').hidden`)) await wait(500);
       log('update button:', await js(`$('updateBtn').hidden ? 'hidden' : $('updateBtn').innerText`));
       await shot('9-update-available');
-      await js(`$('toast').textContent = ''; $('updateBtn').click()`);
+      await js(`$('toast').textContent = ''; $('updateBtn').click()`); await wait(400);
+      log('update dialog:', await js(`[...document.querySelectorAll('.upd-notes h4, .upd-notes li')].slice(0, 4).map(x => x.textContent).join(' | ')`));
+      await js(`$('updInstall').click()`);
       const t1 = Date.now();
       let seen = '';
       while (Date.now() - t1 < 300000) {

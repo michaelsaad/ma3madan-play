@@ -260,7 +260,76 @@ function renderUpdate(progress) {
   b.querySelector('span').textContent = updating
     ? (progress >= 1 ? t('updateInstalling') : t('updateDownloading', { n: Math.round((progress || 0) * 100) }))
     : t(update.canInstall ? 'updateTo' : 'updateGet', { v: update.version });
-  b.title = t(update.canInstall ? 'updateTip' : 'updatePortableTip') + (update.notes ? '\n\n' + update.notes.slice(0, 400) : '');
+  b.title = t('updateAvailableTip', { v: update.version });
+  renderUpdateModal(progress);
+}
+let appVer = '';
+api.appVersion().then(v => { appVer = v; });
+
+// Release notes (Markdown from GitHub) as tidy HTML: headings, lists, bold, code and links.
+function notesHtml(md) {
+  const inline = s => escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g, '<a href="#" data-url="$2">$1</a>');
+  let html = '', depth = 0;
+  for (const raw of String(md || '').replace(/\r/g, '').split('\n')) {
+    const line = raw.trimEnd();
+    const li = /^(\s*)[-*] (.*)$/.exec(line);
+    if (li) {
+      const d = li[1].length >= 2 ? 2 : 1;
+      while (depth < d) { html += '<ul>'; depth++; }
+      while (depth > d) { html += '</ul>'; depth--; }
+      html += `<li>${inline(li[2])}</li>`;
+      continue;
+    }
+    if (!line.trim()) continue;
+    while (depth) { html += '</ul>'; depth--; }
+    const h = /^#{1,6}\s+(.*)$/.exec(line);
+    html += h ? `<h4>${inline(h[1])}</h4>` : `<p>${inline(line.trim())}</p>`;
+  }
+  while (depth) { html += '</ul>'; depth--; }
+  return html;
+}
+
+// "What's new in x.y.z", then Install (or Download for the portable version). Nothing changes
+// until the button is pressed.
+function showUpdate() {
+  if (!update) return;
+  openModal('<div id="updBox"></div>', { cls: 'update-modal' });
+  renderUpdateModal();
+}
+function renderUpdateModal(progress) {
+  const box = $('updBox');
+  if (!box || !update) return;
+  const pct = Math.round((progress || 0) * 100);
+  box.innerHTML = `
+    <div class="upd-head">
+      <img src="assets/app-128.png" alt="">
+      <div><h2>${escapeHtml(t('whatsNew', { v: update.version }))}</h2>
+        <span class="muted small" dir="ltr">${escapeHtml(appVer)} → ${escapeHtml(update.version)}</span></div>
+    </div>
+    <div class="upd-notes" dir="ltr">${notesHtml(update.notes) || `<p class="muted">${escapeHtml(t('noReleaseNotes'))}</p>`}</div>
+    ${updating ? `<div class="upd-progress"><div class="bar"><i style="width:${progress >= 1 ? 100 : pct}%"></i></div>
+      <span>${escapeHtml(progress >= 1 ? t('updateInstalling') : t('updateDownloading', { n: pct }))}</span></div>`
+      : `<p class="muted small">${escapeHtml(t(update.canInstall ? 'updateRestartNote' : 'updatePortableNote'))}</p>`}
+    <div class="modal-actions">
+      <button class="ghost" id="updLater" ${updating ? 'disabled' : ''}>${escapeHtml(t('later'))}</button>
+      <button class="primary" id="updInstall" ${updating ? 'disabled' : ''}><svg><use href="#i-download"/></svg><span>${escapeHtml(t(update.canInstall ? 'installUpdate' : 'downloadUpdate'))}</span></button>
+    </div>`;
+  $('updLater').onclick = closeModal;
+  $('updInstall').onclick = installUpdate;
+  for (const a of box.querySelectorAll('a[data-url]')) a.onclick = e => { e.preventDefault(); api.openExternal(a.dataset.url); };
+}
+async function installUpdate() {
+  if (!update || updating) return;
+  updating = update.canInstall;
+  renderUpdate(0);
+  const r = await api.installUpdate();
+  if (!r.ok) toast(t('updateFailed', { e: r.error }));
+  if (r.result === 'verified') toast('Update verified (dry run)');
+  updating = false;
+  renderUpdate();
 }
 api.onUpdateAvailable(info => { update = info; renderUpdate(); });
 
@@ -309,21 +378,18 @@ async function showAbout() {
     const r = await api.checkForUpdate();
     b.disabled = false;
     status.textContent = !r.ok ? t('checkFailed') : r.info ? t('updateFound', { v: r.info.version }) : t('upToDate');
+    if (r.ok && r.info) {
+      const see = document.createElement('button');
+      see.className = 'small-btn primary'; see.textContent = t('seeWhatsNew');
+      see.onclick = showUpdate;
+      status.append(' ', see);
+    }
   };
   $('aboutClose').focus();
 }
 $('aboutBtn').onclick = showAbout;
 api.onUpdateProgress(p => renderUpdate(p));
-$('updateBtn').onclick = async () => {
-  if (!update || updating) return;
-  updating = update.canInstall;
-  renderUpdate(0);
-  const r = await api.installUpdate();
-  if (!r.ok) toast(t('updateFailed', { e: r.error }));
-  if (r.result === 'verified') toast('Update verified (dry run)');
-  updating = false;
-  renderUpdate();
-};
+$('updateBtn').onclick = showUpdate;
 
 // ---------- playlist ----------
 const save = () => { api.savePlaylist(items); pushRemote(); };
