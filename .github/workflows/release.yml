@@ -21,13 +21,14 @@ jobs:
   build:
     runs-on: windows-latest
     env:
+      TAG: ${{ github.ref_name }}
       SIGNING: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
       SIGNPATH_PROJECT: ${{ vars.SIGNPATH_PROJECT_SLUG || 'ma3madan-video-presenter' }}
       SIGNPATH_POLICY: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -39,7 +40,7 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
-          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} doesn't match package.json version $version" }
+          if ("v$version" -ne $env:TAG) { throw "Tag $($env:TAG) doesn't match package.json version $version" }
 
       # Step 1: the app folder. Its main .exe is signed before the installers are built around it,
       # so the installed app is signed too.
@@ -49,7 +50,7 @@ jobs:
       - name: Upload the app for signing
         if: env.SIGNING == 'true'
         id: app-unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: app-unsigned
           path: dist/win-unpacked/
@@ -57,7 +58,7 @@ jobs:
 
       - name: Sign the app
         if: env.SIGNING == 'true'
-        uses: signpath/github-action-submit-signing-request@v1
+        uses: signpath/github-action-submit-signing-request@ced31329c0317e779dad2eec2a7c3bb46ea1343e # v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -86,7 +87,7 @@ jobs:
 
       - name: Upload the installers
         id: installers-unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: installers${{ env.SIGNING == 'true' && '-unsigned' || '' }}
           path: release/
@@ -94,7 +95,7 @@ jobs:
 
       - name: Sign the installers
         if: env.SIGNING == 'true'
-        uses: signpath/github-action-submit-signing-request@v1
+        uses: signpath/github-action-submit-signing-request@ced31329c0317e779dad2eec2a7c3bb46ea1343e # v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -120,6 +121,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $signed = if ($env:SIGNING -eq 'true') { 'Signed' } else { 'Unsigned' }
-          gh release create "${{ github.ref_name }}" (Get-ChildItem release/*.exe).FullName `
-            --draft --title "Ma3madan Play ${{ github.ref_name }}" `
-            --notes "$signed build of ${{ github.ref_name }}. Edit these notes, then publish."
+          gh release create "$env:TAG" (Get-ChildItem release/*.exe).FullName `
+            --draft --title "Ma3madan Play $env:TAG" `
+            --notes "$signed build of $env:TAG. Edit these notes, then publish."

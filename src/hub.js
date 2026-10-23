@@ -54,6 +54,8 @@ function identity() {
 //            computerName: () => string, phoneDir: the phone app's files for the Wi-Fi page (lan.js) }
 function createHub(options) {
   const me = options.app;
+  // Tests (a test pipe) show up as "<name> (test)" in Nearby, never as the real computer.
+  const computerName = () => options.computerName() + (process.env.MA3MADAN_PIPE ? ' (test)' : '');
   const page = () => { const w = options.window(); return w && !w.isDestroyed() ? w.webContents : null; };
   const toPage = (ch, msg) => page()?.send(ch, msg);
   let on = false, role = 'off', server = null, upstream = null;
@@ -65,7 +67,7 @@ function createHub(options) {
   // The Wi-Fi page (no internet needed), served by the hub: its pages are phones like the others.
   const lan = createLan({
     dir: options.phoneDir,
-    onJoin: peer => { lan.send(peer, { type: 'hello', name: options.computerName(), hostId: identity().hostId, apps: appNames() }); fromNet(peer, { type: 'joined' }); pushStatus(); },
+    onJoin: peer => { lan.send(peer, { type: 'hello', name: computerName(), hostId: identity().hostId, apps: appNames() }); fromNet(peer, { type: 'joined' }); pushStatus(); },
     onLeave: () => pushStatus(),
     onMessage: (peer, msg) => fromNet(peer, msg),
   });
@@ -210,7 +212,7 @@ function createHub(options) {
   // ---------- trusted phones and the QR code ----------
   function hostIdentity() {
     const j = identity();
-    return { hostId: j.hostId, auth: j.auth, pairCode: j.pairCode, name: options.computerName(), devices: Object.fromEntries(Object.entries(j.devices).map(([k, d]) => [k, { key: d.key, name: d.name }])) };
+    return { hostId: j.hostId, auth: j.auth, pairCode: j.pairCode, name: computerName(), devices: Object.fromEntries(Object.entries(j.devices).map(([k, d]) => [k, { key: d.key, name: d.name }])) };
   }
   function identityChanged() { if (role === 'hub') toPage('link-host-identity', hostIdentity()); pushStatus(); }
   // Ops from either app's Remote panel (the other app asks the hub).
@@ -245,7 +247,7 @@ function createHub(options) {
   // ---------- status, for the Remote panels of both apps ----------
   function hubStatus() {
     const j = identity();
-    const pairUrl = `${BASE}/#pair=${encodeURIComponent(j.hostId + '.' + j.pairCode)}&name=${encodeURIComponent(options.computerName())}`;
+    const pairUrl = `${BASE}/#pair=${encodeURIComponent(j.hostId + '.' + j.pairCode)}&name=${encodeURIComponent(computerName())}`;
     return {
       online, pairUrl, hub: options.title, apps: appNames(),
       phones: peers.map(p => ({ device: p.device, deviceId: p.deviceId, route: p.route })),
