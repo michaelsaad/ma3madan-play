@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://ma3madan-remote.pages.dev wss://ma3madan-remote.pages.dev; manifest-src 'self'">
+<meta name="theme-color" content="#0b1120">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ma3madan Remote</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-96.png">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<style>
+  :root { --bg: #0b1120; --panel: #141c2e; --panel-2: #1b2539; --line: #26324a; --text: #eef2f8; --muted: #8e9ab0; --accent: #3b82f6; --gold: #f2b84b; --live: #e5484d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, "Segoe UI", Tahoma, sans-serif; }
+  body { padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; min-height: 100vh; user-select: none; }
+  header { display: flex; align-items: center; gap: 10px; }
+  header b { flex: 1; font-size: 15px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: #30a46c; box-shadow: 0 0 0 4px rgba(48,164,108,.2); }
+  .status { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
+  .status.live { background: var(--live); color: #fff; }
+  .status.standby { background: #2b3446; color: #fff; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .title { font-size: 19px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .next { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.2em; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; }
+  .seekwrap { position: relative; height: 30px; display: flex; align-items: center; direction: ltr; }
+  #seek { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; margin: 0; border-radius: 99px; background: linear-gradient(to right, var(--accent) var(--p, 0%), var(--line) var(--p, 0%)); }
+  #seek::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); position: relative; z-index: 2; }
+  .ticks { position: absolute; left: 11px; right: 11px; top: 50%; height: 0; pointer-events: none; }
+  .ticks i { position: absolute; top: -7px; width: 3px; height: 14px; margin-left: -1.5px; border-radius: 2px; background: var(--gold); }
+  .marks button { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+  .marks button b { font: 600 12px ui-monospace, Consolas, monospace; color: var(--gold); direction: ltr; }
+  .marks button.on { border-color: var(--gold); background: #2b2412; }
+  .times { display: flex; justify-content: space-between; font: 600 12px ui-monospace, Consolas, monospace; color: var(--muted); direction: ltr; }
+  .row { display: flex; align-items: center; justify-content: center; gap: 8px; direction: ltr; }
+  .row button { min-width: 0; width: 54px; padding: 0; flex: none; }
+  button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px; min-height: 56px; min-width: 56px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  button:active { transform: scale(.96); background: var(--line); }
+  button svg { width: 26px; height: 26px; }
+  button.play { width: 78px !important; height: 78px; border-radius: 50%; background: var(--accent); border-color: var(--accent); }
+  button.play svg { width: 38px; height: 38px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .grid button { flex-direction: column; gap: 4px; font-size: 12.5px; min-height: 72px; color: var(--muted); }
+  .grid button svg { color: var(--text); }
+  .grid button.on { background: var(--live); border-color: var(--live); color: #fff; }
+  .grid button.on.freeze { background: #38bdf8; border-color: #38bdf8; color: #04263b; }
+  .grid button.on svg { color: inherit; }
+  .card.vol { flex-direction: row; align-items: center; gap: 12px; direction: ltr; padding: 10px 14px; }
+  .vol button { min-height: 48px; min-width: 48px; border-radius: 14px; }
+  .vol input { flex: 1; accent-color: var(--accent); height: 32px; }
+  .vol span { min-width: 46px; text-align: end; font: 600 13px ui-monospace, Consolas, monospace; color: var(--muted); }
+  h3 { margin: 4px 2px 0; font-size: 14px; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; }
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  li { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+  li:active { background: var(--panel-2); }
+  li.playing { border-color: var(--accent); background: #16274a; }
+  li.missing { opacity: .45; }
+  li .th { width: 72px; height: 40px; border-radius: 8px; background: #000 center/cover no-repeat; flex: none; display: grid; place-items: center; color: var(--muted); }
+  li .th svg { width: 20px; height: 20px; }
+  li .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; }
+  li .d { font: 12px ui-monospace, Consolas, monospace; color: var(--muted); direction: ltr; }
+  .lyrics { display: flex; flex-direction: column; gap: 6px; }
+  .lyrics button { justify-content: flex-start; text-align: start; white-space: pre-line; font-size: 14px; min-height: 48px; padding: 10px 14px; line-height: 1.45; }
+  .lyrics button.on { border-color: var(--gold); background: #2b2412; }
+  .off { color: var(--muted); text-align: center; padding: 40px 10px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- the app around the remote ---------- */
+  body { padding-bottom: calc(86px + env(safe-area-inset-bottom)); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 4px 0 8px; }
+  header .who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+  header .who b { font-size: 15px; }
+  header .who small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: rgba(11, 17, 32, .96); border-top: 1px solid var(--line); backdrop-filter: blur(8px); }
+  .tabs button { min-height: 56px; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); background: transparent; border: 0; }
+  .tabs button svg { width: 24px; height: 24px; }
+  .tabs button.on { color: var(--text); background: var(--panel-2); }
+  .screen { display: flex; flex-direction: column; gap: 14px; }
+  .center { text-align: center; align-items: center; padding: 24px 6px; }
+  .center img { width: 84px; height: 84px; border-radius: 20px; }
+  .center h2 { margin: 6px 0 0; font-size: 20px; }
+  .center p { margin: 0; color: var(--muted); line-height: 1.6; max-width: 340px; }
+  ol.steps { margin: 0; padding-inline-start: 22px; color: var(--text); line-height: 1.9; text-align: start; }
+  ol.steps li { display: list-item; background: none; border: 0; border-radius: 0; padding: 2px 0; }
+  ol.steps li::marker { color: var(--gold); font-weight: 700; }
+  .primary { background: var(--accent); border-color: var(--accent); }
+  .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .laptops { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+  .laptops button { min-height: 40px; border-radius: 999px; font-size: 13px; padding: 0 12px 0 10px; flex: none; }
+  .laptops button.on { border-color: var(--accent); background: #16274a; }
+  .laptops button svg { width: 18px; height: 18px; }
+  .soon { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #2b2412; color: var(--gold); font-weight: 600; }
+  .install { display: flex; align-items: center; gap: 12px; padding: 12px 10px 12px 12px; border-radius: 18px;
+    background: linear-gradient(135deg, #16274a, #141c2e); border: 1px solid #24385f; }
+  .install img { width: 44px; height: 44px; border-radius: 11px; flex: none; }
+  .install-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .install-text b { font-size: 14.5px; }
+  .install-text small { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .install-text small svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--accent); }
+  .install .primary { min-height: 40px; min-width: 0; border-radius: 12px; padding: 0 16px; font-size: 14px; font-weight: 600; flex: none; }
+  .install-x { min-height: 32px; min-width: 32px; width: 32px; padding: 0; border: 0; background: transparent; color: var(--muted); flex: none; }
+  .install-x svg { width: 18px; height: 18px; }
+  .nearby { align-self: stretch; display: flex; flex-direction: column; gap: 8px; text-align: start; }
+  .nearby-head { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .mini-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin 1s linear infinite; }
+  .nearby-list { display: flex; flex-direction: column; gap: 8px; }
+  .nearby-list button { justify-content: flex-start; gap: 12px; min-height: 58px; font-size: 15.5px; font-weight: 600; background: #16274a; border-color: #24385f; }
+  .nearby-list button svg { color: var(--accent); }
+  .nearby-list button small { margin-inline-start: auto; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .nearby-none { margin: 0; font-size: 13px; color: var(--muted); }
+  .or { margin: 4px 0 -4px !important; font-size: 13px; color: var(--muted); align-self: stretch; text-align: start; border-top: 1px solid var(--line); padding-top: 12px; }
+  .approve-code { font: 700 44px ui-monospace, Consolas, monospace; letter-spacing: .18em; color: var(--gold); }
+  .laptops button.add { color: var(--muted); }
+  .laptops button .more { font-style: normal; font-size: 18px; line-height: 1; padding: 4px 2px 8px 8px; margin-inline-end: -4px; color: var(--muted); }
+  .nearby-list button span small.apps { display: block; margin: 2px 0 0; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .note { margin: 0; padding: 10px 12px; border-radius: 10px; background: #2a2412; border: 1px solid #5a4a1a; color: #f3d98b; font-size: 13px; text-align: start; }
+  /* ---------- Ma3madan PPT ---------- */
+  .ppt-logo { width: 64px; height: 64px; color: var(--gold); }
+  .grow { flex: 1; }
+  .pdeck-line { display: flex; align-items: center; gap: 10px; }
+  .pdeck { flex: 1; min-width: 0; font-size: 16px; -webkit-line-clamp: 1; }
+  /* The slide on the projector: pinned under the header, edge to edge, a third of the screen.
+     Everything else scrolls underneath it. */
+  .pstage { position: sticky; top: var(--hh, 56px); z-index: 4; margin: -6px -14px 0; background: #000; box-shadow: 0 6px 16px rgba(0,0,0,.45); }
+  /* The slide fills the width; a thin strip above and below holds the labels, so they never cover it. */
+  .pslide-main { position: relative; width: 100%; height: auto; aspect-ratio: var(--r, 1.7778) !important; overflow: hidden; background: #000; touch-action: pan-y; }
+  .pstage-bar { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; font-size: 13px; color: #c9d2e3; background: #000; border-bottom: 1px solid var(--line); }
+  .pstage-bar .status { font-size: 11px; padding: 2px 8px; }
+  .pstage-bar b { color: #fff; white-space: nowrap; }
+  .pstage-bar #pStageSec { color: var(--gold); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .pstage-bar .pdeck { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; color: var(--muted); }
+  .pfull-btn { position: absolute; top: 6px; inset-inline-end: 6px; min-height: 32px; min-width: 36px; width: 36px; height: 32px; padding: 0; border-radius: 8px; background: rgba(0,0,0,.45); border: 0; z-index: 3; }
+  .pfull-btn svg { width: 20px !important; height: 20px !important; }
+  .pfull-btn svg { width: 22px; height: 22px; }
+  .pfull-bar { display: none; }
+  /* Full screen: only the slide, with next and back under the thumb. Rotating the phone sideways does it too. */
+  body.pfull { overflow: hidden; }
+  body.pfull #pSlide { position: fixed; inset: 0; z-index: 50; width: 100vw; height: 100dvh; max-height: none; margin: 0; aspect-ratio: auto !important; border-radius: 0; box-shadow: none; }
+  body.pfull .pstage-bar { display: none; }
+  body.pfull .pfull-btn { display: none; }
+  body.pfull .pfull-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; align-items: center; gap: 10px; direction: ltr;
+    padding: 10px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    background: linear-gradient(transparent, rgba(0,0,0,.7)); opacity: .9; }
+  .pfull-bar button { min-height: 52px; min-width: 64px; border-radius: 16px; background: rgba(20,28,46,.85); }
+  .pfull-bar button.primary { background: var(--accent); margin-inline-start: auto; min-width: 96px; }
+  .pfull-bar #pFullClose { min-width: 52px; }
+  .pfull-pos { color: #fff; font-weight: 600; font-size: 15px; text-shadow: 0 1px 3px #000; }
+  @media (orientation: landscape) { body.pfull .pfull-bar { background: none; } }
+  .pslide-main img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .pslide-main img:not([src]) { display: none; }
+  .pslide-main.dark img { opacity: .15; }
+  .pslide-main.light img { opacity: .35; }
+  .pslide-main .tap { position: absolute; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; border: 2px solid var(--gold); animation: tap .6s ease-out forwards; pointer-events: none; }
+  @keyframes tap { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+  .pempty { position: absolute; inset: 0; margin: 0; display: grid; place-content: center; padding: 20px; text-align: center; color: var(--muted); font-size: 14px; }
+  .ppos { display: flex; align-items: baseline; gap: 10px; font-size: 14px; color: var(--muted); }
+  .ppos b { color: var(--text); font-size: 15px; }
+  .ppos #pSec { color: var(--gold); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptimer { font: 600 15px ui-monospace, Consolas, monospace; direction: ltr; color: var(--text); }
+  .phint { margin: -6px 0 0; font-size: 12px; color: var(--muted); }
+  .prow { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; direction: ltr; }
+  .prow:has(.wide) { grid-template-columns: 1fr; }
+  .pbig { min-height: 84px; border-radius: 20px; font-size: 16px; font-weight: 600; }
+  .pbig svg { width: 40px; height: 40px; }
+  .pbig.primary svg { width: 46px; height: 46px; }
+  .pbig.wide svg { width: 28px; height: 28px; }
+  .grid button.on.white { background: #f3f4f6; border-color: #f3f4f6; color: #111; }
+  .pnotes { white-space: pre-wrap; font-size: 17px; line-height: 1.6; max-height: 40vh; overflow-y: auto; user-select: text; }
+  .pnotes.empty { color: var(--muted); font-size: 14px; }
+  .psections, .pdecks { display: flex; flex-direction: column; gap: 8px; }
+  .psec { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .psec.here { border-color: var(--gold); }
+  .psec-head, .pgroup-head { width: 100%; min-height: 54px; border: 0; border-radius: 0; background: transparent; justify-content: flex-start; gap: 10px; padding: 0 8px 0 12px; }
+  .psec-head b, .pgroup-head b { flex: 1; min-width: 0; text-align: start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 15px; }
+  .psec.here .psec-head b { color: var(--gold); }
+  .psec-head small, .pgroup-head small { color: var(--muted); font-size: 12px; }
+  .caret { width: 20px !important; height: 20px !important; color: var(--muted); transition: transform .15s; transform: rotate(-90deg); }
+  [dir=rtl] .caret { transform: rotate(90deg); }
+  .open > button > .caret, .psec.open .caret, .pgroup.open .caret { transform: none; }
+  .psec-head .go { width: 44px; height: 40px; border-radius: 12px; background: var(--panel-2); display: grid; place-items: center; }
+  .psec-head .go svg { width: 18px; height: 18px; }
+  .pslides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 4px 10px 12px; }
+  .pslide { flex-direction: column; align-items: stretch; gap: 4px; padding: 4px; min-height: 0; min-width: 0; width: 100%; border-radius: 12px; background: transparent; }
+  .pslide .pic { position: relative; aspect-ratio: var(--r, 16/9); border-radius: 8px; background: #000 center/contain no-repeat; border: 2px solid transparent; }
+  .pslide.cur .pic { border-color: var(--gold); }
+  .pslide.hid { opacity: .45; }
+  .pslide .pic i { position: absolute; top: 4px; inset-inline-start: 4px; font: 600 11px system-ui; font-style: normal; background: rgba(0,0,0,.7); color: #fff; border-radius: 5px; padding: 1px 6px; }
+  .pslide .cap { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: start; }
+  .pgroup { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .pgroup ul { padding: 0 8px 8px; }
+  .pgroup li { min-width: 0; gap: 10px; padding: 4px 4px 4px 10px; background: var(--panel-2); }
+  .pgroup li > svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
+  .pgroup li.active { border-color: var(--accent); }
+  .pgroup li.playing { border-color: var(--gold); background: #2b2412; }
+  .pstart { min-height: 44px; min-width: 44px; width: 44px; padding: 0; border-radius: 12px; }
+  .pstart svg { width: 18px; height: 18px; }
+  /* the YouTube link card */
+  .linkbar { gap: 10px; padding: 12px; }
+  .link-row { display: flex; align-items: center; gap: 8px; }
+  .link-row .yt { width: 30px; height: 30px; color: #ff3b3b; flex: none; }
+  .link-row input { flex: 1; min-width: 0; font: inherit; font-size: 15px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; }
+  .link-row input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  .small-btn { min-height: 44px; min-width: 0; padding: 0 14px; font-size: 14px; border-radius: 12px; flex: none; }
+  .link-actions { display: grid; grid-template-columns: 1.4fr 1fr .8fr; gap: 8px; }
+  .link-actions button { min-height: 48px; min-width: 0; padding: 0 8px; font-size: 14px; border-radius: 12px; }
+  .link-actions button svg { width: 20px; height: 20px; }
+  .link-actions button.sent { background: #1d4d33; border-color: #2f7a52; }
+  .dl-list { display: flex; flex-direction: column; gap: 8px; }
+  .dl-list:empty { display: none; }
+  .dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; font-size: 13px; }
+  .dl .dt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dl .dp { font: 600 12px ui-monospace, Consolas, monospace; color: var(--muted); direction: ltr; }
+  .dl .dbar { grid-column: 1 / -1; height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .dl .dbar i { display: block; height: 100%; background: var(--accent); }
+  .dl.error .dp { color: #ff7a7a; }
+  .dl button { min-height: 28px; min-width: 28px; padding: 0; border: 0; background: none; color: var(--muted); grid-row: 1; grid-column: 2; display: none; }
+  /* countdown and karaoke buttons */
+  .grid button.on.cd { background: var(--gold); border-color: var(--gold); color: #2b1d00; }
+  .grid button.on.karaoke { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .grid button span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .cd-panel { gap: 10px; padding: 12px; }
+  .cd-panel b { font-size: 14px; color: var(--muted); }
+  .cd-chips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .cd-chips button { min-height: 48px; min-width: 0; padding: 0; font-weight: 700; }
+  .cd-stop { min-height: 44px; color: #ff7a7a; border-color: #5a2a2a; }
+  /* playback options */
+  .opts { gap: 12px; padding: 12px; }
+  .opt-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--muted); }
+  .seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); direction: ltr; }
+  .seg button { min-height: 38px; min-width: 0; padding: 0 10px; border: 0; background: none; font-size: 13.5px; color: var(--muted); border-radius: 9px; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .toggles { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tog { min-height: 40px; min-width: 0; padding: 0 14px; font-size: 13.5px; border-radius: 999px; color: var(--muted); }
+  .tog.on { background: #16274a; border-color: var(--accent); color: var(--text); }
+  /* lists and search */
+  .list-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; margin-top: 4px; }
+  .list-chips button { min-height: 40px; min-width: 0; padding: 0 14px; border-radius: 999px; font-size: 13.5px; flex: none; }
+  .list-chips button.on { background: #16274a; border-color: var(--accent); }
+  .list-chips button small { color: var(--muted); margin-inline-start: 4px; }
+  .search { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
+  .search svg { width: 18px; height: 18px; color: var(--muted); }
+  .search input { flex: 1; min-width: 0; font: inherit; font-size: 15px; color: var(--text); background: none; border: 0; padding: 12px 0; outline: none; }
+  li .sub { display: block; font-size: 11.5px; color: var(--muted); }
+  /* vocal remover mixer and screens */
+  .card-title { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .card-title svg { width: 18px; height: 18px; color: var(--accent); }
+  .mix-card, .screen-card { gap: 10px; padding: 12px; }
+  .seg.wide { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .seg.wide button { padding: 0 4px; }
+  .mix-row { display: grid; grid-template-columns: 64px 1fr 44px; align-items: center; gap: 10px; font-size: 13.5px; color: var(--muted); direction: ltr; }
+  .mix-row input { accent-color: var(--accent); height: 30px; }
+  .mix-row b { font: 600 12.5px ui-monospace, Consolas, monospace; color: var(--text); text-align: end; }
+  .link-btn { background: none; border: 0; min-height: 0; color: var(--muted); font-size: 13px; text-decoration: underline; padding: 6px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z" fill="currentColor"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5v14l10-7zM16 5h3v14h-3z" fill="currentColor"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M19 5v14L9 12zM5 5h3v14H5z" fill="currentColor"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z" fill="currentColor"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M12 5V2l5 4-5 4V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z" fill="currentColor"/></symbol>
+  <symbol id="i-black" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" fill="currentColor"/><path d="M9 20.5h6M12 17v3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-freeze" viewBox="0 0 24 24"><path d="M12 2.5v19M3.8 7.25l16.4 9.5M3.8 16.75l16.4-9.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="17.5" cy="16" r="2.5" fill="currentColor"/></symbol>
+
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M2 19h20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-slides" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 16v4M8 20h8M7 8h6M7 11h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-white" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9 20.5h6M12 17v3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-caret" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-yt" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4" fill="currentColor"/><path d="M10 9v6l5-3z" fill="#0b1120"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 19h14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 13.5V9.5M9.5 2.5h5M18.5 6.5l1.5-1.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><g transform="rotate(35 14 11)" fill="currentColor"><path fill-rule="evenodd" d="M14 2.5a3.6 3.6 0 0 1 3.6 3.6v.4a3.6 3.6 0 0 1-7.2 0v-.4A3.6 3.6 0 0 1 14 2.5zM10.5 5.75h7v1.1h-7z"/><path d="M11 10.6h6l-1 2H12z"/><path d="M12.4 13.3h3.2l-.7 8.2h-1.8z"/></g><path d="M4.5 3.5v7M4.5 3.5c1.6.4 2.6 1.3 3 2.6" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><ellipse cx="3.2" cy="10.6" rx="1.9" ry="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-shrink" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-screens" viewBox="0 0 24 24"><rect x="2.5" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="9.5" y="9" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<header>
+  <img class="logo" src="/icons/icon-96.png" alt="">
+  <span class="who"><b id="appName">Ma3madan Remote</b><small id="whoSub"></small></span>
+  <span id="dot" class="dot"></span><span id="status" class="status" hidden></span>
+</header>
+
+<!-- Ma3madan Play -->
+<main id="tab-play" class="screen">
+  <div id="laptops" class="laptops" hidden></div>
+
+  <section id="pairScreen" class="screen center card" hidden>
+    <img src="/icons/icon-192.png" alt="">
+    <h2 data-s="pairTitle"></h2>
+    <p id="upgradeNote" class="note" data-s="upgradeNote" hidden></p>
+    <!-- Computers on the same Wi-Fi with the remote on: tap one, then approve on the computer -->
+    <div class="nearby">
+      <div class="nearby-head"><span data-s="nearbyTitle"></span><i id="nearbyBusy" class="mini-spin"></i></div>
+      <div id="nearbyList" class="nearby-list"></div>
+      <p id="nearbyNone" class="nearby-none" data-s="nearbyNone"></p>
+    </div>
+    <p class="or" data-s="orScan"></p>
+    <ol class="steps">
+      <li data-s="pair1"></li>
+      <li data-s="pair2"></li>
+      <li data-s="pair3"></li>
+    </ol>
+  </section>
+
+  <!-- Install: one tap on Android; on iPhone, how to add it from the Share menu -->
+  <section id="installCard" class="install" hidden>
+    <img src="/icons/icon-96.png" alt="">
+    <div class="install-text">
+      <b data-s="installTitle"></b>
+      <small id="installHow"></small>
+    </div>
+    <button id="installBtn" class="primary" data-s="install" hidden></button>
+    <button id="installClose" class="install-x" aria-label="Close"><svg><use href="#i-x"/></svg></button>
+  </section>
+
+  <section id="connectScreen" class="screen center card" hidden>
+    <div id="spinner" class="spinner"></div>
+    <div id="approveCode" class="approve-code" dir="ltr" hidden></div>
+    <h2 id="connTitle"></h2>
+    <p id="connText"></p>
+    <button id="retryBtn" class="primary" hidden><svg><use href="#i-retry"/></svg><span data-s="retry"></span></button>
+    <button id="forgetBtn" class="link-btn" hidden data-s="forget"></button>
+  </section>
+
+  <div id="remoteUi" class="screen" hidden>
+    <!-- A YouTube link: play it now (online), or download it to the computer -->
+    <section class="card linkbar">
+      <div class="link-row">
+        <svg class="yt"><use href="#i-yt"/></svg>
+        <input id="linkInput" type="url" inputmode="url" dir="ltr" autocomplete="off" spellcheck="false" data-ph="linkPh">
+        <button id="pasteBtn" class="small-btn" data-s="paste"></button>
+      </div>
+      <div id="linkActions" class="link-actions" hidden>
+        <button id="linkPlay" class="primary"><svg><use href="#i-play"/></svg><span data-s="playNow"></span></button>
+        <button id="linkVideo"><svg><use href="#i-download"/></svg><span data-s="dlVideo"></span></button>
+        <button id="linkMp3"><svg><use href="#i-music"/></svg><span>MP3</span></button>
+      </div>
+      <div id="dlList" class="dl-list"></div>
+    </section>
+
+    <section class="card">
+      <div id="title" class="title" dir="auto"></div>
+      <div id="next" class="next" dir="auto"></div>
+      <div class="seekwrap"><div id="ticks" class="ticks"></div><input id="seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Seek"></div>
+      <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+      <div class="row">
+        <button data-a="prev" aria-label="Previous"><svg><use href="#i-prev"/></svg></button>
+        <button data-a="back" aria-label="Back 10 s"><svg><use href="#i-back"/></svg></button>
+        <button data-a="toggle" class="play" id="playBtn" aria-label="Play"><svg><use href="#i-play"/></svg></button>
+        <button data-a="fwd" aria-label="Forward 10 s"><svg><use href="#i-fwd"/></svg></button>
+        <button data-a="next" aria-label="Next"><svg><use href="#i-next"/></svg></button>
+      </div>
+    </section>
+    
+    <div class="grid">
+      <button data-a="black" id="blackBtn"><svg><use href="#i-black"/></svg><span data-s="standby"></span></button>
+      <button data-a="freeze" id="freezeBtn" class="freeze"><svg><use href="#i-freeze"/></svg><span data-s="freeze"></span></button>
+      <button data-a="stop"><svg><use href="#i-stop"/></svg><span data-s="stop"></span></button>
+      <button id="cdBtn" class="cd"><svg><use href="#i-timer"/></svg><span id="cdLabel"></span></button>
+      <button data-a="karaoke" id="karaokeBtn" class="karaoke"><svg><use href="#i-mic"/></svg><span id="karaokeLabel"></span></button>
+    </div>
+    <section id="mixCard" class="card mix-card" hidden>
+      <b class="card-title"><svg><use href="#i-mic"/></svg><span data-s="vocalRemover"></span></b>
+      <div id="mixPresets" class="seg wide">
+        <button data-p="karaoke" data-s="presetKaraoke"></button><button data-p="original" data-s="presetOriginal"></button><button data-p="vocals" data-s="presetVocals"></button>
+      </div>
+      <label class="mix-row"><span data-s="vocalsLabel"></span><input id="mixVocals" type="range" min="0" max="100" step="5"><b id="mixVocalsPct"></b></label>
+      <label class="mix-row"><span data-s="musicLabel"></span><input id="mixMusic" type="range" min="0" max="100" step="5"><b id="mixMusicPct"></b></label>
+    </section>
+
+    <!-- Where the video shows: full screen (one screen) or which screens (two or more) -->
+    <section id="screenCard" class="card screen-card">
+      <b class="card-title"><svg><use href="#i-screens"/></svg><span data-s="screensTitle"></span></b>
+      <div id="screenChips" class="toggles"></div>
+      <button id="fullBtn" class="tog" hidden><span data-s="fullscreen"></span></button>
+      <button id="audioStandbyBtn" class="tog" data-s="audioStandby"></button>
+    </section>
+
+    <div id="cdPanel" class="card cd-panel" hidden>
+      <b data-s="cdTitle"></b>
+      <div class="cd-chips">
+        <button data-min="1">1</button><button data-min="2">2</button><button data-min="5">5</button><button data-min="10">10</button><button data-min="15">15</button>
+      </div>
+      <button id="cdStop" class="cd-stop" data-s="cdStop" hidden></button>
+    </div>
+    
+    <div class="vol card">
+      <button data-a="mute" id="muteBtn"><svg><use href="#i-vol"/></svg></button>
+      <input id="vol" type="range" min="0" max="200" step="5">
+      <span id="volPct"></span>
+    </div>
+
+    <section class="card opts">
+      <div class="opt-row"><span data-s="speed"></span>
+        <div id="speedSeg" class="seg"><button data-r="0.75">0.75×</button><button data-r="1">1×</button><button data-r="1.25">1.25×</button><button data-r="1.5">1.5×</button></div>
+      </div>
+      <div class="toggles">
+        <button id="autoNextBtn" class="tog" data-s="autoNext"></button>
+        <button id="loopBtn" class="tog" data-s="loop"></button>
+        <button id="subsBtn" class="tog" data-s="subtitles" hidden></button>
+      </div>
+    </section>
+    
+    <section id="marksBox" hidden>
+      <h3><span data-s="marks"></span><button data-a="addMark" style="min-height:32px;padding:0 12px;font-size:12px" data-s="addHere"></button></h3>
+      <div id="marks" class="lyrics marks"></div>
+    </section>
+    
+    <section id="lyricsBox" hidden>
+      <h3><span data-s="lyrics"></span><button data-a="lyricsOff" style="min-height:32px;padding:0 10px;font-size:12px" data-s="hide"></button></h3>
+      <div id="lyrics" class="lyrics"></div>
+    </section>
+    
+    <div id="listChips" class="list-chips"></div>
+    <div class="search"><svg><use href="#i-search"/></svg><input id="searchInput" type="search" dir="auto" data-ph="searchPh"></div>
+    <h3><span id="listName"></span><span id="count"></span></h3>
+    <ul id="list"></ul>
+  </div>
+</main>
+
+<!-- Ma3madan PPT, the PowerPoint remote -->
+<main id="tab-slides" class="screen" hidden>
+  <div id="p-laptops" class="laptops" hidden></div>
+
+  <section id="p-pairScreen" class="screen center card" hidden>
+    <svg class="ppt-logo"><use href="#i-slides"/></svg>
+    <h2 data-s="pptPairTitle"></h2>
+    <p id="p-upgradeNote" class="note" data-s="upgradeNote" hidden></p>
+    <div class="nearby">
+      <div class="nearby-head"><span data-s="nearbyTitle"></span><i class="mini-spin"></i></div>
+      <div id="p-nearbyList" class="nearby-list"></div>
+      <p id="p-nearbyNone" class="nearby-none" data-s="pptNearbyNone"></p>
+    </div>
+    <p class="or" data-s="orScan"></p>
+    <ol class="steps">
+      <li data-s="pptPair1"></li>
+      <li data-s="pair2"></li>
+      <li data-s="pair3"></li>
+    </ol>
+  </section>
+
+  <section id="p-connectScreen" class="screen center card" hidden>
+    <div id="p-spinner" class="spinner"></div>
+    <div id="p-approveCode" class="approve-code" dir="ltr" hidden></div>
+    <h2 id="p-connTitle"></h2>
+    <p id="p-connText"></p>
+    <button id="p-retryBtn" class="primary" hidden><svg><use href="#i-retry"/></svg><span data-s="retry"></span></button>
+    <button id="p-forgetBtn" class="link-btn" hidden data-s="forget"></button>
+  </section>
+
+  <div id="p-remoteUi" class="screen" hidden>
+    <div id="pStage" class="pstage">
+      <div id="pSlide" class="pslide-main"><img id="pSlideImg" alt=""><p id="pEmpty" class="pempty" data-s="noDeck"></p>
+        <button id="pFullBtn" class="pfull-btn" aria-label="Full screen"><svg><use href="#i-expand"/></svg></button>
+        <div id="pFullBar" class="pfull-bar">
+          <button data-p="prev" aria-label="Previous"><svg><use href="#i-left"/></svg></button>
+          <span id="pFullPos" class="pfull-pos"></span>
+          <button id="pFullClose" aria-label="Close"><svg><use href="#i-shrink"/></svg></button>
+          <button data-p="next" class="primary" aria-label="Next"><svg><use href="#i-right"/></svg></button>
+        </div></div>
+      <div class="pstage-bar"><span id="pStatus" class="status"></span><b id="pStagePos"></b><span id="pStageSec" dir="auto"></span><span id="pDeck" class="pdeck" dir="auto"></span></div>
+    </div>
+    <section class="card">
+      <div class="ppos"><b id="pPos"></b><span id="pSec" dir="auto"></span><span id="pStep"></span><span class="grow"></span><span id="pTimer" class="ptimer"></span></div>
+      <p id="pHint" class="phint" data-s="tapHint"></p>
+      <div id="pPlayRow" class="prow">
+        <button data-p="prev" class="pbig" aria-label="Previous"><svg><use href="#i-left"/></svg></button>
+        <button data-p="next" class="pbig primary" aria-label="Next"><svg><use href="#i-right"/></svg></button>
+      </div>
+      <div id="pStartRow" class="prow" hidden>
+        <button id="pStartBtn" class="pbig primary wide"><svg><use href="#i-play"/></svg><span data-s="fromStart"></span></button>
+      </div>
+    </section>
+
+    <div id="pControls" class="grid">
+      <button data-p="black" id="pBlackBtn"><svg><use href="#i-black"/></svg><span data-s="black"></span></button>
+      <button data-p="white" id="pWhiteBtn" class="white"><svg><use href="#i-white"/></svg><span data-s="white"></span></button>
+      <button data-p="end"><svg><use href="#i-stop"/></svg><span data-s="end"></span></button>
+    </div>
+
+    <section id="pNotesBox" class="card pnotes-card">
+      <h3><span data-s="notes"></span></h3>
+      <div id="pNotes" class="pnotes" dir="auto"></div>
+    </section>
+
+    <h3 id="pSectionsHead"><span data-s="sections"></span></h3>
+    <div id="pSections" class="psections"></div>
+
+    <div id="pDecks" class="pdecks"></div>
+  </div>
+</main>
+
+<nav class="tabs">
+  <button data-tab="play" class="on"><svg><use href="#i-play"/></svg><span>Ma3madan Play</span></button>
+  <button data-tab="ppt"><svg><use href="#i-slides"/></svg><span data-s="slidesTab"></span></button>
+</nav>
+
+<script src="/link.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

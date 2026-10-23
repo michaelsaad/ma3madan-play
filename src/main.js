@@ -4,7 +4,7 @@
 // - Presenter mode: a full-screen window on the second screen (the projector).
 // - Player mode: inside the control window, over its preview box, like a normal video player.
 // Moving the view doesn't reload it, so switching modes doesn't interrupt the video.
-const { app, BrowserWindow, BaseWindow, WebContentsView, ipcMain, screen, dialog, shell, globalShortcut, nativeTheme, clipboard } = require('electron');
+const { app, BrowserWindow, BaseWindow, WebContentsView, ipcMain, screen, dialog, shell, globalShortcut, nativeTheme, clipboard, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -12,7 +12,8 @@ const youtube = require('./youtube');
 const streamProxy = require('./stream-proxy');
 const updater = require('./updater');
 const vocals = require('./vocals');
-const remote = require('./remote');
+const { qrSvg } = require('./lan');
+const { createHub } = require('./hub');
 
 const APP_NAME = 'Ma3madan Play';
 const OLD_APP_NAME = 'Ma3madan Video Presenter'; // the name before 1.4.0
@@ -23,12 +24,14 @@ const OLD_APP_NAME = 'Ma3madan Video Presenter'; // the name before 1.4.0
 app.commandLine.appendSwitch('disable-features', ['WebRtcHideLocalIpsWithMdns', ...(process.env.VP_SELFTEST ? ['CalculateNativeWinOcclusion'] : [])].join(','));
 if (process.env.VP_SELFTEST) {
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.setPath('appData', process.env.VP_SELFTEST_DIR); // the shared phone link (hub.js) too: never the real one
   app.setPath('userData', process.env.VP_SELFTEST_DIR);
   app.setPath('videos', process.env.VP_SELFTEST_DIR);
 }
-// Migration check in a throwaway folder (never the real profile): VP_MIGRATION_TEST=<dir>
-if (process.env.VP_MIGRATION_TEST) {
-  const dir = process.env.VP_MIGRATION_TEST;
+// Migration check in a throwaway folder (never the real profile): VP_MIGRATION_TEST=<dir>.
+// VP_PROFILE=<dir>: the app as usual, in a throwaway profile (tests with Ma3madan PPT).
+if (process.env.VP_MIGRATION_TEST || process.env.VP_PROFILE) {
+  const dir = process.env.VP_MIGRATION_TEST || process.env.VP_PROFILE;
   app.setPath('appData', dir);
   app.setPath('userData', path.join(dir, APP_NAME));
   app.setPath('videos', path.join(dir, 'Videos'));
@@ -98,7 +101,28 @@ function writeJson(file, data) {
 }
 
 const settings = readJson(settingsFile(), {});
-const saveSettings = () => writeJson(settingsFile(), settings);
+// The MVSEP key is kept encrypted by Windows for this user (safeStorage), never as plain text.
+const SECRETS = ['mvsepToken'];
+const canEncrypt = () => app.isReady() && safeStorage.isEncryptionAvailable();
+function saveSettings() {
+  const out = { ...settings };
+  for (const k of SECRETS) {
+    if (!out[k]) { delete out[k + 'Enc']; continue; }
+    if (canEncrypt()) { out[k + 'Enc'] = safeStorage.encryptString(out[k]).toString('base64'); delete out[k]; }
+  }
+  writeJson(settingsFile(), out);
+}
+// Once the app is ready: read the encrypted ones (and encrypt any older plain one).
+function unlockSecrets() {
+  if (!canEncrypt()) return;
+  let plain = false;
+  for (const k of SECRETS) {
+    if (settings[k + 'Enc'] && !settings[k]) { try { settings[k] = safeStorage.decryptString(Buffer.from(settings[k + 'Enc'], 'base64')); } catch {} }
+    else if (settings[k]) plain = true;
+    delete settings[k + 'Enc'];
+  }
+  if (plain) saveSettings();
+}
 
 // ---------- screens ----------
 // Screens are numbered like a map: 1 is the main screen, the others follow from left to right.
@@ -364,8 +388,17 @@ function createControl() {
   Object.defineProperty(controlWin, 'webContents', { value: controlView.webContents });
   fitControlView();
   controlWin.setMenu(null);
+  // Maximizing a hidden window doesn't always send 'maximize'/'resize', so the page would stay at
+  // the normal size (half the screen) until minimize/maximize. Size the page again once it shows.
+  controlWin.on('show', fitControlView);
+  controlWin.on('restore', fitControlView);
   if (settings.controlMaximized ?? true) controlWin.maximize();
-  controlView.webContents.once('did-finish-load', () => { controlWin.show(); controlView.webContents.focus(); });
+  controlView.webContents.once('did-finish-load', () => {
+    controlWin.show();
+    fitControlView();
+    setTimeout(fitControlView, 300);
+    controlView.webContents.focus();
+  });
   controlView.webContents.loadFile(path.join(__dirname, 'control.html'));
   controlWin.on('focus', () => { if (!playerFullscreen) controlView.webContents.focus(); });
 
@@ -464,11 +497,15 @@ function togglePlayerFullscreen(on) {
 if (app.isPackaged && !process.env.VP_SELFTEST) app.setAsDefaultProtocolClient('ma3madan');
 
 app.whenReady().then(async () => {
+  unlockSecrets();
   await streamProxy.start();
   createControl();
   createOutput();
   registerMediaKeys();
-  if (settings.remoteOn && !process.env.VP_SELFTEST) startRemote().catch(() => {});
+  // The phone link, shared with Ma3madan PPT when both are open (hub.js).
+  hub = createHub({ app: 'play', title: APP_NAME, version: app.getVersion(), window: () => controlWin, computerName: () => require('os').hostname(), phoneDir: path.join(__dirname, 'phone') });
+  controlWin.webContents.on('did-finish-load', () => hub.pageReady());
+  if (settings.remoteOn && (!process.env.VP_SELFTEST || process.env.VP_LINK_TEST)) hub.start();
   // yt-dlp has to keep up with YouTube's changes: update it quietly once a week.
   if (!process.env.VP_SELFTEST) {
     setTimeout(() => {
@@ -521,7 +558,12 @@ function registerMediaKeys() {
     globalShortcut.register(accelerator, () => controlWin?.webContents.send('output-key', { code }));
   }
 }
-app.on('will-quit', () => globalShortcut.unregisterAll());
+// No window ever goes to another site or opens a new one: links go to the browser (open-external).
+app.on('web-contents-created', (_e, wc) => {
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+  wc.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) e.preventDefault(); });
+});
+app.on('will-quit', () => { globalShortcut.unregisterAll(); hub?.stop(); });
 
 app.on('second-instance', (_e, argv) => {
   if (!controlWin) return;
@@ -546,15 +588,28 @@ ipcMain.on('state', (_e, state) => { lastState = state; controlWin?.webContents.
 // Sound only (an MP3, a voice note): by default the audience sees the standby screen. With
 // "Standby screen for sound only" off, the projector (and mirrors) step aside instead, so whatever
 // else is on those screens (slides, the desktop) stays in view. Lyrics or a countdown bring it back.
-let hiddenForAudio = false;
+// Standby "Off" does the same whenever standby would show: the screens look as if the app is closed.
+let hiddenForAudio = false, hideTimer = null;
 function audioOnlyScreens(state) {
-  const hide = settings.audioStandby === false && mode === 'presenter' && state.loaded && state.audioOnly && !state.lyrics && !state.countdown;
-  if (hide === hiddenForAudio || !outputWin) return;
-  hiddenForAudio = hide;
+  const quiet = mode === 'presenter' && !state.lyrics && !state.countdown;
+  const forAudio = settings.audioStandby === false && state.loaded && state.audioOnly;
+  const standbyOff = settings.standby?.kind === 'off' && (!state.loaded || state.black);
+  const hide = quiet && (forAudio || standbyOff);
+  if (!outputWin) return;
+  if (!hide) { clearTimeout(hideTimer); hideTimer = null; }
+  if (hide === hiddenForAudio) return;
   if (hide) {
-    outputWin.hide();
-    for (const w of mirrors.values()) w.hide();
+    // Let the fade to black finish first, so the picture never cuts away mid-frame.
+    if (hideTimer) return;
+    const wait = state.loaded ? Math.round((settings.fadeSec ?? 1) * 1000) + 150 : 0;
+    hideTimer = setTimeout(() => {
+      hideTimer = null;
+      hiddenForAudio = true;
+      outputWin.hide();
+      for (const w of mirrors.values()) w.hide();
+    }, wait);
   } else {
+    hiddenForAudio = false;
     placeOutput();
     syncMirrors();
   }
@@ -588,7 +643,7 @@ ipcMain.on('player-rect', (_e, rect) => {
 ipcMain.on('player-fullscreen', (_e, on) => togglePlayerFullscreen(on));
 
 ipcMain.handle('get-settings', () => ({ ...settings, _selftest: !!process.env.VP_SELFTEST }));
-ipcMain.on('set-setting', (_e, key, value) => { settings[key] = value; saveSettings(); if (key === 'audioStandby') audioOnlyScreens(lastState); });
+ipcMain.on('set-setting', (_e, key, value) => { settings[key] = value; saveSettings(); if (key === 'audioStandby' || key === 'standby') audioOnlyScreens(lastState); });
 
 ipcMain.handle('playlist-load', () =>
   readJson(playlistFile(), []).map(({ stems, ...it }) => ({
@@ -658,33 +713,17 @@ ipcMain.handle('pick-image', async (_e, title) => {
 ipcMain.handle('file-exists', (_e, p) => !!p && fs.existsSync(p));
 
 // ---------- phone remote ----------
-function startRemote() {
-  return remote.start({
-    port: 8790,
-    key: settings.remoteKey,
-    onCommand: c => controlWin?.webContents.send('remote-cmd', c),
-    thumbPath: id => thumbFile(id),
-  }).then(info => {
-    settings.remoteKey = remote.key(); settings.remoteOn = true; saveSettings();
-    return info;
-  });
-}
-ipcMain.handle('remote-start', async () => {
-  try { return { ok: true, ...(await startRemote()) }; }
-  catch (e) { return { ok: false, error: e.message }; }
-});
-ipcMain.handle('remote-stop', () => { remote.stop(); settings.remoteOn = false; saveSettings(); return remote.info(); });
-ipcMain.handle('remote-info', () => remote.info());
-// A new key makes the old QR code useless (someone who shouldn't have it is locked out).
-ipcMain.handle('remote-new-key', async () => {
-  remote.stop();
-  settings.remoteKey = null;
-  try { return { ok: true, ...(await startRemote()) }; } catch (e) { return { ok: false, error: e.message }; }
-});
-ipcMain.on('remote-state', (_e, s) => remote.setState(s));
-// The phone app (WebRTC, see link-host.js): its pairing QR code, and this PC's name for it.
-ipcMain.handle('qr-svg', (_e, text) => (typeof text === 'string' && text.length < 600 ? remote.qrSvg(text) : null));
+// The phone app over WebRTC and the Wi-Fi page (no internet), both from the hub (hub.js), which
+// Ma3madan PPT shares when both are open.
+let hub = null;
+ipcMain.handle('remote-start', () => { hub?.start(); settings.remoteOn = true; saveSettings(); return { ok: true, on: true }; });
+ipcMain.handle('remote-stop', () => { hub?.stop(); settings.remoteOn = false; saveSettings(); return { on: false }; });
+ipcMain.handle('remote-info', () => ({ on: !!hub?.isOn() }));
+// The phone app's pairing QR code, and this PC's name for it.
+ipcMain.handle('qr-svg', (_e, text) => (typeof text === 'string' && text.length < 600 ? qrSvg(text) : null));
 ipcMain.handle('host-name', () => require('os').hostname());
+// A phone asks to connect: the taskbar button blinks until the window is looked at.
+ipcMain.on('flash-window', () => { if (controlWin && !controlWin.isFocused()) controlWin.flashFrame(true); });
 
 ipcMain.handle('pick-files', async (_e, title) => {
   const r = await dialog.showOpenDialog(controlWin, {
@@ -705,11 +744,15 @@ ipcMain.on('open-videos-folder', () => {
 ipcMain.on('show-in-folder', (_e, p) => shell.showItemInFolder(p));
 ipcMain.on('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 
-// YouTube
-ipcMain.on('download-start', (_e, { id, url, kind }) =>
-  youtube.download(id, url, videosDir(), kind, data => controlWin?.webContents.send('download', { id, ...data })));
+// YouTube. Only real web links reach yt-dlp.
+const webLink = url => { try { const u = new URL(String(url)); return (u.protocol === 'https:' || u.protocol === 'http:') && url.length < 600; } catch { return false; } };
+ipcMain.on('download-start', (_e, { id, url, kind }) => {
+  if (!webLink(url)) { controlWin?.webContents.send('download', { id, status: 'error', error: 'bad link' }); return; }
+  youtube.download(id, url, videosDir(), kind, data => controlWin?.webContents.send('download', { id, ...data }));
+});
 ipcMain.on('download-cancel', (_e, id) => youtube.cancelDownload(id));
 ipcMain.handle('stream-resolve', async (_e, url, force) => {
+  if (!webLink(url)) return { ok: false, error: 'bad link' };
   try { return { ok: true, ...(await youtube.resolveStream(url, force)) }; }
   catch (e) { return { ok: false, error: e.message }; }
 });

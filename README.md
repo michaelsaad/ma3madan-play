@@ -45,7 +45,7 @@ It plays your own video files and YouTube links, streamed directly or downloaded
   - **Download** saves the video to your PC as a single MP4 (up to 1080p) so it plays offline, or just the sound as an **MP3**.
   - Streamed something and want to keep it? Use the item's **⋯** menu (or right-click) → **Download video** or **Download as MP3**. The same menu opens the file's folder or the YouTube link.
 - **Show on any screens.** The **Show on** button opens a map of your screens: the projector only, this window, or several screens at once (for example a projector and a TV), all showing the same video in sync with one sound.
-- **Standby screen** (`B`): between videos the audience sees black, a picture (your church's logo, a welcome slide) or a short text such as a verse. Choose it in **Settings**.
+- **Standby screen** (`B`): between videos the audience sees black, a picture (your church's logo, a welcome slide) or a short text such as a verse. Or **Off**: the screens go back to the desktop, as if the app were closed, and the video comes back when you play. Choose it in **Settings**.
 - **Fades.** Picture and sound fade in from standby, fade out at the end, and cross through standby from one video to the next. Choose 0.5, 1 or 2 seconds, or turn them off.
 - **Saved lists.** Make a list for each meeting ("Thursday meeting"), fill it from Recents, and reorder it by dragging. **Next** follows the list you started from.
 - **Check before the meeting** (the ✓ button above the list): what's ready on this PC, what still plays from the internet (with **Download all**), and which files are missing.
@@ -56,7 +56,11 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 - **Checkpoints.** Mark the moments you jump to ("Verse 1", "Chorus") with **Here** (`Ctrl + D`) while a video plays. They list under Recents and show as gold ticks on the seek bar; click one to jump there, or `Alt + ←` / `Alt + →` to step between them. The phone remote has them too.
 - **Lyrics on screen.** Write a song's lyrics in its **Video settings…**, one slide per paragraph. While it plays, the slides line up under the controls: click one (or `Shift + N` / `Shift + P`) to show it over the video, or full screen over the standby screen for a song with no picture.
 - **Countdown** (`T`): a big "We start in 5:00" on the audience's screen before the meeting.
-- **Phone remote.** Turn it on, then on the phone either pick this computer from **Computers on this Wi-Fi** in the [Ma3madan Remote](https://ma3madan-remote.pages.dev) app and approve it here (**Trust this device** or **Just this time**, after checking the same 4-digit code shows on both), or scan the QR code once: the [Ma3madan Remote](https://github.com/michaelsaad/ma3madan-remote) app opens on the phone (add it to the home screen), and from then on it connects to the laptop by itself, directly over the Wi-Fi. Change videos, pause, seek, put up the standby screen, jump to checkpoints or show lyrics while you walk around; paste a YouTube link to play or download it, switch lists, start a countdown, turn karaoke on, or change the speed. Only phones that scanned the code can connect, and the connection is encrypted. For a place with no internet, a plain Wi-Fi page works too (**No internet here?**).
+- **Phone remote.** Turn it on, then on the phone either scan the QR code once (the [Ma3madan Remote](https://github.com/michaelsaad/ma3madan-remote) app opens; add it to the home screen), or pick this computer from **Computers on this Wi-Fi** in the [app](https://ma3madan-remote.pages.dev) and approve it here (**Trust this device** or **Just this time**, after checking the same 4-digit code shows on both). From then on it connects by itself, in about a second. Change videos, pause, seek, put up the standby screen, jump to checkpoints or show lyrics while you walk around; paste a YouTube link to play or download it, switch lists, start a countdown, turn karaoke on, or change the speed.
+  - **One connection with Ma3madan PPT.** When both apps are open, the phone has one connection to the computer and a tab for each: one QR code, one approval.
+  - **Trusted phones.** Each phone gets a key of its own: see them in the remote's window and **Forget** any one of them, or all. Only phones you trusted can connect, and the connection is encrypted.
+  - **Works on more networks.** Directly over the Wi-Fi when it can; through an encrypted relay when the Wi-Fi keeps devices apart (guest and church networks often do) or the phone is on mobile data.
+  - **No internet at all?** Scan the code under **No internet here?**: the same phone app, served by this computer on the local network.
 - **Freeze** (`Z`) holds the picture on the audience's screens while the video keeps running underneath, sound included. Your preview keeps showing the running video, marked *Frozen*.
 - **Frame by frame** (`[` and `]`): one click moves one frame; hold the button to keep stepping.
 - **Always know what the audience sees**: a status next to the title says *On screen*, *Standby*, *Paused*, *Frozen* or *Countdown*, and on which screens.
@@ -76,7 +80,7 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 
 1. Download **`Ma3madan-Play-Setup-x.y.z.exe`** from the [latest release](https://github.com/michaelsaad/ma3madan-play/releases/latest).
 2. Run it. Because the app is new and not code-signed yet, Edge or Windows may warn you first. See [Windows says the file is unsafe](#windows-says-the-file-is-unsafe) below.
-3. Pick where to install it. No admin rights are needed. You'll get a desktop shortcut and a Start-menu entry.
+3. Pick where to install it. No admin rights are needed. You'll get a desktop shortcut and a Start-menu entry. Installed for all users, it also lets the phone remote through the Windows firewall on private networks; otherwise Windows asks once, the first time (choose **Private networks**).
 
 Prefer not to install? Download **`Ma3madan-Play-Portable-x.y.z.exe`** and run it from anywhere, even a USB stick. The portable version can't register itself as a video player.
 
@@ -95,7 +99,7 @@ The warnings fade as more people download the app. Signed releases (see [Code si
 
 The app used to be called *Ma3madan Video Presenter*. Updating keeps your settings, videos and downloads.
 
-When a new version is out, an **Update to x.y.z** button appears in the top bar. Nothing changes until you click it, so it never interrupts a presentation. The app downloads the new installer, checks it against the SHA-256 that GitHub publishes for the file, installs it and restarts. The portable version's button opens the download page instead.
+The app updates itself. It looks for a new version a little after it starts and every few hours (or right away with **ⓘ** → **Check for updates**). When one is out, an **Update to x.y.z** button appears in the top bar. Nothing changes until you click it, so it never interrupts a presentation. The app downloads the new installer, checks it against the SHA-256 that GitHub publishes for the file, installs it and restarts. The portable version's button opens the download page instead.
 
 ## Using it with a projector
 
@@ -214,10 +218,11 @@ Other scripts:
 | `src/output.html` | The video engine (on the projector in Presenter mode, inside the main window in Player mode): playback, fades, standby screen, countdown, lyrics, subtitles, Web Audio volume boost, aspect ratio, stream buffering and automatic quality (two video elements, so a higher quality takes over at the same frame) |
 | `src/youtube.js` | yt-dlp: downloads, and resolving stream formats into a quality ladder |
 | `src/stream-proxy.js` | Local proxy that fetches YouTube streams in chunks, so they aren't throttled to playback speed, and measures the connection speed for auto quality |
-| `src/link.js` · `link-host.js` | The phone app's side here: pairing, then a direct WebRTC connection to [Ma3madan Remote](https://github.com/michaelsaad/ma3madan-remote) |
-| `src/remote.js` · `remote.html` | The Wi-Fi remote page for places without internet, protected by the key in its QR code |
+| `src/hub.js` | One phone link for this app and [Ma3madan PPT](https://github.com/michaelsaad/ma3madan-ppt): the first one with the remote on holds it, the other joins it over a named pipe and takes over when the first closes. Keeps the trusted phones (`%APPDATA%\Ma3madan\link.json`) |
+| `src/link.js` · `link-host.js` · `link-page.js` | The WebRTC side: pairing, each phone's own key, signaling, and the direct (or relayed) connection to [Ma3madan Remote](https://github.com/michaelsaad/ma3madan-remote) |
+| `src/lan.js` · `src/phone/` | The Wi-Fi page for places without internet: a copy of the phone app (`npm run phone` refreshes it), protected by the key in its QR code |
 | `src/i18n.js` | English and Arabic strings |
-| `build/installer.nsh` | Registers the app under Windows Default apps |
+| `build/installer.nsh` | Registers the app under Windows Default apps, and lets the phone remote through the firewall on private networks |
 
 In Presenter mode, the preview in the control window is a live capture of the projector, so it always shows exactly what the audience sees. In Player mode, the same video engine is moved into the main window over the preview box, so switching modes never interrupts playback.
 
@@ -238,7 +243,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 Only files built by this repository's GitHub Actions workflow from its public source code are signed. Each signing request is approved by hand.
 
-**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. The phone remote, when you turn it on, connects only to phones that scanned its code: the Ma3madan Remote app finds the laptop through a signaling server that sees only encrypted messages and deletes them after ten minutes, then talks to it directly over the Wi-Fi; the Wi-Fi page is served only on your local network. Settings, lists and the list of recent videos stay on your computer.
+**Privacy:** the app doesn't collect, store or send any personal data or usage statistics. It connects to the internet only when you ask it to: YouTube when you stream or download a link; GitHub to set up or update its tools (yt-dlp, FFmpeg, the vocal remover) and to check for app updates; and MVSEP only if you choose the online vocal remover, which uploads that song's sound for separation. The phone remote, when you turn it on, connects only to phones you trusted: the Ma3madan Remote app finds the laptop through a signaling server that passes on only encrypted messages and keeps none of them, then talks to it directly over the Wi-Fi (or through an encrypted relay that can't read it either); the Wi-Fi page is served only on your local network. The MVSEP key is stored encrypted by Windows for your user account. Settings, lists and the list of recent videos stay on your computer.
 
 ## Third-party software
 

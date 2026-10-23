@@ -322,7 +322,7 @@ function showCountdown() {
     cmd('countdown', { until, text });
     closeModal();
   };
-  for (const b of document.querySelectorAll('#cdQuick button')) b.onclick = () => start(Date.now() + Number(b.dataset.m) * 60000 + 900);
+  for (const b of document.querySelectorAll('#cdQuick button')) b.onclick = () => start(Date.now() + Number(b.dataset.m) * 60000);
   $('cdStart').onclick = () => {
     const m = Number($('cdMinutes').value), until = $('cdUntil').value;
     if (until) {
@@ -330,7 +330,7 @@ function showCountdown() {
       const d = new Date(); d.setHours(h, mi, 0, 0);
       if (d < Date.now()) d.setDate(d.getDate() + 1);
       start(d.getTime());
-    } else if (m > 0) start(Date.now() + m * 60000 + 900);
+    } else if (m > 0) start(Date.now() + m * 60000);
     else $('cdMinutes').focus();
   };
   $('cdStop')?.addEventListener('click', () => { cmd('countdown', { until: 0 }); closeModal(); });
@@ -352,7 +352,8 @@ function showSettings() {
       </section>
       <section><h3>${escapeHtml(t('sPresenting'))}</h3>
         <div class="set-row"><span>${escapeHtml(t('sFade'))}<small>${escapeHtml(t('sFadeHint'))}</small></span>${seg('fade', [[0, t('off')], [0.5, '0.5 s'], [1, '1 s'], [2, '2 s']], s.fadeSec ?? 1)}</div>
-        <div class="set-row"><span>${escapeHtml(t('sStandby'))}<small>${escapeHtml(t('sStandbyHint'))}</small></span>${seg('standby', [['black', t('sbBlack')], ['image', t('sbImage')], ['text', t('sbText')]], sb.kind)}</div>
+        <div class="set-row"><span>${escapeHtml(t('sStandby'))}<small>${escapeHtml(t('sStandbyHint'))}</small></span>${seg('standby', [['black', t('sbBlack')], ['image', t('sbImage')], ['text', t('sbText')], ['off', t('sbOff')]], sb.kind)}</div>
+        <div id="sbOffRow" class="set-sub muted" ${sb.kind === 'off' ? '' : 'hidden'}>${escapeHtml(t('sbOffHint'))}</div>
         <div id="sbImageRow" class="set-sub" ${sb.kind === 'image' ? '' : 'hidden'}>
           <span id="sbImageName" class="muted" dir="auto">${escapeHtml(sb.image ? sb.image.split(/[\\/]/).pop() : t('sbNoImage'))}</span>
           <button id="sbImagePick" class="small-btn"><svg><use href="#i-image"/></svg>${escapeHtml(t('fChoose'))}</button>
@@ -386,7 +387,7 @@ function showSettings() {
     else if (g.dataset.k === 'fade') { settings.fadeSec = Number(v); api.setSetting('fadeSec', Number(v)); cmd('fade', { sec: Number(v) }); }
     else if (g.dataset.k === 'standby') {
       settings.standby = { ...(settings.standby || {}), kind: v }; api.setSetting('standby', settings.standby); applyStandby();
-      $('sbImageRow').hidden = v !== 'image'; $('sbTextRow').hidden = v !== 'text';
+      $('sbImageRow').hidden = v !== 'image'; $('sbTextRow').hidden = v !== 'text'; $('sbOffRow').hidden = v !== 'off'; renderStatus();
       if (v === 'image' && !settings.standby.image) $('sbImagePick').click();
     }
   };
@@ -417,37 +418,32 @@ $('settingsBtn').onclick = showSettings;
 
 // ---------- phone remote ----------
 // Two ways in, both on while the remote is on:
-// - the phone app (Ma3madan Remote): pair once with the QR code, then it finds this PC by itself
-//   and talks to it directly over the Wi-Fi (link-host.js; the internet is needed only for the
-//   moment of connecting);
-// - the Wi-Fi page (remote.js): needs no internet at all, but its address changes with the network.
+// - the phone app (Ma3madan Remote): one link for this computer, shared with Ma3madan PPT when
+//   both are open (hub.js): pair once with the QR code, then it finds this PC by itself and talks
+//   to it directly over the Wi-Fi (the internet is needed only for the moment of connecting);
+// - the Wi-Fi page (lan.js): the same phone app served by this computer, for places with no
+//   internet at all (its address changes with the network).
 let remote = { on: false };
-let hostName = '';
+let link = { on: false };
 let lanOpen = false;
 function renderRemoteBtn() {
   $('remoteBtn').classList.toggle('on', !!remote.on);
-  $('remoteBtn').classList.toggle('linked', !!(remote.clients || LinkHost.connected()));
+  $('remoteBtn').classList.toggle('linked', !!(link.phones?.length || link.wifiPages));
 }
-async function startLink() {
-  if (!settings.linkKey) { settings.linkKey = MaLink.randomId(18); api.setSetting('linkKey', settings.linkKey); }
-  // How phones on the same network find this computer without the QR code (not secret).
-  if (!settings.linkHostId) { settings.linkHostId = MaLink.randomId(12); api.setSetting('linkHostId', settings.linkHostId); }
-  if (!settings.linkLobby) { settings.linkLobby = MaLink.randomHex(16); api.setSetting('linkLobby', settings.linkLobby); }
-  hostName ||= await api.hostName();
-  await LinkHost.start(settings.linkKey, {
-    name: hostName, hostId: settings.linkHostId, lobby: settings.linkLobby,
-    onCommand: remoteCommand, thumb: thumbData,
-    onRequest: askLinkRequest, onCancel: cancelLinkRequest,
-    onChange: () => { renderRemoteBtn(); renderRemoteModal(); },
-  });
-  pushRemote();
-}
+LinkPage.onStatus = s => { link = s; renderRemoteBtn(); renderRemoteModal(); };
+LinkPage.onMessage = async m => {
+  if (m.type === 'cmd' && m.cmd && typeof m.cmd.action === 'string') remoteCommand(m.cmd);
+  else if (m.type === 'thumb' && typeof m.id === 'string') {
+    const data = await thumbData(m.id);
+    if (data) LinkPage.send({ type: 'thumb', peer: m.peer, id: m.id, v: m.v, data });
+  }
+};
 
 // A phone from "Nearby computers" asks to connect: it waits until it's approved here. The same
 // 4 digits show on the phone, so you know it's that phone.
 const linkRequests = []; // [{ device, code, resolve }]
 function askLinkRequest(req) {
-  return new Promise(resolve => { linkRequests.push({ ...req, resolve }); renderLinkRequest(); });
+  return new Promise(resolve => { linkRequests.push({ ...req, resolve }); renderLinkRequest(); api.flashWindow?.(); });
 }
 function cancelLinkRequest(code) {
   const i = linkRequests.findIndex(r => r.code === code);
@@ -455,6 +451,8 @@ function cancelLinkRequest(code) {
   linkRequests.splice(i, 1)[0].resolve('deny');
   renderLinkRequest();
 }
+LinkPage.onRequest = askLinkRequest;
+LinkPage.onCancel = cancelLinkRequest;
 function renderLinkRequest() {
   let box = $('linkRequest');
   const r = linkRequests[0];
@@ -474,11 +472,10 @@ function renderLinkRequest() {
     renderLinkRequest();
   };
 }
-// Called once the settings are loaded: the remote comes back on if it was on.
+// Called once the settings are loaded (main.js turns the link back on if it was on).
 async function initRemote() {
   remote = await api.remoteInfo();
   renderRemoteBtn();
-  if (remote.on && !settings._selftest) startLink().catch(e => console.warn('link', e));
 }
 // A small JPEG of a video's thumbnail, sent to the phone app over the connection.
 async function thumbData(id) {
@@ -498,6 +495,21 @@ async function showRemote() {
   openModal(`<div id="remoteBody"></div>`, { cls: 'remote wide' });
   renderRemoteModal();
 }
+const ago = ms => {
+  const m = Math.round((Date.now() - ms) / 60000);
+  return m < 2 ? t('agoNow') : m < 60 ? t('agoMin', { n: m }) : m < 48 * 60 ? t('agoHour', { n: Math.round(m / 60) }) : t('agoDay', { n: Math.round(m / 1440) });
+};
+// The phones this computer trusts (for both apps): each can be forgotten on its own.
+function devicesHtml() {
+  const list = link.devices || [];
+  if (!list.length) return '';
+  return `<div class="r-devices"><b>${escapeHtml(t('phonesTitle'))}</b><ul>${list.sort((a, b) => (b.seen || 0) - (a.seen || 0)).map(d => {
+    const live = (link.phones || []).find(p => p.deviceId === d.id);
+    return `<li><svg><use href="#i-phone"/></svg><span dir="auto">${escapeHtml(d.name)}</span>
+      <small class="${live ? 'live' : 'muted'}">${escapeHtml(live ? (live.route === 'relay' ? t('phoneRelay') : t('phoneConnected')) : t('phoneSeen', { d: ago(d.seen || d.added) }))}</small>
+      <button class="small-btn ghost" data-forget="${escapeHtml(d.id)}">${escapeHtml(t('phoneForget'))}</button></li>`;
+  }).join('')}</ul></div>`;
+}
 async function renderRemoteModal() {
   if (!$('remoteBody')) return;
   let html;
@@ -508,8 +520,10 @@ async function renderRemoteModal() {
       <ul class="r-points"><li>${escapeHtml(t('remoteP1'))}</li><li>${escapeHtml(t('remoteP2'))}</li><li>${escapeHtml(t('remoteP3'))}</li></ul>
       <div class="modal-actions"><button class="ghost" data-close>${escapeHtml(t('close'))}</button><button id="rOn" class="primary" data-primary>${escapeHtml(t('remoteOn'))}</button></div>`;
   } else {
-    const qr = LinkHost.isRunning() ? await api.qrSvg(LinkHost.pairUrl(hostName)) : '';
-    const n = LinkHost.connected() + (remote.clients || 0);
+    const qr = link.pairUrl ? await api.qrSvg(link.pairUrl) : '';
+    const n = (link.phones?.length || 0) + (link.wifiPages || 0);
+    const lan = link.lan || {};
+    const shared = (link.apps || []).includes('ppt');
     html = `
       <h2><svg class="h-ico"><use href="#i-phone"/></svg>${escapeHtml(t('remoteTitle'))}<span class="r-live">${escapeHtml(t('remoteIsOn'))}</span></h2>
       <div class="r-grid">
@@ -518,16 +532,18 @@ async function renderRemoteModal() {
           <b>${escapeHtml(t('appScan'))}</b>
           <ol class="r-steps"><li>${escapeHtml(t('appStep1'))}</li><li>${escapeHtml(t('appStep2'))}</li><li>${escapeHtml(t('appStep3'))}</li></ol>
           <p class="r-count">${escapeHtml(n ? t('remoteClients', { n }) : t('remoteNoClients'))}</p>
-          ${LinkHost.isOnline() === false ? `<p class="warn-text small">${escapeHtml(t('appOffline'))}</p>` : ''}
+          ${shared ? `<p class="muted small">${escapeHtml(t('linkShared'))}</p>` : ''}
+          ${link.online === false ? `<p class="warn-text small">${escapeHtml(t('appOffline'))}</p>` : ''}
         </div>
       </div>
+      ${devicesHtml()}
       <details class="r-lan" ${lanOpen ? 'open' : ''}>
         <summary>${escapeHtml(t('lanTitle'))}</summary>
         <div class="r-grid">
-          <div class="qr">${remote.qr || ''}</div>
+          <div class="qr">${lan.qr || ''}</div>
           <div class="r-info">
             <p class="muted">${escapeHtml(t('lanText'))}</p>
-            ${remote.urls?.length ? `<code dir="ltr">${escapeHtml(remote.urls[0])}</code>` : `<p class="warn-text">${escapeHtml(t('remoteNoNet'))}</p>`}
+            ${lan.urls?.length ? `<code dir="ltr">${escapeHtml(lan.urls[0].replace(/\?k=.*/, ''))}</code>` : `<p class="warn-text">${escapeHtml(t('remoteNoNet'))}</p>`}
             <p class="muted small">${escapeHtml(t('remoteFirewall'))}</p>
           </div>
         </div>
@@ -549,17 +565,17 @@ async function renderRemoteModal() {
     const r = await api.remoteStart();
     if (!r.ok) { toast(t('remoteFailed', { e: r.error })); return; }
     remote = r; renderRemoteBtn();
-    await startLink();
     renderRemoteModal();
   });
-  $('rOff')?.addEventListener('click', async () => { remote = await api.remoteStop(); LinkHost.stop(); renderRemoteBtn(); renderRemoteModal(); });
-  // A new code: every paired phone (app and Wi-Fi page) has to scan again.
+  $('rOff')?.addEventListener('click', async () => { remote = await api.remoteStop(); renderRemoteBtn(); renderRemoteModal(); });
+  for (const b of body.querySelectorAll('[data-forget]')) b.onclick = async () => {
+    const d = (link.devices || []).find(x => x.id === b.dataset.forget);
+    if (d && confirm(t('phoneForgetQ', { n: d.name }))) LinkPage.op({ op: 'forget', id: d.id });
+  };
+  // Start over: every phone (app and Wi-Fi page) has to scan again.
   $('rNewKey')?.addEventListener('click', async () => {
-    const r = await api.remoteNewKey();
-    if (!r.ok) return;
-    remote = r;
-    settings.linkKey = MaLink.randomId(18); api.setSetting('linkKey', settings.linkKey);
-    await startLink();
+    if (!confirm(t('remoteNewKeyQ'))) return;
+    await LinkPage.op({ op: 'forgetAll' });
     renderRemoteModal();
   });
 }
@@ -596,7 +612,7 @@ async function remoteCommand(c) {
     case 'openList': if (c.id == null || lists.some(l => l.id === c.id)) openList(c.id ?? null); break;
     case 'countdown': {
       const m = Number(c.minutes);
-      if (m > 0 && m <= 600) cmd('countdown', { until: Date.now() + m * 60000 + 900, text: settings.countdownText ?? t('cdDefaultMsg') });
+      if (m > 0 && m <= 600) cmd('countdown', { until: Date.now() + m * 60000, text: settings.countdownText ?? t('cdDefaultMsg') });
       else cmd('countdown', { until: 0 });
       break;
     }
@@ -617,11 +633,9 @@ async function remoteCommand(c) {
     }
     case 'mix': if (typeof c.music === 'number' && typeof c.vocals === 'number') setMix({ music: c.music, vocals: c.vocals }); break;
     case 'audioStandby': setAudioStandby(!!c.on); break;
-    case 'clients': remote = await api.remoteInfo(); renderRemoteBtn(); renderRemoteModal(); break;
   }
   pushRemote();
 }
-api.onRemoteCmd(remoteCommand);
 
 // "Standby screen for sound only" (main.js hides the projector for sound when it's off).
 function setAudioStandby(on) {

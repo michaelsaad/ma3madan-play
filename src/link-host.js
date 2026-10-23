@@ -1,133 +1,200 @@
-// The computer side of the phone app (Ma3madan Remote, ma3madan-remote.pages.dev): while the phone
-// remote is on, it watches the signaling server for phones and connects to each one directly over
-// the Wi-Fi (a WebRTC data channel, see link.js). The phone gets the same state and sends the same
-// commands as the Wi-Fi remote page served by remote.js.
+// The computer side of the phone app (Ma3madan Remote, ma3madan-remote.pages.dev), in the page of
+// whichever app holds the link (see hub.js: Ma3madan Play or Ma3madan PPT, one link for both).
+// While the remote is on it keeps a socket open to this computer's room at the signaling server,
+// and connects every phone that knocks directly over the Wi-Fi (a WebRTC data channel, link.js).
+// Messages from phones go to hub.js, which hands each one to its app; what the apps send comes
+// back here for the phones.
 //
-// Two ways a phone gets in:
-// - paired (scanned the QR code, or trusted before): it knows the key, its offer arrives encrypted
-//   in our room, and it's in straight away;
-// - from "Nearby computers" on the phone (same network, no QR code): its offer arrives in our
-//   lobby, and nothing happens until this computer approves it: "Trust this device" (it gets the
-//   key and connects by itself from then on), "Just this time", or "Don't allow".
+// Three ways a phone gets in:
+// - trusted before: its offer arrives encrypted with its own key, and it's in straight away;
+// - it just scanned the QR code: the offer is encrypted with the pairing code; it's trusted and
+//   gets a key of its own (the code changes after each use, so a photo of it is worth nothing);
+// - from "Nearby computers" on the phone (same network, no QR code): nothing happens until this
+//   computer approves it: "Trust this device", "Just this time", or "Don't allow".
+// eslint-disable-next-line no-unused-vars
 const LinkHost = (() => {
-  const APP_URL = 'https://ma3madan-remote.pages.dev/';
-  let link = null, secret = null, running = false, timer = null, presenceTimer = null, opts = {}, online = null;
-  let cursor = 0, lobbyCursor = 0;
-  let lastState = null;
-  const peers = new Map(); // phone id → { pc, dc, device, approved, code }
+  const APP_URL = MaLink.BASE + '/';
+  let id = null, opts = {}, sock = null, running = false, online = null, presenceTimer = null, sweepTimer = null;
+  const keys = new Map();  // device id → CryptoKey
+  let pairing = null;      // CryptoKey for the QR code's pairing code
+  const peers = new Map(); // phone id → { pc, ctl, img, device, deviceId, key, approved, code, seen, route }
 
-  async function start(key, options) {
+  // identity: { hostId, auth, pairCode, name, devices: { id: { key, name } } }
+  // options: { onNet(peer, msg), onPeers(list), onRequest({device, code}) → 'trust'|'once'|'deny',
+  //            onCancel(code), trust({device}) → { deviceId, key }, seen(deviceId), apps() → ['play',…], onOnline(bool) }
+  async function start(identity, options) {
     stop();
-    secret = key; opts = options; running = true;
-    link = await MaLink.deriveLink(key);
-    // Offers left before we started are stale: begin after the newest message waiting.
-    try {
-      const old = await MaLink.receive(link, 'host', 0);
-      cursor = old.length ? old[old.length - 1].id : 0;
-      const oldLobby = await MaLink.receiveOpen(opts.lobby, 'host', 0);
-      lobbyCursor = oldLobby.length ? oldLobby[oldLobby.length - 1].id : 0;
-      online = true;
-    } catch { online = false; }
+    id = identity; opts = options; running = true;
+    await setIdentity(identity);
+    sock = MaLink.socket({
+      room: id.hostId, role: 'host', auth: id.auth, keep: true,
+      onopen: () => setOnline(true),
+      onclose: () => setOnline(false),
+      onmessage: m => signal(m).catch(e => console.warn('link', e)),
+    });
     announce();
-    loop();
+    // A phone that went quiet (no ping for 20 s: it slept, or left the Wi-Fi) is let go.
+    sweepTimer = setInterval(() => {
+      for (const [pid, p] of peers) if (p.approved && Date.now() - p.seen > 20000) drop(pid, p);
+    }, 5000);
   }
+  // New pairing code or trusted list (after a phone was trusted or forgotten).
+  async function setIdentity(identity) {
+    id = identity;
+    pairing = id.pairCode ? await MaLink.pairKey(id.pairCode) : null;
+    keys.clear();
+    for (const [devId, d] of Object.entries(id.devices || {})) {
+      try { keys.set(devId, await MaLink.deviceKey(d.key)); } catch {}
+    }
+    // A forgotten phone is cut off at once.
+    for (const [pid, p] of peers) if (p.deviceId && !keys.has(p.deviceId)) drop(pid, p);
+  }
+  function setOnline(v) { if (online !== v) { online = v; opts.onOnline?.(v); changed(); } }
   function stop() {
     // Off the phones' "nearby" list right away (not after it times out).
-    if (running && opts.hostId) MaLink.leave(opts.hostId).catch(() => {});
+    if (running && id) MaLink.leave(id.hostId, id.auth).catch(() => {});
     running = false;
-    clearTimeout(timer); clearTimeout(presenceTimer);
+    clearTimeout(presenceTimer); clearInterval(sweepTimer);
+    sock?.close(); sock = null;
     for (const p of peers.values()) close(p);
     peers.clear();
+    online = null;
     changed();
   }
-  // "I'm here" for phones on the same network, every 20 s.
+  // "I'm here" for phones on the same network, every 30 s (and when the apps change).
   async function announce() {
+    clearTimeout(presenceTimer);
     if (!running) return;
-    try { await MaLink.announce(opts.hostId, opts.name, opts.lobby); } catch {}
-    presenceTimer = setTimeout(announce, 20000);
+    try { await MaLink.announce(id.hostId, id.name, id.auth, opts.apps?.() || []); } catch {}
+    presenceTimer = setTimeout(announce, 30000);
   }
-  async function loop() {
+
+  // ---------- signaling ----------
+  async function signal(m) {
     if (!running) return;
-    try {
-      const [msgs, lobby] = await Promise.all([MaLink.receive(link, 'host', cursor), MaLink.receiveOpen(opts.lobby, 'host', lobbyCursor)]);
-      for (const m of msgs) {
-        cursor = Math.max(cursor, m.id);
-        if (m.msg?.type === 'offer' && Math.abs(Date.now() - m.msg.ts) < 60000) accept(m.from, m.msg, true).catch(e => console.warn('link', e));
-      }
-      for (const m of lobby) {
-        lobbyCursor = Math.max(lobbyCursor, m.id);
-        if (m.msg?.type === 'offer' && typeof m.msg.sdp === 'string' && Math.abs(Date.now() - m.msg.ts) < 60000 && !peers.has(m.from)) {
-          accept(m.from, m.msg, false).catch(e => console.warn('link', e));
-        }
-      }
-      if (online !== true) { online = true; changed(); }
-    } catch {
-      if (online !== false) { online = false; changed(); }
+    if (m.type === 'gone') { const p = peers.get(m.from); if (p && !p.ctl) drop(m.from, p); return; }
+    const pid = m.from;
+    if (typeof pid !== 'string') return;
+    if (m.type === 'offer') {
+      let key = null, offer = null, how = null;
+      if (m.dev && keys.has(m.dev)) { key = keys.get(m.dev); how = 'trusted'; }
+      else if (m.pair && pairing) { key = pairing; how = 'pair'; }
+      if (key) {
+        try { offer = await MaLink.unseal(key, m.box); } catch { offer = null; }
+        if (!offer) return;
+      } else if (m.dev) {
+        // A phone this computer forgot (or a copy of an old one): tell it to pair again.
+        sock?.send({ to: pid, type: 'unknown' });
+        return;
+      } else if (m.open && typeof m.sdp === 'string') {
+        offer = { sdp: m.sdp, device: m.device };
+        how = 'nearby';
+      } else return;
+      accept(pid, offer, how, key, m.dev || null).catch(e => console.warn('link', e));
+    } else if (m.type === 'ice') {
+      const p = peers.get(pid);
+      if (!p) return;
+      let c = null;
+      try { c = p.key ? (await MaLink.unseal(p.key, m.box)).c : m.c; } catch { return; }
+      if (c) p.pc.addIceCandidate(c).catch(() => {});
     }
-    timer = setTimeout(loop, 2000);
   }
-  async function accept(id, offer, paired) {
-    if (peers.has(id)) close(peers.get(id));
-    const pc = new RTCPeerConnection({ iceServers: MaLink.ICE_SERVERS });
-    const peer = { pc, dc: null, device: String(offer.device || 'Phone').slice(0, 20), approved: paired, code: null };
-    peers.set(id, peer);
-    pc.ondatachannel = e => { peer.dc = e.channel; wire(id, peer, e.channel); };
+  const sendSignal = async (pid, p, obj) => {
+    if (p.key) sock?.send({ to: pid, type: obj.type, box: await MaLink.seal(p.key, obj) });
+    else sock?.send({ to: pid, ...obj });
+  };
+
+  async function accept(pid, offer, how, key, deviceId) {
+    if (peers.has(pid)) close(peers.get(pid));
+    const pc = new RTCPeerConnection({ iceServers: await MaLink.iceServers() });
+    const peer = {
+      pc, ctl: null, img: null, device: String(offer.device || 'Phone').slice(0, 24), deviceId, key,
+      approved: how === 'trusted', how, code: null, seen: Date.now(), route: null,
+    };
+    peers.set(pid, peer);
+    pc.ondatachannel = e => {
+      if (e.channel.label === 'img') { peer.img = e.channel; return; }
+      peer.ctl = e.channel; wire(pid, peer, e.channel);
+    };
+    pc.onicecandidate = e => { if (e.candidate) sendSignal(pid, peer, { type: 'ice', c: e.candidate.toJSON() }).catch(() => {}); };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') drop(id, peer);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') drop(pid, peer);
+      if (pc.connectionState === 'connected') MaLink.route(pc).then(r => { peer.route = r; changed(); });
     };
     await pc.setRemoteDescription({ type: 'offer', sdp: offer.sdp });
     await pc.setLocalDescription(await pc.createAnswer());
-    await MaLink.gathered(pc);
-    const answer = { type: 'answer', sdp: pc.localDescription.sdp, name: opts.name };
-    if (paired) await MaLink.send(link, 'host', id, answer);
-    else {
-      peer.code = await MaLink.sasCode(offer.sdp, pc.localDescription.sdp);
-      await MaLink.sendOpen(opts.lobby, 'host', id, answer);
-    }
+    if (how === 'nearby') peer.code = await MaLink.sasCode(offer.sdp, pc.localDescription.sdp);
+    // The answer goes at once; the network addresses follow as they're found.
+    await sendSignal(pid, peer, { type: 'answer', sdp: pc.localDescription.sdp, name: id.name });
   }
-  function wire(id, peer, dc) {
+
+  function wire(pid, peer, dc) {
+    const hello = () => {
+      dc.send(JSON.stringify({ type: 'hello', name: id.name, hostId: id.hostId, apps: opts.apps?.() || [] }));
+      opts.onNet?.(pid, { type: 'joined' });
+    };
     dc.onopen = async () => {
       changed();
-      if (peer.approved) { if (lastState) dc.send(JSON.stringify({ type: 'state', state: lastState })); return; }
-      // Not paired: ask here first. Nothing is sent or obeyed until then.
-      const answer = await opts.onRequest({ device: peer.device, code: peer.code });
+      if (peer.approved) { if (peer.deviceId) opts.seen?.(peer.deviceId); hello(); return; }
+      let answer = 'trust';
+      // From "Nearby computers": ask here first. Nothing is sent or obeyed until then.
+      if (peer.how === 'nearby') answer = await opts.onRequest({ device: peer.device, code: peer.code });
       if (dc.readyState !== 'open') return;
-      if (answer === 'trust' || answer === 'once') {
+      if (answer === 'trust') {
+        const t = await opts.trust({ device: peer.device });
+        peer.approved = true; peer.deviceId = t.deviceId;
+        dc.send(JSON.stringify({ type: 'paired', hostId: id.hostId, deviceId: t.deviceId, key: t.key, name: id.name }));
+        hello();
+      } else if (answer === 'once') {
         peer.approved = true;
-        dc.send(JSON.stringify(answer === 'trust' ? { type: 'paired', secret, name: opts.name } : { type: 'welcome', name: opts.name }));
-        if (lastState) dc.send(JSON.stringify({ type: 'state', state: lastState }));
+        dc.send(JSON.stringify({ type: 'welcome', name: id.name }));
+        hello();
       } else {
         dc.send(JSON.stringify({ type: 'denied' }));
-        setTimeout(() => drop(id, peer), 2000); // let the message reach the phone first
+        setTimeout(() => drop(pid, peer), 2000); // let the message reach the phone first
       }
       changed();
     };
-    dc.onmessage = async e => {
+    dc.onmessage = e => {
+      peer.seen = Date.now();
       if (!peer.approved) return;
       let m; try { m = JSON.parse(e.data); } catch { return; }
-      if (m.type === 'cmd' && m.cmd && typeof m.cmd.action === 'string') opts.onCommand(m.cmd);
-      else if (m.type === 'thumb' && typeof m.id === 'string') {
-        const data = await opts.thumb(m.id);
-        if (data && dc.readyState === 'open') dc.send(JSON.stringify({ type: 'thumb', id: m.id, v: m.v, data }));
-      }
+      if (m.type === 'ping') { if (dc.readyState === 'open') dc.send('{"type":"pong"}'); return; }
+      if (typeof m.app === 'string' && typeof m.type === 'string') opts.onNet?.(pid, m);
     };
-    dc.onclose = () => { drop(id, peer); opts.onCancel?.(peer.code); };
+    dc.onclose = () => { drop(pid, peer); opts.onCancel?.(peer.code); };
   }
-  function drop(id, peer) {
-    if (peers.get(id) !== peer) return;
-    peers.delete(id); close(peer); changed();
+  function drop(pid, peer) {
+    if (peers.get(pid) !== peer) return;
+    peers.delete(pid); close(peer); changed();
+    opts.onNet?.(pid, { type: 'left' });
   }
-  function close(p) { try { p.dc?.close(); } catch {} try { p.pc.close(); } catch {} }
-  function changed() { opts.onChange?.(); }
+  function close(p) { try { p.ctl?.close(); } catch {} try { p.img?.close(); } catch {} try { p.pc.close(); } catch {} }
+  function changed() { opts.onPeers?.(list()); }
+  const list = () => [...peers.entries()].filter(([, p]) => p.approved && p.ctl?.readyState === 'open')
+    .map(([pid, p]) => ({ peer: pid, device: p.device, deviceId: p.deviceId, route: p.route }));
 
-  // Every state change of the player goes to every approved phone.
-  function broadcast(state) {
-    lastState = state;
-    const s = JSON.stringify({ type: 'state', state });
-    for (const p of peers.values()) if (p.approved && p.dc?.readyState === 'open') p.dc.send(s);
+  // To one phone (peer) or to every connected one (peer null). Pictures go on their own channel,
+  // in parts, so they never hold up a tap or the state.
+  function send(peer, msg) {
+    const targets = peer ? [peers.get(peer)].filter(Boolean) : [...peers.values()];
+    const big = msg.type === 'thumb' && typeof msg.data === 'string';
+    const s = big ? null : JSON.stringify(msg);
+    for (const p of targets) {
+      if (!p.approved || p.ctl?.readyState !== 'open') continue;
+      try {
+        if (big) {
+          const ch = p.img?.readyState === 'open' ? p.img : p.ctl;
+          if (ch.bufferedAmount > 4 * 1024 * 1024) continue; // a phone that can't keep up skips pictures
+          MaLink.sendParts(ch, { app: msg.app, type: 'thumb', id: msg.id, v: msg.v }, msg.data);
+        } else p.ctl.send(s);
+      } catch (e) { console.warn('link send', e.message); }
+    }
   }
-  const connected = () => [...peers.values()].filter(p => p.approved && p.dc?.readyState === 'open').length;
-  const pairUrl = name => `${APP_URL}#pair=${encodeURIComponent(secret)}&name=${encodeURIComponent(name || '')}`;
+  const pairUrl = () => `${APP_URL}#pair=${encodeURIComponent(id.hostId + '.' + id.pairCode)}&name=${encodeURIComponent(id.name || '')}`;
 
-  return { start, stop, broadcast, connected, pairUrl, isRunning: () => running, isOnline: () => online };
+  return {
+    start, stop, setIdentity, send, announce, pairUrl, peers: list,
+    isRunning: () => running, isOnline: () => online,
+  };
 })();

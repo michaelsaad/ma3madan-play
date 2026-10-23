@@ -84,7 +84,7 @@ const ensureFfmpeg = () => ensureTool('ffmpeg', 'ffmpeg.exe', async () => {
 
 // YouTube needs a JavaScript runtime to solve its player challenges; Electron itself can act as Node.
 const baseArgs = () => [
-  '--no-playlist', '--encoding', 'utf-8',
+  '--ignore-config', '--no-playlist', '--encoding', 'utf-8',
   '--js-runtimes', 'node:' + process.execPath,
   '-S', 'res:1080,vcodec:h264,ext:mp4:m4a',
 ];
@@ -115,13 +115,14 @@ async function download(id, url, outDir, kind, onUpdate) {
       ? ['-f', 'ba', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '--ffmpeg-location', await ensureFfmpeg()]
       : ['-f', 'bv*+ba/b', '--merge-output-format', 'mp4', '--ffmpeg-location', await ensureFfmpeg()];
     proc = await runYtdlp([
-      url, ...baseArgs(),
+      ...baseArgs(),
       ...format,
       '-o', path.join(outDir, '%(title).120B [%(id)s].%(ext)s'),
       '--newline', '--progress', '--no-simulate',
       '--progress-template', 'download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s',
       '--print', 'before_dl:TITLE|%(title)s',
       '--print', 'after_move:FILE|%(vcodec)s|%(filepath)s',
+      '--', url, // after "--": a link can never be read as an option
     ]);
   } catch (e) {
     return onUpdate({ status: 'error', error: e.message });
@@ -216,7 +217,7 @@ const STREAM_TTL = 2 * 60 * 60 * 1000; // YouTube links expire after ~6h
 async function resolveStream(url, force) {
   const hit = streamCache.get(url);
   if (!force && hit && Date.now() - hit.at < STREAM_TTL) return hit.info;
-  const proc = await runYtdlp([url, '-j', ...baseArgs()]);
+  const proc = await runYtdlp(['-j', ...baseArgs(), '--', url]);
   return new Promise((resolve, reject) => {
     let out = '', stderr = '';
     proc.stdout.setEncoding('utf8');

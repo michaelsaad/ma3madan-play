@@ -125,36 +125,37 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
   await shot('45-scrub');
   await js(`document.querySelector('.seek-track').dispatchEvent(new PointerEvent('pointerleave'))`);
 
-  // ---------- phone remote ----------
+  // ---------- phone remote: the Wi-Fi page (no internet, lan.js) ----------
+  // The same phone app, served by this computer. Its address is the PC's own on the network.
+  const wifiOn = async () => {
+    await js(`api.remoteStart().then(r => { remote = r; renderRemoteBtn(); })`);
+    const t = Date.now();
+    while (Date.now() - t < 10000 && !(await js(`!!link.lan?.urls?.length`))) await wait(200);
+    const url = await js(`link.lan.urls[0]`);
+    return { url, base: new URL(url).origin, key: new URL(url).searchParams.get('k') };
+  };
   {
-    const r = JSON.parse(await js(`api.remoteStart().then(r => JSON.stringify(r))`));
-    log('remote on:', r.ok, '| urls', JSON.stringify(r.urls), '| qr', !!r.qr);
-    const key = new URL(r.urls?.[0] || `http://127.0.0.1:${r.port}/?k=x`).searchParams.get('k');
-    const base = `http://127.0.0.1:${r.port}`;
-    log('page without key:', (await fetch(base + '/')).status, '| with key:', (await fetch(`${base}/?k=${key}`)).status);
+    const { url, base, key } = await wifiOn();
+    log('Wi-Fi page on:', base, '| qr', await js(`!!link.lan.qr`));
+    const noKey = await fetch(base + '/'), withKey = await fetch(`${base}/?k=${key}`, { redirect: 'manual' });
+    log('page without key:', noKey.status, '| with key:', withKey.status, '→ cookie:', /mk=/.test(withKey.headers.get('set-cookie') || ''), '| bad request:', (await fetch(`${base}//`)).status);
     await js(`showRemote()`); await wait(500); await shot('46-remote');
-    const ctrl = new AbortController();
-    const ev = await fetch(`${base}/events?k=${key}`, { signal: ctrl.signal });
-    const reader = ev.body.getReader();
-    const firstMsg = new TextDecoder().decode((await reader.read()).value);
-    // A read can hold more than one event: take the first.
-    const state = JSON.parse(firstMsg.split('\n\n')[0].replace(/^data: /, ''));
-    log('remote state:', JSON.stringify({ title: state.title, items: state.items?.length, paused: state.paused }));
-    const before = await js('out.paused');
-    await fetch(`${base}/cmd?k=${key}`, { method: 'POST', body: JSON.stringify({ action: 'toggle' }) });
-    await wait(700);
-    log('remote play/pause:', before, '→', await js('out.paused'));
-    await fetch(`${base}/cmd?k=${key}`, { method: 'POST', body: JSON.stringify({ action: 'play', id: await js('items[3].id') }) });
-    await wait(1200);
-    log('remote picked a video:', await js(`items.find(x => x.id === playingId)?.title`));
-    log('remote button:', await js(`$('remoteBtn').className`), '| clients in dialog:', await js(`document.querySelector('.r-count')?.textContent`));
-    ctrl.abort();
-    // The phone page itself, rendered.
     const { BrowserWindow } = require('electron');
-    const w = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true } });
-    await w.loadURL(`${base}/?k=${key}`); await wait(1500);
+    const w = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true, partition: 'wifi-test-' + Date.now() } });
+    const wjs = code => w.webContents.executeJavaScript(code);
+    await w.loadURL(url);
+    const t0 = Date.now();
+    while (Date.now() - t0 < 10000 && !(await wjs(`!document.getElementById('remoteUi').hidden`))) await wait(200);
+    log('Wi-Fi page connected in', Date.now() - t0, 'ms:', await wjs(`JSON.stringify({address: location.href, title: document.getElementById('title').textContent, videos: document.querySelectorAll('#list li').length})`));
+    const before = await js('out.paused');
+    await wjs(`document.getElementById('playBtn').click()`); await wait(700);
+    log('Wi-Fi page play/pause:', before, '→', await js('out.paused'));
+    await wjs(`[...document.querySelectorAll('#list li')][3].click()`); await wait(1200);
+    log('Wi-Fi page picked a video:', await js(`items.find(x => x.id === playingId)?.title`), '| shows:', await wjs(`document.getElementById('title').textContent`));
+    await wait(1000);
+    log('Wi-Fi page thumbnails:', await wjs(`[...document.querySelectorAll('#list .th')].filter(e => e.style.backgroundImage).length`));
+    log('remote button:', await js(`$('remoteBtn').className`), '| clients in dialog:', await js(`document.querySelector('.r-count')?.textContent`));
     fs.writeFileSync(path.join(dir, '47-remote-phone.png'), (await w.webContents.capturePage()).toPNG());
-    log('phone page:', await w.webContents.executeJavaScript(`document.getElementById('title').textContent + ' | ' + document.querySelectorAll('#list li').length + ' videos'`));
     w.destroy();
     await js(`closeModal(); api.remoteStop().then(r => { remote = r; renderRemoteBtn(); })`);
   }
@@ -171,35 +172,44 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     await js(`document.querySelector('#marksList .mark').click()`); await wait(700);
     log('clicked the first checkpoint:', await js('out.time.toFixed(1)'));
     await shot('50-checkpoints');
-    const r = JSON.parse(await js(`api.remoteStart().then(r => JSON.stringify(r))`));
-    const key = new URL(r.urls[0]).searchParams.get('k'), base = `http://127.0.0.1:${r.port}`;
-    await fetch(`${base}/cmd?k=${key}`, { method: 'POST', body: JSON.stringify({ action: 'mark', i: 1 }) }); await wait(700);
-    log('phone → checkpoint 2:', await js('out.time.toFixed(1)'));
-    await fetch(`${base}/cmd?k=${key}`, { method: 'POST', body: JSON.stringify({ action: 'seek', t: 7 }) }); await wait(700);
-    log('phone seek to 7:', await js('out.time.toFixed(1)'), '| logo:', (await fetch(`${base}/logo.png?k=${key}`)).status);
+    const { url } = await wifiOn();
     const { BrowserWindow } = require('electron');
-    const w = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true } });
-    await w.loadURL(`${base}/?k=${key}`); await wait(1500);
-    log('phone page:', await w.webContents.executeJavaScript(`JSON.stringify({logo: document.getElementById('logo').naturalWidth, marks: document.querySelectorAll('#marks button').length, seek: document.getElementById('seek').value})`));
+    const w = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true, partition: 'wifi-marks-' + Date.now() } });
+    const wjs = code => w.webContents.executeJavaScript(code);
+    await w.loadURL(url);
+    const t0 = Date.now();
+    while (Date.now() - t0 < 10000 && !(await wjs(`document.querySelectorAll('#marks button').length === 2`))) await wait(200);
+    await wjs(`document.querySelectorAll('#marks button')[1].click()`); await wait(700);
+    log('phone → checkpoint 2:', await js('out.time.toFixed(1)'));
+    log('phone page:', await wjs(`JSON.stringify({marks: document.querySelectorAll('#marks button').length, seek: document.getElementById('seek').value})`));
     fs.writeFileSync(path.join(dir, '51-remote-phone-marks.png'), (await w.webContents.capturePage()).toPNG());
     w.destroy();
     await js(`api.remoteStop().then(r => { remote = r; renderRemoteBtn(); })`);
   }
 
-  // ---------- the phone app (WebRTC through ma3madan-remote.pages.dev) ----------
+  // ---------- the phone app (WebRTC, one link for the computer: hub.js) ----------
+  // MA3MADAN_BASE points the link at a test copy of the server (else the real one).
+  const SITE = process.env.MA3MADAN_BASE || 'https://ma3madan-remote.pages.dev';
+  const linkOn = async () => {
+    await js(`api.remoteStart().then(r => { remote = r; renderRemoteBtn(); })`);
+    const t = Date.now();
+    while (Date.now() - t < 15000 && !(await js(`!!(link.pairUrl && link.online)`))) await wait(300);
+  };
+  const linkOff = () => js(`api.remoteStop().then(r => { remote = r; renderRemoteBtn(); })`);
+  const hostId = async () => decodeURIComponent((await js('link.pairUrl')).match(/pair=([^&]+)/)[1]).split('.')[0];
   {
     await js(`playItem(items[0])`); await wait(1000);
-    await js(`startLink()`); await wait(1500);
-    const pair = await js(`LinkHost.pairUrl(hostName)`);
-    log('pairing link:', pair.replace(/pair=[^&]+/, 'pair=…'));
+    await linkOn();
+    const pair = await js(`link.pairUrl`);
+    log('pairing link:', pair.replace(/pair=[^&]+/, 'pair=…'), '| room online:', await js('link.online'));
     const { BrowserWindow } = require('electron');
-    const phone = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true } });
+    const phone = new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true, partition: 'qr-test-' + Date.now() } });
     await phone.loadURL(pair);
     const pjs = code => phone.webContents.executeJavaScript(code);
     const t0 = Date.now();
-    while (Date.now() - t0 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(500);
-    log('phone app connected in', Date.now() - t0, 'ms:', await pjs(`JSON.stringify({ui: !document.getElementById('remoteUi').hidden, title: document.getElementById('title').textContent, sub: document.getElementById('whoSub').textContent, address: location.href})`));
-    log('host sees phones:', await js(`LinkHost.connected()`));
+    while (Date.now() - t0 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(200);
+    log('phone app connected in', Date.now() - t0, 'ms:', await pjs(`JSON.stringify({ui: !document.getElementById('remoteUi').hidden, title: document.getElementById('title').textContent, sub: document.getElementById('whoSub').textContent, route: link.route, saved: JSON.parse(localStorage.getItem('computers') || '[]').map(c => c.name + (c.key ? ' (own key)' : ''))})`));
+    log('host sees phones:', await js(`link.phones.length`), '| trusted:', await js(`link.devices.length`), '| QR code changed after use:', (await js('link.pairUrl')) !== pair);
     const before = await js('out.paused');
     await pjs(`document.getElementById('playBtn').click()`); await wait(800);
     log('phone app play/pause:', before, '→', await js('out.paused'));
@@ -220,79 +230,90 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     await pjs(`[...document.querySelectorAll('#listChips button')][1]?.click()`); await wait(1000);
     log('phone opened list:', await js(`activeList()?.name || 'Recents'`), '| phone list:', await pjs(`document.querySelectorAll('#list li').length + ' videos'`));
     await pjs(`[...document.querySelectorAll('#listChips button')][0]?.click()`); await wait(800);
-    await pjs(`(i => { i.value = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ'; i.dispatchEvent(new Event('input')); })(document.getElementById('linkInput'))`);
-    log('link actions shown:', await pjs(`!document.getElementById('linkActions').hidden`));
-    fs.writeFileSync(path.join(dir, '56-phone-link.png'), (await phone.webContents.capturePage()).toPNG());
-    await pjs(`document.getElementById('linkPlay').click()`);
-    const tl = Date.now();
-    while (Date.now() - tl < 60000 && !(await js(`!!items.find(x => x.url === 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' && !x.loading) && playingId === items.find(x => x.url === 'https://www.youtube.com/watch?v=aqz-KE-bpKQ')?.id && out.loaded && out.time > 0.5`))) await wait(1000);
-    log('phone pasted a YouTube link → playing on the computer:', await js(`items.find(x => x.id === playingId)?.title`), 'in', Date.now() - tl, 'ms | phone shows:', await pjs(`document.getElementById('title').textContent`));
-    fs.writeFileSync(path.join(dir, '57-phone-more.png'), (await phone.webContents.capturePage()).toPNG());
-    // Screens, full screen and "standby for sound only" from the phone.
-    log('phone screens:', await pjs(`[...document.querySelectorAll('#screenChips button')].map(b => b.textContent + (b.classList.contains('on') ? '*' : '')).join(' | ') + ' | full screen button: ' + !document.getElementById('fullBtn').hidden`));
-    await pjs(`document.getElementById('fullBtn').click()`); await wait(1500);
-    log('phone → full screen:', JSON.stringify(getMode().playerFullscreen), '| phone shows on:', await pjs(`document.getElementById('fullBtn').classList.contains('on')`));
-    await pjs(`document.getElementById('fullBtn').click()`); await wait(1500);
-    log('phone → full screen off:', JSON.stringify(getMode().playerFullscreen));
-    await pjs(`document.getElementById('audioStandbyBtn').click()`); await wait(800);
-    log('phone → standby for sound only:', await js('settings.audioStandby'));
-    await pjs(`document.getElementById('audioStandbyBtn').click()`); await wait(800);
-    log('… back on:', await js('settings.audioStandby'));
+    if (process.env.VP_LINK_YT) {
+      await pjs(`(i => { i.value = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ'; i.dispatchEvent(new Event('input')); })(document.getElementById('linkInput'))`);
+      log('link actions shown:', await pjs(`!document.getElementById('linkActions').hidden`));
+      await pjs(`document.getElementById('linkPlay').click()`);
+      const tl = Date.now();
+      while (Date.now() - tl < 60000 && !(await js(`!!items.find(x => x.url === 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' && !x.loading) && playingId === items.find(x => x.url === 'https://www.youtube.com/watch?v=aqz-KE-bpKQ')?.id && out.loaded && out.time > 0.5`))) await wait(1000);
+      log('phone pasted a YouTube link → playing on the computer:', await js(`items.find(x => x.id === playingId)?.title`), 'in', Date.now() - tl, 'ms');
+    }
+    // The PPT tab: Ma3madan PPT isn't open here, on the same connection.
+    await pjs(`document.querySelector('.tabs [data-tab="ppt"]').click()`); await wait(400);
+    log('PPT tab without Ma3madan PPT:', await pjs(`document.getElementById('p-connTitle').textContent`));
+    await pjs(`document.querySelector('.tabs [data-tab="play"]').click()`);
     // Reopen the app without the QR link: it must find the laptop by itself.
-    await phone.loadURL('https://ma3madan-remote.pages.dev/');
+    await phone.loadURL(SITE + '/');
     const t1 = Date.now();
-    while (Date.now() - t1 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(500);
+    while (Date.now() - t1 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(200);
     log('reopened without scanning, connected in', Date.now() - t1, 'ms:', await pjs(`!document.getElementById('remoteUi').hidden`));
+    // The computer turns the remote off, then on again: the phone waits, then is back by itself.
+    await linkOff(); await wait(2500);
+    log('remote off → phone shows:', await pjs(`document.getElementById('connTitle').textContent`));
+    await linkOn();
+    const t2 = Date.now();
+    while (Date.now() - t2 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(200);
+    log('remote on again → phone back in', Date.now() - t2, 'ms:', await pjs(`!document.getElementById('remoteUi').hidden`));
+    // Forget this phone on the computer: it's cut off and can't come back with its old key.
+    const devId = await js(`link.devices[0].id`);
+    await js(`LinkPage.op({ op: 'forget', id: ${JSON.stringify(devId)} })`);
+    const t3 = Date.now();
+    while (Date.now() - t3 < 20000 && (await pjs(`link.state`)) === 'connected') await wait(300);
+    await wait(2500);
+    log('forgotten on the computer → phone:', await pjs(`link.state + ' | ' + document.getElementById('connTitle').textContent`), '| trusted left:', await js('link.devices.length'));
+    // And on the phone: forget the computer.
+    await pjs(`window.confirm = () => true; document.getElementById('forgetBtn').click()`); await wait(500);
+    log('forgotten on the phone → computers left:', await pjs(`JSON.parse(localStorage.getItem('computers') || '[]').length`), '| shows pairing:', await pjs(`!document.getElementById('pairScreen').hidden`));
     phone.destroy();
-    await js(`LinkHost.stop()`);
   }
 
   // ---------- a new phone finds this computer without the QR code ----------
   {
-    await js(`startLink()`); await wait(2500);
+    const id = await hostId();
     const { BrowserWindow } = require('electron');
     const mk = () => new BrowserWindow({ show: false, width: 390, height: 844, webPreferences: { offscreen: true, partition: 'nearby-test-' + Date.now() } });
     let phone = mk();
     const pjs = code => phone.webContents.executeJavaScript(code);
-    await phone.loadURL('https://ma3madan-remote.pages.dev/');
+    await phone.loadURL(SITE + '/');
     const t0 = Date.now();
-    while (Date.now() - t0 < 20000 && !(await pjs(`!!document.querySelector('#nearbyList button[data-host="${await js('settings.linkHostId')}"]')`))) await wait(500);
+    while (Date.now() - t0 < 40000 && !(await pjs(`!!document.querySelector('#nearbyList button[data-host="${id}"]')`))) await wait(500);
     log('nearby list:', await pjs(`[...document.querySelectorAll('#nearbyList button span')].map(s => s.textContent).join(', ')`), 'after', Date.now() - t0, 'ms');
     fs.writeFileSync(path.join(dir, '53-phone-nearby.png'), (await phone.webContents.capturePage()).toPNG());
-    await pjs(`document.querySelector('#nearbyList button[data-host="${await js('settings.linkHostId')}"]').click()`); // this test's own copy (the real app may be on too)
+    await pjs(`document.querySelector('#nearbyList button[data-host="${id}"]').click()`); // this test's own copy (the real app may be on too)
     const t1 = Date.now();
-    while (Date.now() - t1 < 30000 && !(await js(`!!document.getElementById('linkRequest')`))) await wait(500);
+    while (Date.now() - t1 < 30000 && !(await js(`!!document.getElementById('linkRequest')`))) await wait(300);
     await wait(800);
     const pcCode = await js(`document.querySelector('#linkRequest code')?.textContent`);
     const phoneCode = await pjs(`document.getElementById('approveCode').hidden ? null : document.getElementById('approveCode').textContent`);
     log('approval asked in', Date.now() - t1, 'ms | code on the computer:', pcCode, '| on the phone:', phoneCode, '| match:', !!pcCode && pcCode === phoneCode);
-    log('before approval the phone gets nothing:', await pjs(`document.getElementById('remoteUi').hidden`), '| host counts it:', await js('LinkHost.connected()'));
+    log('before approval the phone gets nothing:', await pjs(`document.getElementById('remoteUi').hidden`), '| host counts it:', await js('link.phones.length'));
     await shot('54-approve-request');
     fs.writeFileSync(path.join(dir, '55-phone-waiting.png'), (await phone.webContents.capturePage()).toPNG());
     await js(`document.querySelector('#linkRequest [data-a="trust"]').click()`); await wait(1500);
-    log('trusted → phone remote:', await pjs(`JSON.stringify({ui: !document.getElementById('remoteUi').hidden, title: document.getElementById('title').textContent, saved: JSON.parse(localStorage.getItem('laptops') || '[]').map(l => l.name + (l.secret ? ' (key)' : ''))})`));
+    log('trusted → phone remote:', await pjs(`JSON.stringify({ui: !document.getElementById('remoteUi').hidden, title: document.getElementById('title').textContent, saved: JSON.parse(localStorage.getItem('computers') || '[]').map(c => c.name + (c.key ? ' (own key)' : ''))})`));
     const before = await js('out.paused');
     await pjs(`document.getElementById('playBtn').click()`); await wait(800);
     log('trusted phone controls it:', before, '→', await js('out.paused'));
     // Next time: no list, no approval.
-    await phone.loadURL('https://ma3madan-remote.pages.dev/');
+    await phone.loadURL(SITE + '/');
     const t2 = Date.now();
-    while (Date.now() - t2 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(500);
+    while (Date.now() - t2 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(200);
     log('reopened: connected by itself in', Date.now() - t2, 'ms | asked again:', await js(`!!document.getElementById('linkRequest')`));
     phone.destroy();
 
     // Another phone: "Don't allow".
     phone = mk();
-    await phone.loadURL('https://ma3madan-remote.pages.dev/');
+    await phone.loadURL(SITE + '/');
     const t3 = Date.now();
-    while (Date.now() - t3 < 20000 && !(await pjs(`!!document.querySelector('#nearbyList button[data-host="${await js('settings.linkHostId')}"]')`))) await wait(500);
-    await pjs(`document.querySelector('#nearbyList button[data-host="${await js('settings.linkHostId')}"]').click()`); // this test's own copy (the real app may be on too)
+    while (Date.now() - t3 < 40000 && !(await pjs(`!!document.querySelector('#nearbyList button[data-host="${id}"]')`))) await wait(500);
+    await pjs(`document.querySelector('#nearbyList button[data-host="${id}"]').click()`);
     const t4 = Date.now();
-    while (Date.now() - t4 < 30000 && !(await js(`!!document.getElementById('linkRequest')`))) await wait(500);
+    while (Date.now() - t4 < 30000 && !(await js(`!!document.getElementById('linkRequest')`))) await wait(300);
     await js(`document.querySelector('#linkRequest [data-a="deny"]').click()`); await wait(1500);
-    log('denied phone:', await pjs(`JSON.stringify({title: document.getElementById('connTitle').textContent, remote: !document.getElementById('remoteUi').hidden, saved: (localStorage.getItem('laptops') || '[]').length > 2})`));
+    log('denied phone:', await pjs(`JSON.stringify({title: document.getElementById('connTitle').textContent, remote: !document.getElementById('remoteUi').hidden, saved: JSON.parse(localStorage.getItem('computers') || '[]').length})`));
     phone.destroy();
-    await js(`LinkHost.stop()`);
+    await js(`LinkPage.op({ op: 'forgetAll' })`);
+    await linkOff();
   }
 
   // ---------- karaoke button ----------

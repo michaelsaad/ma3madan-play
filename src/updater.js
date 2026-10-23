@@ -48,7 +48,7 @@ async function check() {
 // or never (the app quits so the installer can replace it).
 async function install(onProgress) {
   if (!latest) throw new Error('No update available');
-  if (!latest.canInstall) { shell.openExternal(latest.page); return 'opened'; }
+  if (!latest.canInstall) { if (/^https:\/\/github\.com\//.test(latest.page)) shell.openExternal(latest.page); return 'opened'; }
 
   const { name, url, size, sha256 } = latest.asset;
   const res = await fetch(url);

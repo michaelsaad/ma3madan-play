@@ -460,7 +460,8 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode,
     // The key is copied into this test's settings and never logged.
     if (process.env.VP_ONLINE_REAL) {
       const url = process.env.VP_ONLINE_REAL;
-      const real = JSON.parse(fs.readFileSync(path.join(app.getPath('appData'), 'Ma3madan Play', 'settings.json'), 'utf8'));
+      // (Since 2.6 the installed app keeps it encrypted: pass it as VP_MVSEP_KEY.)
+      const real = { mvsepToken: process.env.VP_MVSEP_KEY || '' };
       await js(`for (const [k, v] of [['vocalEngine', 'online'], ['mvsepToken', ${JSON.stringify(real.mvsepToken || '')}]]) { settings[k] = v; api.setSetting(k, v); } addStream(${JSON.stringify(url)})`);
       const t0 = Date.now();
       while (Date.now() - t0 < 60000 && await js(`items.some(x => x.loading)`)) await wait(500);

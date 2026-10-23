@@ -59,9 +59,10 @@ function untar(buf, dest) {
     const size = parseInt(field(124, 12).trim() || '0', 8);
     const type = String.fromCharCode(header[156] || 48);
     const target = path.join(dest, name);
-    if (!target.startsWith(dest)) throw new Error('Bad path in engine archive');
+    const rel = path.relative(dest, target);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('Bad path in engine archive');
     if (type === '5') fs.mkdirSync(target, { recursive: true });
-    else if (type === '0' || type === '\0') {
+    else if (rel && (type === '0' || type === '\0')) {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, buf.subarray(off + 512, off + 512 + size));
     }

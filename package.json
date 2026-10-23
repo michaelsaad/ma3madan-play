@@ -1,6 +1,6 @@
 {
   "name": "ma3madan-play",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Video player for churches and events: controls on your screen, clean full-screen video on the projector. Plays local files and YouTube.",
   "main": "src/main.js",
   "scripts": {
@@ -8,7 +8,8 @@
     "dist": "electron-builder --win portable nsis",
     "icon": "electron build/make-icon.js",
     "test:media": "node test/make-media.js",
-    "test": "node test/run-selftest.js"
+    "test": "node test/run-selftest.js",
+    "phone": "node build/copy-phone.js"
   },
   "keywords": [
     "electron",

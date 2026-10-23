@@ -804,15 +804,17 @@ $('resumeChip').onclick = () => {
 };
 
 // What the audience sees right now, in a word, next to the title.
+const standbyIsOff = () => settings.standby?.kind === 'off' && modeState.mode === 'presenter';
 function renderStatus() {
   const pill = $('statusPill');
   let cls, text;
   const where = modeState.mode === 'presenter' ? showOnLabel() : '';
   if (out.countdown) { cls = 'cd'; text = t('stCountdown', { t: fmt(Math.ceil((out.countdown.until - Date.now()) / 1000)) }); }
-  else if (!out.loaded) { cls = 'idle'; text = t('stStandby'); }
+  else if (!out.loaded) { cls = 'idle'; text = t(standbyIsOff() ? 'stOff' : 'stStandby'); }
   else if (out.buffering) { cls = 'wait'; text = t('loading'); }
   else if (out.frozen) { cls = 'frozen'; text = t('stFrozen'); }
   else if (out.lyrics && (out.black || out.audioOnly)) { cls = 'lyr'; text = t('stLyrics'); }
+  else if (out.black && standbyIsOff()) { cls = 'idle'; text = t('stOff'); }
   else if (out.black && !out.audioOnly) { cls = 'standby'; text = t('stStandby'); }
   else if (out.ended) { cls = 'idle'; text = t('stEnded'); }
   else if (out.paused) { cls = 'paused'; text = t('stPaused'); }
@@ -1387,8 +1389,7 @@ function pushRemote() {
       mix: it?.stems && it.stemsOn && out.loaded ? (it.mix || { music: 1, vocals: 0 }) : null,
       audioStandby: settings.audioStandby !== false,
     };
-    api.remoteState(state);     // the Wi-Fi page (remote.js)
-    LinkHost.broadcast(state);  // the phone app (link-host.js)
+    LinkPage.send({ type: 'state', state }); // the phone app and the Wi-Fi page (hub.js)
   }, 200);
 }
 

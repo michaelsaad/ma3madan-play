@@ -22,9 +22,14 @@
   WriteRegStr SHCTX "${VP_CAPS}\FileAssociations" ".flac" "Ma3madan.Audio"
   WriteRegStr SHCTX "Software\RegisteredApplications" "Ma3madan Play" "${VP_CAPS}"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+  ; The phone remote: phones on the local network may reach the app (private networks only).
+  ; Needs an installation for all users (admin); otherwise Windows asks once, the first time.
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="Ma3madan Play"'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="Ma3madan Play" dir=in action=allow program="$INSTDIR\${APP_EXECUTABLE_FILENAME}" enable=yes profile=private'
 !macroend
 
 !macro customUnInstall
   DeleteRegKey SHCTX "Software\Clients\Media\Ma3madan Play"
   DeleteRegValue SHCTX "Software\RegisteredApplications" "Ma3madan Play"
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="Ma3madan Play"'
 !macroend

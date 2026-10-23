@@ -1,6 +1,12 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const on = (channel, fn) => ipcRenderer.on(channel, (_e, data) => fn(data));
+const LINK_IN = new Set(['link-host-start', 'link-host-identity', 'link-host-apps', 'link-host-send', 'link-host-stop', 'link-app-in', 'link-status']);
+const LINK_OUT = new Set(['link-app-out', 'link-host-net', 'link-host-peers', 'link-host-online', 'link-host-seen']);
+const LINK_ASK = new Set(['link-op', 'link-host-trust', 'link-status']);
+
+// Tests point the phone link at a test copy of the server.
+if (process.env.MA3MADAN_BASE) contextBridge.exposeInMainWorld('MA3MADAN_BASE', process.env.MA3MADAN_BASE);
 
 contextBridge.exposeInMainWorld('api', {
   // relay
@@ -87,9 +93,13 @@ contextBridge.exposeInMainWorld('api', {
   remoteStart: () => ipcRenderer.invoke('remote-start'),
   remoteStop: () => ipcRenderer.invoke('remote-stop'),
   remoteInfo: () => ipcRenderer.invoke('remote-info'),
-  remoteNewKey: () => ipcRenderer.invoke('remote-new-key'),
-  remoteState: s => ipcRenderer.send('remote-state', s),
   qrSvg: text => ipcRenderer.invoke('qr-svg', text),
   hostName: () => ipcRenderer.invoke('host-name'),
-  onRemoteCmd: fn => on('remote-cmd', fn),
+  flashWindow: () => ipcRenderer.send('flash-window'),
+  // the phone link shared with Ma3madan PPT (hub.js, link-page.js): only these channels
+  link: {
+    on: (ch, fn) => { if (LINK_IN.has(ch)) on(ch, fn); },
+    send: (ch, data) => { if (LINK_OUT.has(ch)) ipcRenderer.send(ch, data); },
+    invoke: (ch, data) => (LINK_ASK.has(ch) ? ipcRenderer.invoke(ch, data) : Promise.resolve(null)),
+  },
 });

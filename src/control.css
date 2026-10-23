@@ -819,3 +819,13 @@ body.mini .transport .grp button.big svg { width: 18px; height: 18px; }
    window itself paints the background colour behind everything. */
 html, body { background: transparent; }
 body.player-mode .preview { background: transparent; }
+/* Trusted phones in the Remote panel */
+.r-devices { margin: 4px 0 12px; }
+.r-devices > b { display: block; font-size: 13px; margin-bottom: 6px; }
+.r-devices ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; }
+.r-devices li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+.r-devices li + li { border-top: 1px solid var(--line); }
+.r-devices li svg { width: 16px; height: 16px; flex: none; opacity: .7; }
+.r-devices li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-devices li small { font-size: 12px; }
+.r-devices li small.live { color: var(--ok, #2fb67c); }
