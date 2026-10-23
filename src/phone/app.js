@@ -741,38 +741,79 @@ setInterval(tickPptTimer, 500);
 // Tap on the slide: the same spot on the projector (links, buttons, videos, triggers).
 // Swipe left or right on the slide: next or back. A tap stays a click on the projector.
 let touch = null, swiped = 0;
-$('pSlide').addEventListener('touchstart', e => { if (e.touches.length === 1) touch = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
+// Full screen with the phone upright, the slide is turned sideways (body.rot): finger positions
+// are turned back into the slide's own directions.
+const turned = () => document.body.classList.contains('rot');
+function onSlide(x, y) {
+  const el = $('pSlide'), b = el.getBoundingClientRect();
+  if (!turned()) return { x: x - b.left, y: y - b.top, w: b.width, h: b.height };
+  const w = el.offsetWidth, h = el.offsetHeight, cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+  return { x: (y - cy) + w / 2, y: -(x - cx) + h / 2, w, h };
+}
+$('pSlide').addEventListener('touchstart', e => { if (e.touches.length === 1) touch = onSlide(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
 $('pSlide').addEventListener('touchend', e => {
   if (!touch || !showOf()) return;
-  const dx = e.changedTouches[0].clientX - touch.x, dy = e.changedTouches[0].clientY - touch.y;
+  const end = onSlide(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+  const dx = end.x - touch.x, dy = end.y - touch.y;
   touch = null;
   if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) { swiped = Date.now(); psend({ action: dx < 0 ? 'next' : 'prev' }); }
 });
-function setFull(on) {
-  document.body.classList.toggle('pfull', !!on);
-  if (on && document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-  if (!on && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+// Full screen: only the slide. The phone's Back button (or ✕) brings the remote back.
+let fullBy = null, fullHistory = false;
+const isFull = () => document.body.classList.contains('pfull');
+const portrait = () => matchMedia('(orientation: portrait)').matches;
+function applyTurn() {
+  // Upright phone: turn the slide sideways so it's wide and readable (when the phone can't turn
+  // the screen itself; Android in full screen can).
+  document.body.classList.toggle('rot', isFull() && portrait());
 }
+function setFull(on, by = 'button') {
+  if (!!on === isFull()) return;
+  document.body.classList.toggle('pfull', !!on);
+  if (on) {
+    fullBy = by;
+    // An entry in the history, so Back closes full screen instead of leaving the app.
+    if (!fullHistory) { history.pushState({ pfull: 1 }, ''); fullHistory = true; }
+    const root = document.documentElement;
+    if (root.requestFullscreen && !document.fullscreenElement) {
+      root.requestFullscreen().then(() => screen.orientation?.lock?.('landscape')).then(applyTurn, applyTurn).catch(applyTurn);
+    }
+  } else {
+    fullBy = null;
+    try { screen.orientation?.unlock?.(); } catch {}
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    if (fullHistory) { fullHistory = false; if (history.state?.pfull) history.back(); }
+  }
+  applyTurn();
+}
+addEventListener('popstate', () => { if (fullHistory) { fullHistory = false; setFull(false); } });
+// The system left full screen by itself (Back on Android, a swipe): leave ours too.
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && isFull()) setFull(false); });
+addEventListener('resize', applyTurn);
 $('pFullBtn').onclick = e => { e.stopPropagation(); setFull(true); };
 $('pFullClose').onclick = e => { e.stopPropagation(); setFull(false); };
-// Sideways while presenting: the slide fills the screen; upright again: back to the remote.
+$('pFullBack').onclick = e => { e.stopPropagation(); setFull(false); };
+// Sideways while presenting: the slide fills the screen; upright again: back to the remote
+// (only when turning the phone opened it, not the button).
 matchMedia('(orientation: landscape)').addEventListener('change', e => {
-  if (currentTab === 'ppt' && showOf()) setFull(e.matches);
+  if (currentTab !== 'ppt' || !showOf()) return;
+  if (e.matches) setFull(true, 'turn');
+  else if (fullBy === 'turn') setFull(false);
+  applyTurn();
 });
 $('pSlide').addEventListener('click', e => {
   if (!showOf() || Date.now() - swiped < 600 || e.target.closest('button')) return;
   // Where on the slide itself: full screen, the slide sits letterboxed in the phone's screen.
-  const box = $('pSlide').getBoundingClientRect(), b = box, ratio = pst.deck?.ratio || b.width / b.height;
-  let w = b.width, h = w / ratio;
-  if (h > b.height) { h = b.height; w = h * ratio; }
-  const r = { left: b.left + (b.width - w) / 2, top: b.top + (b.height - h) / 2, width: w, height: h };
-  const sx = (e.clientX - r.left) / r.width, sy = (e.clientY - r.top) / r.height;
+  const p = onSlide(e.clientX, e.clientY), ratio = pst.deck?.ratio || p.w / p.h;
+  let w = p.w, h = w / ratio;
+  if (h > p.h) { h = p.h; w = h * ratio; }
+  const sx = (p.x - (p.w - w) / 2) / w, sy = (p.y - (p.h - h) / 2) / h;
   if (sx < 0 || sx > 1 || sy < 0 || sy > 1) return;
   psend({ action: 'click', sx, sy });
   // A ripple where the finger was.
   const dot = document.createElement('i');
   dot.className = 'tap';
-  dot.style.left = (e.clientX - box.left) + 'px'; dot.style.top = (e.clientY - box.top) + 'px';
+  dot.style.left = p.x + 'px'; dot.style.top = p.y + 'px';
   $('pSlide').appendChild(dot);
   setTimeout(() => dot.remove(), 600);
 });

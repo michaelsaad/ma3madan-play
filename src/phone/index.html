@@ -143,6 +143,7 @@
   .pfull-bar { display: none; }
   /* Full screen: only the slide, with next and back under the thumb. Rotating the phone sideways does it too. */
   body.pfull { overflow: hidden; }
+  body.pfull > header, body.pfull .tabs, body.pfull #installCard { display: none !important; }
   body.pfull #pSlide { position: fixed; inset: 0; z-index: 50; width: 100vw; height: 100dvh; max-height: none; margin: 0; aspect-ratio: auto !important; border-radius: 0; box-shadow: none; }
   body.pfull .pstage-bar { display: none; }
   body.pfull .pfull-btn { display: none; }
@@ -154,6 +155,13 @@
   .pfull-bar #pFullClose { min-width: 52px; }
   .pfull-pos { color: #fff; font-weight: 600; font-size: 15px; text-shadow: 0 1px 3px #000; }
   @media (orientation: landscape) { body.pfull .pfull-bar { background: none; } }
+  .pfull-back { display: none; }
+  body.pfull .pfull-back { display: flex; position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); z-index: 4;
+    width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.55); border: 0; }
+  body.pfull .pfull-back svg { width: 22px; height: 22px; }
+  /* Upright phone: the slide turned sideways, filling the screen the long way. */
+  body.pfull.rot #pSlide { inset: auto; top: 50%; left: 50%; width: 100dvh; height: 100vw; transform: translate(-50%, -50%) rotate(90deg); }
+  body.pfull.rot .pfull-back { top: 10px; left: 10px; }
   .pslide-main img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   .pslide-main img:not([src]) { display: none; }
   .pslide-main.dark img { opacity: .15; }
@@ -474,6 +482,7 @@
     <div id="pStage" class="pstage">
       <div id="pSlide" class="pslide-main"><img id="pSlideImg" alt=""><p id="pEmpty" class="pempty" data-s="noDeck"></p>
         <button id="pFullBtn" class="pfull-btn" aria-label="Full screen"><svg><use href="#i-expand"/></svg></button>
+        <button id="pFullBack" class="pfull-back" aria-label="Back"><svg><use href="#i-x"/></svg></button>
         <div id="pFullBar" class="pfull-bar">
           <button data-p="prev" aria-label="Previous"><svg><use href="#i-left"/></svg></button>
           <span id="pFullPos" class="pfull-pos"></span>
