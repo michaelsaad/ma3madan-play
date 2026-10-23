@@ -11,15 +11,15 @@ const S = {
   en: {
     standby: 'Standby', freeze: 'Freeze', stop: 'Stop', lyrics: 'Lyrics', hide: 'Hide', marks: 'Checkpoints', addHere: '+ Here',
     next: 'Next: ', nothing: 'Nothing playing', live: 'LIVE', standbyOn: 'Standby', paused: 'Paused', videos: '{n} videos', recents: 'Recents',
-    pairTitle: 'Connect to your computer', pair1: 'On the computer, open Ma3madan Play.', pair2: 'Click the phone button at the top, then turn the remote on.',
+    pairTitle: 'Connect to your computer', pair1: 'On the computer, open Ma3madan Play or Ma3madan PPT.', pair2: 'Click the phone button at the top, then turn the remote on.',
     pair3: 'Scan the QR code with this phone’s camera.',
     pptPairTitle: 'Connect to Ma3madan PPT', pptPair1: 'On the computer, open Ma3madan PPT.',
     installTitle: 'Install Ma3madan Remote', install: 'Install', installAndroid: 'One tap away on your home screen, and it connects by itself.', installIos: 'Tap {share} Share, then “Add to Home Screen”.',
     connecting: 'Connecting to {n}…', connectingText: 'The phone and the computer need the same Wi-Fi.',
-    failedTitle: 'Couldn’t reach {n}', failedText: 'Make sure Ma3madan Play is open on the computer with the phone remote turned on, and that both are on the same Wi-Fi.',
+    failedTitle: 'Couldn’t reach {n}', failedText: 'Open Ma3madan Play or Ma3madan PPT with the phone remote on.',
     pptFailedText: 'Make sure Ma3madan PPT is open on the computer with the phone remote turned on, and that both are on the same Wi-Fi.',
     noNet: 'No internet: connecting needs it for a moment. Once connected, the remote keeps working without it.',
-    nearbyTitle: 'Computers on this Wi-Fi', nearbyNone: 'Looking… Ma3madan Play must be open with the phone remote on.', nearbyTap: 'Tap to connect',
+    nearbyTitle: 'Computers on this Wi-Fi', nearbyNone: 'Looking…', nearbyTap: 'Tap to connect',
     pptNearbyNone: 'Looking… Ma3madan PPT must be open with the phone remote on.',
     orScan: 'Not there? Scan the QR code instead:',
     approveTitle: 'Approve on {n}', approveText: 'Check that it shows this code, then choose “Trust this device” (or “Just this time”).',
@@ -34,11 +34,11 @@ const S = {
     adding: 'Adding…', online: 'YouTube · online', dlFailed: 'Download failed', preparing: 'Preparing…',
     retry: 'Try again', forget: 'Forget this computer', connectedTo: 'Connected to {n}', notConnected: 'Not connected',
     viaRelay: 'through a relay', appClosed: '{a} isn’t open', appClosedTitle: '{a} isn’t open on {n}',
-    appClosedText: 'Open {a} on the computer: it shows up here by itself, on the same connection.',
-    waitingTitle: 'Waiting for {n}…', waitingText: 'The computer is off, or the phone remote is off in Ma3madan Play (or Ma3madan PPT). It connects as soon as it’s on.',
-    pptWaitingText: 'The computer is off, or the phone remote is off in Ma3madan PPT (or Ma3madan Play). It connects as soon as it’s on.',
-    unknownTitle: '{n} doesn’t know this phone any more', unknownText: 'It was forgotten on the computer. Scan its code again to connect.',
-    upgradeNote: 'Ma3madan Remote was improved: one connection for both apps. Update the apps on the computer, then scan the code once more.',
+    appClosedText: 'Open it on the computer.',
+    waitingTitle: 'Waiting for {n}…', waitingText: 'Turn the phone remote on in Ma3madan Play or Ma3madan PPT.',
+    pptWaitingText: 'Turn the phone remote on in Ma3madan PPT.',
+    unknownTitle: '{n} doesn’t know this phone any more', unknownText: 'Scan its code again.',
+    upgradeNote: 'Scan the code on the computer again.',
     slidesTab: 'Ma3madan PPT',
     forgetQ: 'Forget “{n}”? You can pair again by scanning its code.',
     // Ma3madan PPT
@@ -52,15 +52,15 @@ const S = {
   ar: {
     standby: 'شاشة الانتظار', freeze: 'تثبيت', stop: 'إيقاف', lyrics: 'الكلمات', hide: 'إخفاء', marks: 'نقاط الفيديو', addHere: '+ هنا',
     next: 'التالي: ', nothing: 'لا يوجد تشغيل', live: 'مباشر', standbyOn: 'انتظار', paused: 'متوقف', videos: '{n} فيديو', recents: 'الأخيرة',
-    pairTitle: 'اربط الموبايل بالكمبيوتر', pair1: 'افتح «معمدان بلاي» على الكمبيوتر.', pair2: 'اضغط زر الموبايل بالأعلى، ثم شغّل الريموت.',
+    pairTitle: 'اربط الموبايل بالكمبيوتر', pair1: 'افتح «معمدان بلاي» أو «معمدان بي بي تي» على الكمبيوتر.', pair2: 'اضغط زر الموبايل بالأعلى، ثم شغّل الريموت.',
     pair3: 'امسح الكود بكاميرا هذا الموبايل.',
     pptPairTitle: 'اربط الموبايل بمعمدان بي بي تي', pptPair1: 'افتح «معمدان بي بي تي» على الكمبيوتر.',
     installTitle: 'ثبّت Ma3madan Remote', install: 'تثبيت', installAndroid: 'على شاشتك الرئيسية بلمسة واحدة، ويتصل وحده.', installIos: 'اضغط {share} مشاركة، ثم «إضافة إلى الشاشة الرئيسية».',
     connecting: 'جارٍ الاتصال بـ {n}…', connectingText: 'يجب أن يكون الموبايل والكمبيوتر على نفس الواي فاي.',
-    failedTitle: 'تعذّر الوصول إلى {n}', failedText: 'تأكد أن «معمدان بلاي» مفتوح على الكمبيوتر وريموت الموبايل يعمل، وأن الجهازين على نفس الواي فاي.',
+    failedTitle: 'تعذّر الوصول إلى {n}', failedText: 'افتح «معمدان بلاي» أو «معمدان بي بي تي» وشغّل ريموت الموبايل.',
     pptFailedText: 'تأكد أن «معمدان بي بي تي» مفتوح على الكمبيوتر وريموت الموبايل يعمل، وأن الجهازين على نفس الواي فاي.',
     noNet: 'لا يوجد إنترنت: الاتصال يحتاجه للحظات فقط. بعد الاتصال يعمل الريموت بدونه.',
-    nearbyTitle: 'أجهزة على هذا الواي فاي', nearbyNone: 'جارٍ البحث… يجب أن يكون «معمدان بلاي» مفتوحًا وريموت الموبايل يعمل.', nearbyTap: 'اضغط للاتصال',
+    nearbyTitle: 'أجهزة على هذا الواي فاي', nearbyNone: 'جارٍ البحث…', nearbyTap: 'اضغط للاتصال',
     pptNearbyNone: 'جارٍ البحث… يجب أن يكون «معمدان بي بي تي» مفتوحًا وريموت الموبايل يعمل.',
     orScan: 'ليس موجودًا؟ امسح الكود بدلًا من ذلك:',
     approveTitle: 'وافق على {n}', approveText: 'تأكد أنه يعرض نفس الرقم، ثم اختر «جهاز موثوق» (أو «هذه المرة فقط»).',
@@ -75,11 +75,11 @@ const S = {
     adding: 'جارٍ الإضافة…', online: 'يوتيوب · أونلاين', dlFailed: 'فشل التحميل', preparing: 'جارٍ التجهيز…',
     retry: 'حاول مرة أخرى', forget: 'نسيان هذا الكمبيوتر', connectedTo: 'متصل بـ {n}', notConnected: 'غير متصل',
     viaRelay: 'عبر وسيط', appClosed: '{a} غير مفتوح', appClosedTitle: '{a} غير مفتوح على {n}',
-    appClosedText: 'افتح {a} على الكمبيوتر: سيظهر هنا وحده، على نفس الاتصال.',
-    waitingTitle: 'في انتظار {n}…', waitingText: 'الكمبيوتر مغلق، أو ريموت الموبايل مطفأ في «معمدان بلاي» (أو «معمدان بي بي تي»). سيتصل بمجرد تشغيله.',
-    pptWaitingText: 'الكمبيوتر مغلق، أو ريموت الموبايل مطفأ في «معمدان بي بي تي» (أو «معمدان بلاي»). سيتصل بمجرد تشغيله.',
-    unknownTitle: '{n} لم يعد يعرف هذا الموبايل', unknownText: 'تم نسيانه على الكمبيوتر. امسح الكود مرة أخرى للاتصال.',
-    upgradeNote: 'تم تحسين Ma3madan Remote: اتصال واحد للبرنامجين. حدّث البرامج على الكمبيوتر، ثم امسح الكود مرة واحدة.',
+    appClosedText: 'افتحه على الكمبيوتر.',
+    waitingTitle: 'في انتظار {n}…', waitingText: 'شغّل ريموت الموبايل في «معمدان بلاي» أو «معمدان بي بي تي».',
+    pptWaitingText: 'شغّل ريموت الموبايل في «معمدان بي بي تي».',
+    unknownTitle: '{n} لم يعد يعرف هذا الموبايل', unknownText: 'امسح الكود مرة أخرى.',
+    upgradeNote: 'امسح الكود من الكمبيوتر مرة أخرى.',
     slidesTab: 'Ma3madan PPT',
     forgetQ: 'نسيان «{n}»؟ يمكنك الربط مرة أخرى بمسح الكود.',
     notPresenting: 'لا يوجد عرض', presenting: 'مباشر', blackOn: 'أسود', whiteOn: 'أبيض',
@@ -137,8 +137,21 @@ function linkClose() {
   try { link.pc?.close(); } catch {}
   link.pc = link.ctl = link.img = link.sock = null;
 }
+// Before a connection there's one screen for both apps (the tabs show once connected).
+const shownTab = () => (link.state === 'connected' ? currentTab : 'play');
+function renderShell() {
+  const linked = link.state === 'connected';
+  document.querySelector('.tabs').hidden = !linked;
+  document.body.classList.toggle('no-tabs', !linked);
+  $('tab-play').hidden = shownTab() !== 'play';
+  $('tab-slides').hidden = shownTab() !== 'ppt';
+}
 function setLinkState(state, extra = {}) {
+  const was = link.state;
   Object.assign(link, { state }, extra);
+  // Just connected: open the tab of an app that's open there.
+  if (state === 'connected' && was !== 'connected' && link.apps.length && !link.apps.includes(currentTab)) currentTab = link.apps[0];
+  renderShell();
   for (const v of Object.values(conns)) v.render();
 }
 
@@ -268,7 +281,7 @@ function wireChannels(ctl, img, c, target, my) {
       if (ready) connected();
       return;
     }
-    if (m.type === 'apps') { link.apps = Array.isArray(m.apps) ? m.apps : []; for (const v of Object.values(conns)) v.render(); return; }
+    if (m.type === 'apps') { link.apps = Array.isArray(m.apps) ? m.apps : []; renderShell(); for (const v of Object.values(conns)) v.render(); return; }
     if (m.type === 'state' && conns[m.app]) conns[m.app].onState(m.state);
     else if (m.type === 'thumb' && conns[m.app]) arrived(m);
   };
@@ -351,7 +364,7 @@ function makeConn(kind, { onState, onThumb, failedText, pairTitle }) {
   const P = kind === 'ppt' ? 'p-' : '';
   const q = id => $(P + id);
   const c = { kind, onState, onThumb, nearbyTimer: null };
-  const visible = () => currentTab === kind;
+  const visible = () => shownTab() === kind;
   c.send = msg => linkSend({ ...msg, app: kind });
   c.status = () => {
     const name = link.current?.name || '';
@@ -381,7 +394,7 @@ function makeConn(kind, { onState, onThumb, failedText, pairTitle }) {
       case 'idle': screen('pairScreen'); break;
       case 'connecting': connectScreen({ spin: true, title: t('connecting', { n: name }), text: t('connectingText') }); break;
       case 'approve': connectScreen({ code: link.code, title: t('approveTitle', { n: name }), text: t('approveText') }); break;
-      case 'offline': connectScreen({ spin: true, title: t('waitingTitle', { n: name }), text: t(kind === 'ppt' ? 'pptWaitingText' : 'waitingText'), forget: !l?.temp }); break;
+      case 'offline': connectScreen({ spin: true, title: t('waitingTitle', { n: name }), text: t('waitingText'), forget: !l?.temp }); break;
       case 'unknown': connectScreen({ title: t('unknownTitle', { n: name }), text: t('unknownText'), forget: true }); break;
       case 'denied':
         connectScreen({ title: t('deniedTitle'), text: t('deniedText', { n: name }) });
@@ -471,10 +484,10 @@ addEventListener('hashchange', () => {
 // ---------- header status: the visible tab's connection ----------
 let currentTab = 'play';
 function renderStatus() {
-  const s = conns[currentTab].status();
+  const s = conns[shownTab()].status();
   $('dot').classList.toggle('on', !!s.on);
   $('whoSub').textContent = s.sub || '';
-  $('status').hidden = currentTab !== 'play' || !s.on;
+  $('status').hidden = shownTab() !== 'play' || !s.on;
 }
 
 // Back from the background (screen was off, another app was open), or back online: reconnect if needed.
@@ -906,8 +919,7 @@ function selectTab(tab) {
   currentTab = tab === 'ppt' ? 'ppt' : 'play';
   try { localStorage.setItem('tab', currentTab); } catch {}
   for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x.dataset.tab === currentTab);
-  $('tab-play').hidden = currentTab !== 'play';
-  $('tab-slides').hidden = currentTab !== 'ppt';
+  renderShell();
   // Look for nearby computers only on the visible tab's pairing screen.
   for (const k of Object.keys(conns)) conns[k].stopNearby();
   const c = conns[currentTab];
@@ -929,7 +941,7 @@ function renderInstall() {
   let dismissed = false;
   try { dismissed = localStorage.getItem('installClosed') === '1'; } catch {}
   // Not over the remote itself: only on the pairing and connecting screens.
-  const remoteShown = !$(currentTab === 'ppt' ? 'p-remoteUi' : 'remoteUi').hidden;
+  const remoteShown = !$(shownTab() === 'ppt' ? 'p-remoteUi' : 'remoteUi').hidden;
   const show = !LAN && !installed() && !dismissed && (isIos || !!installPrompt) && !remoteShown;
   $('installCard').hidden = !show;
   if (!show) return;

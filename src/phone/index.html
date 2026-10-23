@@ -77,6 +77,8 @@
   header .who small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: rgba(11, 17, 32, .96); border-top: 1px solid var(--line); backdrop-filter: blur(8px); }
+  .tabs[hidden] { display: none; }
+  body.no-tabs { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
   .tabs button { min-height: 56px; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); background: transparent; border: 0; }
   .tabs button svg { width: 24px; height: 24px; }
   .tabs button.on { color: var(--text); background: var(--panel-2); }
