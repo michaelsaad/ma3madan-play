@@ -346,10 +346,10 @@ async function showAbout() {
       <img src="assets/app-128.png" alt="" class="about-icon">
       <h2>${escapeHtml(t('appName'))}</h2>
       <div class="muted" dir="ltr">${escapeHtml(t('versionN', { v: version }))}</div>
-      <p>${escapeHtml(t('aboutName'))}</p>
+      ${t('aboutName').split('\n').map(l => `<p>${escapeHtml(l)}</p>`).join('')}
       <div class="about-features">
         <p>${escapeHtml(t('aboutText'))}</p>
-        <ul>${['aboutF1', 'aboutF4', 'aboutF2', 'aboutF3'].map(k => `<li>${escapeHtml(t(k))}</li>`).join('')}</ul>
+        <ul>${['aboutF1', 'aboutF2', 'aboutF3', 'aboutF4'].map(k => `<li>${escapeHtml(t(k))}</li>`).join('')}</ul>
       </div>
       <div class="about-actions">
         <button id="aboutGithub" class="primary"><svg><use href="#i-github"/></svg><span>${escapeHtml(t('aboutGithub'))}</span></button>

@@ -31,7 +31,7 @@ What the audience gets is a smooth, distraction-free flow from one video to the 
 
 It plays your own video files and YouTube links, streamed directly or downloaded first. Either way, YouTube's page, ads and suggestions never reach the projector. And when there's no projector, it's simply a clean everyday video player.
 
-*Ma3madan* (المعمدان) means "the Baptist". The app was originally made for **St. John the Baptist Church in Qalyub, Al-Qalyubia, Egypt**. It's free for anyone to use, for anything.
+*Ma3madan* (المعمدان) is named after St. John the Baptist. To the glory of God’s name, made for **St. John the Baptist Church in Qalyub, Al-Qalyubia, Egypt**. Free and open source, for any ministry and any work. It has a sister app for PowerPoint: [Ma3madan PPT](https://github.com/michaelsaad/ma3madan-ppt).
 
 ## Features
 
