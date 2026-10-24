@@ -817,7 +817,12 @@ let fullBy = null, fullHistory = false;
 const isFull = () => document.body.classList.contains('pfull');
 const portrait = () => matchMedia('(orientation: portrait)').matches;
 function applyTurn() {
-  // Upright phone: turn the slide sideways so it's wide and readable.
+  // Upright phone: turn the slide sideways so it's wide and readable. Sized to the part of the
+  // screen really visible now (CSS's 100vh/100vw count the status and browser bars on some
+  // phones, which cut the turned slide's bottom off).
+  const vv = window.visualViewport, root = document.documentElement.style;
+  root.setProperty('--vw', Math.floor(vv?.width || innerWidth) + 'px');
+  root.setProperty('--vh', Math.floor(vv?.height || innerHeight) + 'px');
   document.body.classList.toggle('rot', isFull() && portrait());
 }
 function setFull(on, by = 'button') {
@@ -841,6 +846,7 @@ function setFull(on, by = 'button') {
 }
 addEventListener('popstate', () => { if (fullHistory) { fullHistory = false; setFull(false); } });
 addEventListener('resize', applyTurn);
+window.visualViewport?.addEventListener('resize', applyTurn);
 $('pFullBtn').onclick = e => { e.stopPropagation(); setFull(true); };
 $('pFullClose').onclick = e => { e.stopPropagation(); setFull(false); };
 // Turning the phone never opens or closes full screen (only the button does), and in full screen
