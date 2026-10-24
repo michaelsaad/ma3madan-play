@@ -1,11 +1,11 @@
 {
   "name": "Ma3madan Remote",
   "short_name": "Ma3madan",
-  "description": "Phone remote for Ma3madan Play, and soon Ma3madan PPT.",
+  "description": "Phone remote for Ma3madan Play and Ma3madan PPT.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait",
   "background_color": "#0b1120",
   "theme_color": "#0b1120",
   "icons": [
