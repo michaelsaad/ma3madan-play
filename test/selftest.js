@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
-module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode, setShowOn: setShowOnFn }) => {
+module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode, setShowOn: setShowOnFn, screensChanged }) => {
   const dir = process.env.VP_SELFTEST_DIR;
   const log = (...a) => fs.appendFileSync(path.join(dir, 'log.txt'), a.join(' ') + '\n');
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -63,6 +63,7 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode,
     const features = () => require('./features')({ js, ojs, log, wait, shot, dir, getControl, getMode, getOutput });
     if (process.env.VP_FEATURES) { await features(); log('DONE'); app.quit(); return; }
     if (process.env.VP_UI_ONLY) { await require('./ui')({ js, log, wait, shot, getMode, getControl, getOutputWin, setShowOn: s => setShowOnFn(s) }); log('DONE'); app.quit(); return; }
+    if (process.env.VP_STANDBY_OFF) { await require('./standby-off')({ js, ojs, log, wait, getMode, getOutputWin, screensChanged }); log('DONE'); app.quit(); return; }
     if (process.env.VP_STREAM_ONLY) { await require('./stream')({ js, ojs, log, wait }); log('DONE'); app.quit(); return; }
 
     await js(`playItem(items[0])`);

@@ -84,6 +84,7 @@ let mode = 'player';    // 'player' | 'presenter'
 let modeChosen = false; // the operator picked a mode this session: don't switch on screen changes
 let playerRect = null;  // where the preview box is in the control window (Player mode)
 let playerFullscreen = false;
+let hiddenForAudio = false, hideTimer = null; // projector stepped aside (standby Off, or sound only)
 
 // ---------- persistence ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
@@ -146,6 +147,8 @@ function defaultShowOn() {
   return { screens: pick ? [pick.id] : [], here: false };
 }
 function liveShowOn() {
+  // Self-test on a one-screen PC: treat the main screen as the projector.
+  if (process.env.VP_FAKE_PROJECTOR) return { screens: [screen.getPrimaryDisplay().id], here: false };
   const ctl = controlDisplay();
   const ids = new Set(screen.getAllDisplays().map(d => d.id));
   const s = showOn || defaultShowOn();
@@ -221,8 +224,17 @@ function placeOutput() {
   if (!outputWin || mode !== 'presenter') return;
   const d = projectorDisplay();
   if (!d) { applyShowOn(); return; }
+  // Standby "Off" (or sound only with no standby): keep the screen as if the app weren't there.
+  // Checked before showing, so the projector never flashes black first.
+  if (screensShouldHide(lastState)) {
+    clearTimeout(hideTimer); hideTimer = null;
+    hiddenForAudio = true;
+    outputWin.hide();
+    return;
+  }
+  hiddenForAudio = false;
   fullscreenOn(outputWin, d);
-  if (!hiddenForAudio) outputWin.showInactive();
+  outputWin.showInactive();
   fitViewToOutputWin();
 }
 
@@ -256,9 +268,10 @@ function syncMirrors() {
       w.on('closed', () => { if (mirrors.get(id) === w) mirrors.delete(id); });
       mirrors.set(id, w);
     }
+    // Going full screen would show a hidden window, so a hidden mirror is left alone.
+    if (hiddenForAudio) { w.hide(); continue; }
     fullscreenOn(w, d);
-    if (hiddenForAudio) w.hide();
-    else if (id === here) { w.show(); w.focus(); } else w.showInactive();
+    if (id === here) { w.show(); w.focus(); } else w.showInactive();
   }
 }
 
@@ -531,6 +544,7 @@ app.whenReady().then(async () => {
       getControl: () => controlWin,
       getOutput: () => outputView,
       getOutputWin: () => outputWin,
+      screensChanged: () => onDisplaysChanged(),
       getMode: () => ({ mode, playerFullscreen, playerRect, viewBounds: outputView?.getBounds(), home: outputView?.__home === controlWin ? 'control' : 'projector' }),
       setMode: m => { modeChosen = true; showOn = m === 'player' ? { screens: [], here: false } : null; applyShowOn(); },
       getMirrors: () => [...mirrors.values()],
@@ -589,12 +603,14 @@ ipcMain.on('state', (_e, state) => { lastState = state; controlWin?.webContents.
 // "Standby screen for sound only" off, the projector (and mirrors) step aside instead, so whatever
 // else is on those screens (slides, the desktop) stays in view. Lyrics or a countdown bring it back.
 // Standby "Off" does the same whenever standby would show: the screens look as if the app is closed.
-let hiddenForAudio = false, hideTimer = null;
-function audioOnlyScreens(state) {
+function screensShouldHide(state) {
   const quiet = mode === 'presenter' && !state.lyrics && !state.countdown;
   const forAudio = settings.audioStandby === false && state.loaded && state.audioOnly;
   const standbyOff = settings.standby?.kind === 'off' && (!state.loaded || state.black);
-  const hide = quiet && (forAudio || standbyOff);
+  return quiet && (forAudio || standbyOff);
+}
+function audioOnlyScreens(state) {
+  const hide = screensShouldHide(state);
   if (!outputWin) return;
   if (!hide) { clearTimeout(hideTimer); hideTimer = null; }
   if (hide === hiddenForAudio) return;
