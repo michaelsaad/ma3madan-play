@@ -158,8 +158,8 @@
   .pfull-bar .fb-round { width: 48px; min-width: 48px; height: 48px; min-height: 48px; border-radius: 50%; background: #121a2a; color: #c9d2e3; }
   .pfull-bar .fb-round svg { width: 22px; height: 22px; }
   .fb-grow { flex: 1; }
-  .fb-prev { min-height: 72px; }
-  .fb-next { min-height: 132px; border: 0 !important; background: linear-gradient(180deg, #4d91fa, #2c6ad9) !important; box-shadow: 0 8px 22px rgba(59, 130, 246, .35); }
+  /* Back and next: the same size and look, one above the other. */
+  .fb-prev, .fb-next { min-height: 104px; background: #1d2a44 !important; border: 1px solid #2f3f60 !important; }
   .fb-prev svg, .fb-next svg { width: 32px; height: 32px; transform: rotate(90deg); }
   .pfull-pos { color: #fff; font-weight: 700; font-size: 13px; text-align: center; line-height: 1.25; }
   /* The sections tree: tap a slide to go straight to it. */
@@ -225,12 +225,12 @@
   .ppos #pSec { color: var(--gold); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ptimer { font: 600 15px ui-monospace, Consolas, monospace; direction: ltr; color: var(--text); }
   .phint { margin: -6px 0 0; font-size: 12px; color: var(--muted); }
-  .prow { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; direction: ltr; }
+  .prow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; direction: ltr; }
   .prow:has(.wide) { grid-template-columns: 1fr; }
-  .pbig { min-height: 84px; border-radius: 22px; font-size: 17px; font-weight: 600; background: #182235; }
-  .pbig.primary { border: 0; background: linear-gradient(180deg, #4d91fa, #2c6ad9); box-shadow: 0 8px 22px rgba(59, 130, 246, .3); gap: 6px; }
+  /* Back and next: twins, side by side. */
+  .pbig { min-height: 84px; border-radius: 22px; font-size: 17px; font-weight: 600; background: #1d2a44; border: 1px solid #2f3f60; }
   .pbig svg { width: 40px; height: 40px; }
-  .pbig.primary svg { width: 46px; height: 46px; }
+  #pStartBtn.pbig { background: var(--accent); border-color: var(--accent); }
   .pbig.wide svg { width: 28px; height: 28px; }
   .grid button.on.white { background: #f3f4f6; border-color: #f3f4f6; color: #111; }
   .pnotes { white-space: pre-wrap; font-size: 17px; line-height: 1.6; max-height: 40vh; overflow-y: auto; user-select: text; }
@@ -552,7 +552,7 @@
       <p id="pHint" class="phint" data-s="tapHint"></p>
       <div id="pPlayRow" class="prow">
         <button data-p="prev" class="pbig" aria-label="Previous"><svg><use href="#i-left"/></svg></button>
-        <button data-p="next" class="pbig primary" aria-label="Next"><svg><use href="#i-right"/></svg><span data-s="nextSlide"></span></button>
+        <button data-p="next" class="pbig" aria-label="Next"><svg><use href="#i-right"/></svg></button>
       </div>
       <div id="pStartRow" class="prow" hidden>
         <button id="pStartBtn" class="pbig primary wide"><svg><use href="#i-play"/></svg><span data-s="fromStart"></span></button>

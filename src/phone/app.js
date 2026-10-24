@@ -662,6 +662,7 @@ function pptThumbArrived(m) {
 }
 
 const showOf = () => (pst.show?.running ? pst.show : null);
+let fullEndTimer = null;
 function renderPpt() {
   if (pst.lang && pst.lang !== lang && currentTab === 'ppt') setLang(pst.lang);
   const s = showOf(), d = pst.deck;
@@ -711,7 +712,10 @@ function renderPpt() {
   $('pFullPos').textContent = live ? `${s.slide} / ${s.count}` : '';
   $('pStagePos').textContent = live ? t('slideOf', { n: s.slide, c: s.count }) : '';
   $('pStageSec').textContent = sec?.name || '';
-  if (!live && document.body.classList.contains('pfull')) setFull(false);
+  // Full screen closes by itself only when the show has really ended (PowerPoint reports a
+  // moment between slides that looks like "not running"); else only ✕ or Back close it.
+  clearTimeout(fullEndTimer);
+  if (!live && document.body.classList.contains('pfull')) fullEndTimer = setTimeout(() => { if (!showOf()) setFull(false); }, 2000);
   renderPptSections(d, live ? n : 0);
   renderPptDecks();
   renderStatus();
@@ -819,6 +823,9 @@ function applyTurn() {
 function setFull(on, by = 'button') {
   if (!!on === isFull()) return;
   document.body.classList.toggle('pfull', !!on);
+  // The phone's top bar turns black to blend with the slide's background (hiding it needs the
+  // browser's own full screen, which shows its "drag to exit" message every time).
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', on ? '#000000' : '#0b1120');
   if (on) {
     fullBy = by;
     // An entry in the history, so Back closes full screen instead of leaving the app.
