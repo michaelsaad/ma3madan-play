@@ -14,6 +14,16 @@
 <style>
   :root { --bg: #0b1120; --panel: #141c2e; --panel-2: #1b2539; --line: #26324a; --text: #eef2f8; --muted: #8e9ab0; --accent: #3b82f6; --gold: #f2b84b; --live: #e5484d; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* Normally #app and #scroll are invisible wrappers; held sideways, #app is the turned frame. */
+  #app, #scroll { display: contents; }
+  body.upright { overflow: hidden; padding: 0; min-height: 0; height: 100vh; }
+  body.upright #app { display: block; position: fixed; left: var(--ucx); top: var(--ucy); width: var(--uw); height: var(--uh);
+    transform: translate(-50%, -50%) rotate(var(--urot)); background: var(--bg); overflow: hidden; }
+  body.upright #scroll { display: flex; flex-direction: column; gap: 14px; height: 100%; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; box-sizing: border-box; padding: 14px 14px 100px; }
+  body.upright #scroll::-webkit-scrollbar { display: none; }
+  body.upright.no-tabs #scroll { padding-bottom: 18px; }
+  body.upright.pfull::before { display: none; }
+  body.upright.pfull #app { background: #000; }
   html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, "Segoe UI", Tahoma, sans-serif; }
   body { padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; min-height: 100vh; user-select: none; }
   header { display: flex; align-items: center; gap: 10px; }
@@ -144,7 +154,7 @@
   /* Full screen: only the slide, and a column of controls on the right edge (right thumb).
      Turning the phone sideways does it too; held upright, the slide is turned sideways. */
   body.pfull { overflow: hidden; }
-  body.pfull > header, body.pfull .tabs, body.pfull #installCard { display: none !important; }
+  body.pfull header, body.pfull .tabs, body.pfull #installCard { display: none !important; }
   /* Full screen stays clear of the phone's bars on every side (Android moves its navigation bar to
      the left or right when the phone is turned): --sl/--sr/--st/--sb are the screen's safe edges. */
   :root { --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
@@ -373,6 +383,8 @@
   <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
+<!-- #app turns against the phone when it's held sideways, so the app stays upright on it -->
+<div id="app"><div id="scroll">
 <header>
   <img class="logo" src="/icons/icon-96.png" alt="">
   <span class="who"><b id="appName">Ma3madan Remote</b><small id="whoSub"></small></span>
@@ -593,6 +605,7 @@
     <div id="pDecks" class="pdecks"></div>
   </div>
 </main>
+</div>
 
 <div id="pTree" class="ptree" hidden>
   <div class="ptree-sheet" role="dialog" aria-modal="true">
@@ -604,6 +617,7 @@
   <button data-tab="play" class="on"><svg><use href="#i-play"/></svg><span>Ma3madan Play</span></button>
   <button data-tab="ppt"><svg><use href="#i-slides"/></svg><span data-s="slidesTab"></span></button>
 </nav>
+</div>
 
 <script src="/link.js"></script>
 <script src="/app.js"></script>

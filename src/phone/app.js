@@ -792,11 +792,14 @@ let touch = null, swiped = 0;
 // Full screen with the phone upright, the slide is turned sideways (body.rot): finger positions
 // are turned back into the slide's own directions.
 const turned = () => document.body.classList.contains('rot');
+// The slide may be turned twice: full screen on an upright phone (+90°), and the whole app turned
+// back when the phone is held sideways (−angle). Finger positions are turned back into the slide.
 function onSlide(x, y) {
   const el = $('pSlide'), b = el.getBoundingClientRect();
-  if (!turned()) return { x: x - b.left, y: y - b.top, w: b.width, h: b.height };
-  const w = el.offsetWidth, h = el.offsetHeight, cx = b.left + b.width / 2, cy = b.top + b.height / 2;
-  return { x: (y - cy) + w / 2, y: -(x - cx) + h / 2, w, h };
+  const deg = (turned() ? 90 : 0) - uprightAngle, t = deg * Math.PI / 180;
+  if (deg % 360 === 0) return { x: x - b.left, y: y - b.top, w: b.width, h: b.height };
+  const w = el.offsetWidth, h = el.offsetHeight, dx = x - (b.left + b.width / 2), dy = y - (b.top + b.height / 2);
+  return { x: dx * Math.cos(t) + dy * Math.sin(t) + w / 2, y: -dx * Math.sin(t) + dy * Math.cos(t) + h / 2, w, h };
 }
 $('pSlide').addEventListener('touchstart', e => { if (e.touches.length === 1) touch = onSlide(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
 $('pSlide').addEventListener('touchend', e => {
@@ -810,14 +813,50 @@ $('pSlide').addEventListener('touchend', e => {
 let fullBy = null, fullHistory = false;
 const isFull = () => document.body.classList.contains('pfull');
 const portrait = () => matchMedia('(orientation: portrait)').matches;
+// ---------- the app stays upright on the phone ----------
+// Browsers don't let a page lock the screen's orientation. So when a phone is held sideways (and
+// the browser turns the page), the whole app (#app) is turned back the other way: it stays upright
+// on the phone, clear of the phone's bars, and full screen always looks the same.
+let uprightAngle = 0;
+function screenAngle() {
+  if (typeof store.get('test-angle', null) === 'number') return store.get('test-angle', 0); // tests
+  const a = screen.orientation ? screen.orientation.angle : (window.orientation || 0);
+  return ((a % 360) + 360) % 360;
+}
+const isPhone = () => matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600 || store.get('test-angle', null) !== null;
+function safeInsets() {
+  const p = document.createElement('div');
+  p.style.cssText = 'position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+  document.body.appendChild(p);
+  const c = getComputedStyle(p), r = { t: parseFloat(c.paddingTop) || 0, r: parseFloat(c.paddingRight) || 0, b: parseFloat(c.paddingBottom) || 0, l: parseFloat(c.paddingLeft) || 0 };
+  p.remove();
+  return r;
+}
+function applyUpright() {
+  const a = isPhone() ? screenAngle() : 0;
+  uprightAngle = a === 90 || a === 270 ? a : 0;
+  const on = !!uprightAngle, root = document.documentElement.style;
+  document.body.classList.toggle('upright', on);
+  if (!on) { for (const k of ['--st', '--sb', '--sl', '--sr']) root.removeProperty(k); return null; }
+  const vv = window.visualViewport, vw = vv?.width || innerWidth, vh = vv?.height || innerHeight, ins = safeInsets();
+  const w = Math.floor(vh - ins.t - ins.b), h = Math.floor(vw - ins.l - ins.r); // the app's upright size
+  root.setProperty('--uw', w + 'px'); root.setProperty('--uh', h + 'px');
+  root.setProperty('--ucx', (ins.l + (vw - ins.l - ins.r) / 2) + 'px'); root.setProperty('--ucy', (ins.t + (vh - ins.t - ins.b) / 2) + 'px');
+  root.setProperty('--urot', -uprightAngle + 'deg');
+  // Inside the turned app the edges are already clear of the bars.
+  for (const k of ['--st', '--sb', '--sl', '--sr']) root.setProperty(k, '0px');
+  return { w, h };
+}
 function applyTurn() {
-  // Upright phone: turn the slide sideways so it's wide and readable. Sized to the part of the
-  // screen really visible now (CSS's 100vh/100vw count the status and browser bars on some
-  // phones, which cut the turned slide's bottom off).
+  // Full screen on an upright phone: the slide turned sideways so it's wide and readable. Sized to
+  // the part of the screen really visible now (CSS's 100vh/100vw count the status and browser bars
+  // on some phones, which cut the turned slide's bottom off).
+  const up = applyUpright();
   const vv = window.visualViewport, root = document.documentElement.style;
-  root.setProperty('--vw', Math.floor(vv?.width || innerWidth) + 'px');
-  root.setProperty('--vh', Math.floor(vv?.height || innerHeight) + 'px');
-  document.body.classList.toggle('rot', isFull() && portrait());
+  root.setProperty('--vw', (up ? up.w : Math.floor(vv?.width || innerWidth)) + 'px');
+  root.setProperty('--vh', (up ? up.h : Math.floor(vv?.height || innerHeight)) + 'px');
+  document.body.classList.toggle('rot', isFull() && (up ? true : portrait()));
+  setTimeout(measureHeader, 0);
 }
 function setFull(on, by = 'button') {
   if (!!on === isFull()) return;
@@ -846,6 +885,9 @@ const lockUpright = () => { try { screen.orientation?.lock?.('portrait').catch((
 lockUpright();
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lockUpright(); });
 window.visualViewport?.addEventListener('resize', applyTurn);
+screen.orientation?.addEventListener?.('change', () => setTimeout(applyTurn, 50));
+addEventListener('orientationchange', () => setTimeout(applyTurn, 50));
+applyTurn();
 $('pFullBtn').onclick = e => { e.stopPropagation(); setFull(true); };
 $('pFullClose').onclick = e => { e.stopPropagation(); setFull(false); };
 // Turning the phone never opens or closes full screen (only the button does), and in full screen
@@ -1074,7 +1116,7 @@ function renderMore() {
 setInterval(() => { if (st.countdown) renderMore(); }, 500);
 
 // The pinned slide sits right under the (sticky) header.
-function measureHeader() { document.documentElement.style.setProperty('--hh', document.querySelector('header').getBoundingClientRect().height + 'px'); }
+function measureHeader() { document.documentElement.style.setProperty('--hh', document.querySelector('header').offsetHeight + 'px'); }
 addEventListener('resize', measureHeader);
 setTimeout(measureHeader, 0);
 
