@@ -642,7 +642,6 @@ let pst = {}, pat = 0;
 const pthumbs = new Map(); // "n|size|path:version" → data URL (null while asked for)
 const openSecs = new Set(); // sections opened in the list
 const openGroups = new Set(['open']);
-let lastAutoSec = '';
 function psend(cmd) {
   if (conns.ppt.send({ type: 'cmd', cmd }) && navigator.vibrate) navigator.vibrate(12);
 }
@@ -702,11 +701,6 @@ function renderPpt() {
   $('pNotesBox').hidden = !live;
   $('pNotes').textContent = pst.notes || t('noNotes');
   $('pNotes').classList.toggle('empty', !pst.notes);
-  // The section on the projector opens by itself (also after a link jumped to another presentation).
-  if (live && sec) {
-    const k = d.path + '|' + secs.indexOf(sec);
-    if (lastAutoSec !== k) { lastAutoSec = k; openSecs.add(k); }
-  }
   // The next slide's big picture comes ahead, so moving on shows it at once.
   if (live && n < d.slides.length) pthumb(n + 1, 'big');
   $('pFullPos').textContent = live ? `${s.slide} / ${s.count}` : '';
@@ -734,7 +728,7 @@ function renderPptSections(d, cur) {
   box.innerHTML = secs.map((sec, i) => {
     const k = d.path + '|' + i;
     const here = cur >= sec.first && cur < sec.first + sec.count;
-    const open = openSecs.has(k) || (secs.length === 1);
+    const open = openSecs.has(k) || (secs.length === 1 && !secs[0].name);
     let slides = '';
     if (open) {
       for (let n = sec.first; n < sec.first + sec.count; n++) {
@@ -846,6 +840,11 @@ function setFull(on, by = 'button') {
 }
 addEventListener('popstate', () => { if (fullHistory) { fullHistory = false; setFull(false); } });
 addEventListener('resize', applyTurn);
+// The app stays upright: the installed app is locked by its manifest; this asks the phone too
+// (some allow it without reinstalling). Full screen shows the slide sideways by itself.
+const lockUpright = () => { try { screen.orientation?.lock?.('portrait').catch(() => {}); } catch {} };
+lockUpright();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lockUpright(); });
 window.visualViewport?.addEventListener('resize', applyTurn);
 $('pFullBtn').onclick = e => { e.stopPropagation(); setFull(true); };
 $('pFullClose').onclick = e => { e.stopPropagation(); setFull(false); };
@@ -875,16 +874,16 @@ $('pStartBtn').onclick = () => pst.deck && psend({ action: 'start', path: pst.de
 
 // ---------- the sections tree: every section with its slides, tap one to go there ----------
 const treeOpen = new Set();
-function openTree() {
+function openTree(fresh = false) {
   const d = pst.deck;
   if (!d) return;
+  if (fresh) { treeOpen.clear(); gridOpen.clear(); }
   if (isFull()) { openGrid(d); return; }
   $('pTree').classList.remove('grid');
   const s = showOf(), live = s && s.path === d.path, cur = live ? s.slide : 0;
   const secs = d.sections.length ? d.sections : [{ name: '', first: 1, count: d.slides.length }];
   const here = secs.findIndex(x => cur >= x.first && cur < x.first + x.count);
-  if (here >= 0) treeOpen.add(d.path + '|' + here);
-  if (secs.length === 1) treeOpen.add(d.path + '|0');
+  if (secs.length === 1 && !secs[0].name) treeOpen.add(d.path + '|0'); // no sections: just the slides
   $('pTreeDeck').textContent = d.name;
   $('pTreeList').innerHTML = secs.map((sec, i) => {
     const k = d.path + '|' + i, open = treeOpen.has(k);
@@ -905,36 +904,45 @@ function openTree() {
   if (wasHidden) $('pTreeList').querySelector('.cur')?.scrollIntoView({ block: 'center' });
 }
 function closeTree() { $('pTree').hidden = true; }
+const gridOpen = new Set(); // sections opened in the full-screen grid
 function openGrid(d) {
   const s = showOf(), live = s && s.path === d.path, cur = live ? s.slide : 0;
   const secs = d.sections.length ? d.sections : [{ name: '', first: 1, count: d.slides.length }];
-  const here = Math.max(0, secs.findIndex(x => cur >= x.first && cur < x.first + x.count));
+  const here = secs.findIndex(x => cur >= x.first && cur < x.first + x.count);
+  const named = secs.length > 1 || secs[0].name;
+  if (!named) gridOpen.add(0); // no sections: just the slides
   $('pTree').classList.add('grid');
   $('pTreeDeck').textContent = d.name;
-  const named = secs.length > 1 || secs[0].name;
-  $('pTreeList').innerHTML = (named ? `<nav class="pg-secs">${secs.map((sec, i) => `<button data-sec="${i}" class="${i === here ? 'here' : ''}"><b dir="auto">${esc(sec.name || t('untitled'))}</b><small>${esc(sec.count === 1 ? t('oneSlide') : t('slides', { n: sec.count }))}</small></button>`).join('')}</nav>` : '')
+  const keepScroll = $('pTreeList').querySelector('.pg-main')?.scrollTop || 0;
+  $('pTreeList').innerHTML = (named ? `<nav class="pg-secs">${secs.map((sec, i) => `<button data-sec="${i}" class="${i === here ? 'here' : ''} ${gridOpen.has(i) ? 'open' : ''}"><b dir="auto">${esc(sec.name || t('untitled'))}</b><small>${esc(sec.count === 1 ? t('oneSlide') : t('slides', { n: sec.count }))}</small></button>`).join('')}</nav>` : '')
     + `<div class="pg-main" style="--r:${d.ratio}">${secs.map((sec, i) => {
+      const open = gridOpen.has(i);
       let tiles = '';
-      for (let n = sec.first; n < sec.first + sec.count; n++) {
+      if (open) for (let n = sec.first; n < sec.first + sec.count; n++) {
         const sl = d.slides[n - 1] || {}, pic = pthumb(n, 'small', d);
         tiles += `<button class="pg-tile ${n === cur ? 'cur' : ''} ${sl.h ? 'hid' : ''}" data-n="${n}"><span class="pg-pic" ${pic ? `style="background-image:url('${pic}')"` : ''}></span><span class="pg-num">${n}</span></button>`;
       }
-      return `<section class="pg-sec" id="pg-sec-${i}">${named ? `<h4 dir="auto">${esc(sec.name || t('untitled'))}</h4>` : ''}<div class="pg-tiles">${tiles}</div></section>`;
+      const head = named ? `<button class="pg-head ${i === here ? 'here' : ''}" data-toggle="${i}"><svg class="caret"><use href="#i-caret"/></svg><b dir="auto">${esc(sec.name || t('untitled'))}</b><small>${sec.count}</small></button>` : '';
+      return `<section class="pg-sec ${open ? 'open' : ''}" id="pg-sec-${i}">${head}${open ? `<div class="pg-tiles">${tiles}</div>` : ''}</section>`;
     }).join('')}</div>`;
   const main = $('pTreeList').querySelector('.pg-main');
+  main.scrollTop = keepScroll;
+  const toggle = i => { gridOpen.has(i) ? gridOpen.delete(i) : gridOpen.add(i); openGrid(d); };
+  for (const b of $('pTreeList').querySelectorAll('[data-toggle]')) b.onclick = () => toggle(Number(b.dataset.toggle));
+  // A section on the side: open it and go to it.
   for (const b of $('pTreeList').querySelectorAll('[data-sec]')) b.onclick = () => {
-    for (const x of $('pTreeList').querySelectorAll('[data-sec]')) x.classList.toggle('here', x === b);
-    main.scrollTo({ top: $('pg-sec-' + b.dataset.sec).offsetTop - main.offsetTop, behavior: 'smooth' });
+    const i = Number(b.dataset.sec);
+    gridOpen.add(i); openGrid(d);
+    const m = $('pTreeList').querySelector('.pg-main');
+    m.scrollTo({ top: $('pg-sec-' + i).offsetTop - m.offsetTop, behavior: 'smooth' });
   };
   for (const b of $('pTreeList').querySelectorAll('[data-n]')) b.onclick = () => {
     psend(live ? { action: 'go', n: Number(b.dataset.n) } : { action: 'go', n: Number(b.dataset.n), path: d.path });
     closeTree();
   };
   $('pTree').hidden = false;
-  const c = main.querySelector('.cur');
-  if (c) main.scrollTop = c.offsetTop - main.offsetTop - 40;
 }
-document.addEventListener('click', e => { if (e.target.closest('[data-tree]')) { e.stopPropagation(); openTree(); } });
+document.addEventListener('click', e => { if (e.target.closest('[data-tree]')) { e.stopPropagation(); openTree(true); } });
 $('pTreeClose').onclick = closeTree;
 $('pTree').addEventListener('click', e => { if (e.target === $('pTree')) closeTree(); });
 

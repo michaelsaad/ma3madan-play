@@ -145,14 +145,24 @@
      Turning the phone sideways does it too; held upright, the slide is turned sideways. */
   body.pfull { overflow: hidden; }
   body.pfull > header, body.pfull .tabs, body.pfull #installCard { display: none !important; }
-  body.pfull #pSlide { position: fixed; inset: 0 var(--fb) 0 0; z-index: 50; width: auto; height: auto; max-height: none; margin: 0; aspect-ratio: auto !important; border-radius: 0; box-shadow: none; }
+  /* Full screen stays clear of the phone's bars on every side (Android moves its navigation bar to
+     the left or right when the phone is turned): --sl/--sr/--st/--sb are the screen's safe edges. */
+  :root { --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
+  body.pfull::before { content: ''; position: fixed; inset: 0; z-index: 49; background: #000; }
+  body.pfull #pStage { z-index: 50; }
+  body.pfull #pSlide { position: fixed; inset: var(--st) calc(var(--fb) + var(--sr)) var(--sb) var(--sl); z-index: 50; width: auto; height: auto; max-height: none; margin: 0; aspect-ratio: auto !important; border-radius: 0; box-shadow: none; }
   /* Upright phone: the whole full screen (slide and buttons together) is turned sideways, so it
      looks the same as with the phone turned, and turning the phone moves nothing. */
-  body.pfull.rot #pStage { position: fixed; z-index: 50; margin: 0; top: calc(var(--vh, 100dvh) / 2); left: calc(var(--vw, 100vw) / 2); width: var(--vh, 100dvh); height: var(--vw, 100vw); transform: translate(-50%, -50%) rotate(90deg); }
+  body.pfull.rot #pStage { position: fixed; z-index: 50; margin: 0;
+    top: calc(var(--st) + (var(--vh, 100dvh) - var(--st) - var(--sb)) / 2); left: calc(var(--sl) + (var(--vw, 100vw) - var(--sl) - var(--sr)) / 2);
+    width: calc(var(--vh, 100dvh) - var(--st) - var(--sb)); height: calc(var(--vw, 100vw) - var(--sl) - var(--sr)); transform: translate(-50%, -50%) rotate(90deg); }
+  /* Inside the turned frame the edges are already safe; placed in the frame itself. */
+  body.pfull.rot #pSlide { position: absolute; inset: 0 var(--fb) 0 0; }
+  body.pfull.rot .pfull-bar { position: absolute; top: 0; right: 0; bottom: 0; padding: 12px 10px 16px; }
   body.pfull .pstage-bar, body.pfull .pfull-btn { display: none; }
   :root { --fb: 84px; }
-  body.pfull .pfull-bar { position: fixed; top: 0; right: 0; bottom: 0; width: var(--fb); z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 12px; direction: ltr;
-    padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) 10px;
+  body.pfull .pfull-bar { position: fixed; top: var(--st); right: var(--sr); bottom: var(--sb); width: var(--fb); z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 12px; direction: ltr;
+    padding: 12px 10px 16px;
     background: #05080f; border-left: 1px solid #172033; }
   .pfull-bar button { width: 64px; min-width: 64px; padding: 0; border-radius: 20px; background: #182235; border: 1px solid #26324a; }
   .pfull-bar .fb-round { width: 48px; min-width: 48px; height: 48px; min-height: 48px; border-radius: 50%; background: #121a2a; color: #c9d2e3; }
@@ -189,17 +199,23 @@
   /* Full screen: the sections like PowerPoint's presenter view (turned with the slide). */
   .ptree.grid { align-items: stretch; background: #070a12; }
   .ptree.grid .ptree-sheet { max-height: none; height: 100%; border: 0; border-radius: 0; animation: none; background: #070a12; padding: 0; }
-  body.rot .ptree.grid { inset: auto; top: calc(var(--vh, 100dvh) / 2); left: calc(var(--vw, 100vw) / 2); width: var(--vh, 100dvh); height: var(--vw, 100vw); transform: translate(-50%, -50%) rotate(90deg); }
+  body.rot .ptree.grid { inset: auto; top: calc(var(--st) + (var(--vh, 100dvh) - var(--st) - var(--sb)) / 2); left: calc(var(--sl) + (var(--vw, 100vw) - var(--sl) - var(--sr)) / 2); width: calc(var(--vh, 100dvh) - var(--st) - var(--sb)); height: calc(var(--vw, 100vw) - var(--sl) - var(--sr)); transform: translate(-50%, -50%) rotate(90deg); }
   .ptree.grid .ptree-head { padding: 10px 12px 10px 18px; border-color: #1a2336; }
   .ptree.grid .ptree-list { flex: 1; min-height: 0; display: flex; padding: 0; overflow: hidden; }
   .pg-secs { width: 30%; max-width: 220px; flex: none; overflow-y: auto; padding: 10px 8px; border-inline-end: 1px solid #1a2336; display: flex; flex-direction: column; gap: 4px; }
   .pg-secs button { width: 100%; min-height: 50px; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; text-align: start; }
   .pg-secs button b { font-size: 14px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pg-secs button small { font-size: 11.5px; color: var(--muted); }
-  .pg-secs button.here { background: #16274a; box-shadow: inset 3px 0 0 var(--gold); }
+  .pg-secs button.here { box-shadow: inset 3px 0 0 var(--gold); }
+  .pg-secs button.open { background: #16274a; }
   .pg-secs button.here b { color: var(--gold); }
   .pg-main { flex: 1; min-width: 0; overflow-y: auto; padding: 4px 14px 18px; }
-  .pg-sec h4 { margin: 14px 2px 8px; font-size: 13px; font-weight: 600; color: #c9d2e3; }
+  .pg-head { width: 100%; min-height: 44px; margin-top: 6px; justify-content: flex-start; gap: 8px; padding: 0 8px; border: 0; border-radius: 10px; background: transparent; font-size: 14px; font-weight: 600; color: #c9d2e3; }
+  .pg-head b { flex: 1; text-align: start; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pg-head small { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .pg-head.here { color: var(--gold); background: rgba(242, 184, 75, .08); }
+  .pg-sec.open .pg-head .caret { transform: none; }
+  .pg-sec.open .pg-tiles { margin: 4px 2px 10px; }
   .pg-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; }
   .pg-tile { flex-direction: column; align-items: stretch; gap: 5px; min-height: 0; min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
   .pg-pic { display: block; aspect-ratio: var(--r, 16/9); border-radius: 4px; background: #000 center/contain no-repeat; outline: 1px solid #26324a; }
