@@ -14,6 +14,7 @@ const { spawn } = require('child_process');
 
 const REPO = 'michaelsaad/ma3madan-play';
 const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR;
+const UA = REPO.endsWith('ppt') ? 'Ma3madan-PPT' : 'Ma3madan-Play';
 const currentVersion = () => process.env.VP_FAKE_VERSION || app.getVersion();
 
 let latest = null; // { version, notes, page, asset: { name, url, size, sha256 }, canInstall }
@@ -24,11 +25,28 @@ function isNewer(a, b) {
   return false;
 }
 
+// GitHub answers 60 questions an hour per internet address without signing in (a church sharing
+// one connection, or tests, can use them up). Then the release page itself (no limit) still says
+// which version is newest: the Update button shows, and opens the download page if the file's
+// checksum can't be read yet.
+async function latestFromPage() {
+  const res = await fetch(`https://github.com/${REPO}/releases/latest`, { method: 'HEAD', redirect: 'manual' });
+  const tag = /\/releases\/tag\/v?([\d.]+)$/.exec(res.headers.get('location') || '');
+  if (!tag) throw new Error('GitHub did not answer');
+  return { version: tag[1], page: `https://github.com/${REPO}/releases/tag/v${tag[1]}` };
+}
+
 async function check() {
   const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Ma3madan-Play' },
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': UA },
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    // Not "you have the latest": we don't know yet.
+    const { version, page } = await latestFromPage();
+    if (!isNewer(version, currentVersion())) return null;
+    latest = { version, notes: '', page, asset: null, canInstall: false };
+    return { version, notes: '', canInstall: false };
+  }
   const release = await res.json();
   const version = String(release.tag_name || '').replace(/^v/, '');
   if (!/^\d+\.\d+\.\d+$/.test(version) || !isNewer(version, currentVersion())) return null;
@@ -48,6 +66,8 @@ async function check() {
 // or never (the app quits so the installer can replace it).
 async function install(onProgress) {
   if (!latest) throw new Error('No update available');
+  // Found through the release page (GitHub's quota was used up): try once more for the checksum.
+  if (!latest.asset && !isPortable) { try { await check(); } catch {} }
   if (!latest.canInstall) { if (/^https:\/\/github\.com\//.test(latest.page)) shell.openExternal(latest.page); return 'opened'; }
 
   const { name, url, size, sha256 } = latest.asset;
