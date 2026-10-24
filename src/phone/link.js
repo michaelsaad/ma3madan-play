@@ -99,6 +99,8 @@
       get open() { return ws?.readyState === 1; },
       send(obj) { if (ws?.readyState === 1) { ws.send(JSON.stringify(obj)); return true; } return false; },
       close() { closed = true; clearTimeout(retryTimer); clearInterval(pingTimer); try { ws?.close(); } catch {} },
+      // The network changed (another Wi-Fi, a hotspot): don't wait for the next try.
+      reconnect() { if (closed || ws?.readyState === 1 || ws?.readyState === 0) return; clearTimeout(retryTimer); retry = 1000; connect(); },
     };
     const connect = () => {
       const q = new URLSearchParams({ room, role });
@@ -124,7 +126,7 @@
         onclose?.(e.code);
         if (closed || !keep || e.code === 4000) return; // 4000: another socket took over
         retryTimer = setTimeout(connect, retry);
-        retry = Math.min(retry * 2, 30000);
+        retry = Math.min(retry * 2, 5000);
       };
     };
     connect();
@@ -173,8 +175,21 @@
     });
   }
 
+  // When the two can't reach each other directly (the phone is itself the hotspot, Wi-Fi that keeps
+  // devices apart, a firewall), the same messages go through the computer's room instead,
+  // encrypted with the phone's key. This stands in for a data channel: send() and onmessage.
+  function relayChannel(sendSealed) {
+    let queue = Promise.resolve();
+    const ch = {
+      readyState: 'open', bufferedAmount: 0, onmessage: null, onopen: null, onclose: null,
+      send(data) { queue = queue.then(() => sendSealed(String(data))).catch(() => {}); },
+      close() { ch.readyState = 'closed'; },
+    };
+    return ch;
+  }
+
   root.MaLink = {
     BASE, STUN, randomId, randomHex, newKey, deviceKey, pairKey, seal, unseal, sasCode,
-    iceServers, route, socket, announce, leave, nearby, sendParts, assembler, waitOpen,
+    iceServers, route, socket, announce, leave, nearby, sendParts, assembler, waitOpen, relayChannel,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

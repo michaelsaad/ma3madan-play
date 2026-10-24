@@ -33,9 +33,11 @@ const LinkHost = (() => {
       onmessage: m => signal(m).catch(e => console.warn('link', e)),
     });
     announce();
+    // Another network (a hotspot, the Wi-Fi back): reconnect to the room at once.
+    addEventListener('online', onOnline);
     // A phone that went quiet (no ping for 20 s: it slept, or left the Wi-Fi) is let go.
     sweepTimer = setInterval(() => {
-      for (const [pid, p] of peers) if (p.approved && Date.now() - p.seen > 20000) drop(pid, p);
+      for (const [pid, p] of peers) if (p.approved && Date.now() - p.seen > 15000) drop(pid, p);
     }, 5000);
   }
   // New pairing code or trusted list (after a phone was trusted or forgotten).
@@ -49,11 +51,13 @@ const LinkHost = (() => {
     // A forgotten phone is cut off at once.
     for (const [pid, p] of peers) if (p.deviceId && !keys.has(p.deviceId)) drop(pid, p);
   }
+  function onOnline() { sock?.reconnect(); announce(); }
   function setOnline(v) { if (online !== v) { online = v; opts.onOnline?.(v); changed(); } }
   function stop() {
     // Off the phones' "nearby" list right away (not after it times out).
     if (running && id) MaLink.leave(id.hostId, id.auth).catch(() => {});
     running = false;
+    removeEventListener('online', onOnline);
     clearTimeout(presenceTimer); clearInterval(sweepTimer);
     sock?.close(); sock = null;
     for (const p of peers.values()) close(p);
@@ -72,7 +76,8 @@ const LinkHost = (() => {
   // ---------- signaling ----------
   async function signal(m) {
     if (!running) return;
-    if (m.type === 'gone') { const p = peers.get(m.from); if (p && !p.ctl) drop(m.from, p); return; }
+    if (m.type === 'gone') { const p = peers.get(m.from); if (p && (!p.ctl || p.relay)) drop(m.from, p); return; }
+    if (m.type === 'r') { relayed(m.from, m.box).catch(() => {}); return; }
     const pid = m.from;
     if (typeof pid !== 'string') return;
     if (m.type === 'offer') {
@@ -99,6 +104,27 @@ const LinkHost = (() => {
       if (c) p.pc.addIceCandidate(c).catch(() => {});
     }
   }
+  // A phone that can't reach this computer directly talks through the room instead (see
+  // relayChannel in link.js): { o: 1 } opens, { d } carries one message.
+  const early = new Map(); // phone id → relay messages that came before its offer was taken in
+  async function relayed(pid, box) {
+    const peer = peers.get(pid);
+    if (!peer) { const q = early.get(pid) || []; if (q.length < 50) q.push(box); early.set(pid, q); setTimeout(() => early.delete(pid), 15000); return; }
+    if (!peer.key) return; // only phones with a key (trusted, or the QR code); never from Nearby
+    let b; try { b = await MaLink.unseal(peer.key, box); } catch { return; }
+    if (b.o && !peer.relay) {
+      const pc = peer.pc;
+      // The direct channels, if any came, are let go quietly (their "closed" isn't the phone leaving).
+      for (const ch of [peer.ctl, peer.img]) if (ch) { ch.onclose = null; ch.onmessage = null; ch.onopen = null; }
+      pc.onconnectionstatechange = null; pc.ondatachannel = null;
+      try { pc.close(); } catch {}
+      const send = async d => sock?.send({ to: pid, type: 'r', box: await MaLink.seal(peer.key, { d }) });
+      peer.relay = true; peer.route = 'relay';
+      peer.ctl = MaLink.relayChannel(send); peer.img = MaLink.relayChannel(send);
+      wire(pid, peer, peer.ctl);
+      peer.ctl.onopen();
+    } else if (typeof b.d === 'string' && peer.relay) peer.ctl.onmessage?.({ data: b.d });
+  }
   const sendSignal = async (pid, p, obj) => {
     if (p.key) sock?.send({ to: pid, type: obj.type, box: await MaLink.seal(p.key, obj) });
     else sock?.send({ to: pid, ...obj });
@@ -112,6 +138,8 @@ const LinkHost = (() => {
       approved: how === 'trusted', how, code: null, seen: Date.now(), route: null,
     };
     peers.set(pid, peer);
+    for (const box of early.get(pid) || []) relayed(pid, box).catch(() => {});
+    early.delete(pid);
     pc.ondatachannel = e => {
       if (e.channel.label === 'img') { peer.img = e.channel; return; }
       peer.ctl = e.channel; wire(pid, peer, e.channel);

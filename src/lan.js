@@ -38,10 +38,15 @@ function lanAddresses() {
       const isVirtual = /vEthernet|VirtualBox|VMware|WSL|Hyper-V|Loopback|Bluetooth|Tailscale|ZeroTier|WireGuard|OpenVPN|TAP-|Radmin|Hamachi/i.test(name);
       // 100.64/10 is carrier and VPN space (Tailscale): a phone on the Wi-Fi can't reach it.
       const isCgnat = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(a.address);
-      list.push({ address: a.address, name, rank: (isPrivate ? 0 : 2) + (isVirtual || isCgnat ? 1 : 0) });
+      // Windows' Mobile Hotspot is always 192.168.137.1: phones on this computer's own hotspot.
+      const hotspot = /^192\.168\.137\.1$/.test(a.address);
+      list.push({ address: a.address, name, hotspot, rank: (isPrivate ? 0 : 2) + (isVirtual || isCgnat ? 1 : 0) });
     }
   }
-  return list.sort((a, b) => a.rank - b.rank).map(({ address, name }) => ({ address, name }));
+  const sorted = list.sort((a, b) => a.rank - b.rank);
+  // Virtual adapters (Hyper-V, WSL, VPNs) only when there's nothing else: no phone is on them.
+  const real = sorted.filter(a => a.rank % 2 === 0);
+  return (real.length ? real : sorted).map(({ address, name, hotspot }) => ({ address, name, hotspot }));
 }
 
 function qrSvg(text) {
@@ -145,10 +150,15 @@ function createLan(options) {
     pages.clear();
     server?.close(); server = null; port = 0;
   }
+  // One entry per network: a phone scans the code of the network it's on (this computer's
+  // Wi-Fi, or the hotspot it shares with phones).
   function info() {
     if (!server) return { on: false };
-    const urls = lanAddresses().map(a => `http://${a.address}:${port}/?k=${key}`);
-    return { on: true, urls, qr: urls[0] ? qrSvg(urls[0]) : null, pages: pages.size };
+    const nets = lanAddresses().map(a => {
+      const url = `http://${a.address}:${port}/?k=${key}`;
+      return { name: a.name, hotspot: a.hotspot, address: a.address, url, qr: qrSvg(url) };
+    });
+    return { on: true, nets, urls: nets.map(n => n.url), qr: nets[0]?.qr || null, pages: pages.size };
   }
   // To one Wi-Fi page (peer), or to all of them (null).
   function send(peer, msg) {

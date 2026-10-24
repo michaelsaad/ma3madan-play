@@ -146,7 +146,9 @@
   body.pfull { overflow: hidden; }
   body.pfull > header, body.pfull .tabs, body.pfull #installCard { display: none !important; }
   body.pfull #pSlide { position: fixed; inset: 0 var(--fb) 0 0; z-index: 50; width: auto; height: auto; max-height: none; margin: 0; aspect-ratio: auto !important; border-radius: 0; box-shadow: none; }
-  body.pfull.rot #pSlide { inset: auto; top: 50%; left: calc((100vw - var(--fb)) / 2); width: 100dvh; height: calc(100vw - var(--fb)); transform: translate(-50%, -50%) rotate(90deg); }
+  /* Upright phone: the whole full screen (slide and buttons together) is turned sideways, so it
+     looks the same as with the phone turned, and turning the phone moves nothing. */
+  body.pfull.rot #pStage { position: fixed; z-index: 50; margin: 0; top: 50%; left: 50%; width: 100dvh; height: 100vw; transform: translate(-50%, -50%) rotate(90deg); }
   body.pfull .pstage-bar, body.pfull .pfull-btn { display: none; }
   :root { --fb: 84px; }
   body.pfull .pfull-bar { position: fixed; top: 0; right: 0; bottom: 0; width: var(--fb); z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 12px; direction: ltr;

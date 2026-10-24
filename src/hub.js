@@ -41,6 +41,14 @@ function writeIdentity(j) {
   fs.writeFileSync(tmp, JSON.stringify(j, null, 2));
   fs.renameSync(tmp, f);
 }
+// Every trusted phone gets a fun name of its own ("Swift Falcon"); rename it in the Remote panel.
+const NAME_A = ['Swift', 'Brave', 'Silent', 'Golden', 'Lucky', 'Rapid', 'Cosmic', 'Mighty', 'Clever', 'Sunny', 'Shadow', 'Thunder', 'Crimson', 'Jolly', 'Sneaky', 'Turbo', 'Royal', 'Night', 'Wild', 'Happy'];
+const NAME_B = ['Falcon', 'Tiger', 'Panda', 'Eagle', 'Fox', 'Lion', 'Owl', 'Wolf', 'Dolphin', 'Rocket', 'Ninja', 'Comet', 'Hawk', 'Bear', 'Phoenix', 'Shark', 'Pilot', 'Ranger', 'Wizard', 'Captain'];
+function funName(taken) {
+  const pick = a => a[crypto.randomInt(a.length)];
+  for (let i = 0; i < 50; i++) { const n = pick(NAME_A) + ' ' + pick(NAME_B); if (!taken.has(n)) return n; }
+  return pick(NAME_A) + ' ' + pick(NAME_B) + ' ' + crypto.randomInt(2, 99);
+}
 const fresh = () => ({ hostId: 'm-' + rid(12), auth: rid(24), pairCode: rid(12), lanKey: rid(12), devices: {} });
 function identity() {
   let j = readIdentity();
@@ -72,6 +80,13 @@ function createHub(options) {
     onMessage: (peer, msg) => fromNet(peer, msg),
   });
   const startLan = () => lan.start(identity().lanKey).then(pushStatus).catch(e => { console.warn('wifi page', e.message); pushStatus(); });
+  // A network came or went (a hotspot turned on, another Wi-Fi): new addresses for the Wi-Fi page.
+  let netKey = '';
+  setInterval(() => {
+    if (role !== 'hub') return;
+    const k = JSON.stringify(require('os').networkInterfaces());
+    if (k !== netKey) { const first = !netKey; netKey = k; if (!first) pushStatus(); }
+  }, 4000);
 
   // ---------- pipe framing: one JSON per line ----------
   function lines(sock, fn) {
@@ -221,7 +236,8 @@ function createHub(options) {
     if (o.op === 'trust') {
       // A phone was just trusted: its own key, and a new QR code (the old one was used).
       const deviceId = 'd-' + rid(9), key = rid(32);
-      j.devices[deviceId] = { key, name: String(o.device || 'Phone').slice(0, 24), added: Date.now(), seen: Date.now() };
+      const name = funName(new Set(Object.values(j.devices).map(d => d.name)));
+      j.devices[deviceId] = { key, name, model: String(o.device || '').slice(0, 24), added: Date.now(), seen: Date.now() };
       j.pairCode = rid(12);
       writeIdentity(j); identityChanged();
       return { deviceId, key };

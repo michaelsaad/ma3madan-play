@@ -829,3 +829,11 @@ body.player-mode .preview { background: transparent; }
 .r-devices li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .r-devices li small { font-size: 12px; }
 .r-devices li small.live { color: var(--ok, #2fb67c); }
+
+/* Wi-Fi page: one code per network (this computer's Wi-Fi, its hotspot) */
+.lan-nets { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.lan-nets button { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+.lan-nets button.on { border-color: var(--gold); color: var(--gold); }
+.r-devices li span[data-rename] { cursor: text; border-bottom: 1px dashed transparent; }
+.r-devices li span[data-rename]:hover { border-bottom-color: currentColor; }
+.r-devices .dev-rename { flex: 1; min-width: 0; font: inherit; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: inherit; }

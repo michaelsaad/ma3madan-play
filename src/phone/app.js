@@ -103,8 +103,13 @@ function setLang(l) {
   for (const c of Object.values(conns)) c.renderLaptops();
 }
 
+// The name the computer shows for this phone. Browsers never give the phone's own name (the one
+// Bluetooth shows); Android tells its model, and the computer can rename it.
+let phoneModel = '';
+navigator.userAgentData?.getHighEntropyValues?.(['model']).then(v => { phoneModel = (v.model || '').trim().slice(0, 24); }).catch(() => {});
 function deviceName() {
   const ua = navigator.userAgent;
+  if (phoneModel) return phoneModel;
   return /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : 'Phone';
 }
 
@@ -130,7 +135,8 @@ const link = {
 const APP_NAMES = { play: 'Ma3madan Play', ppt: 'Ma3madan PPT' };
 
 function linkClose() {
-  clearTimeout(link.retryTimer);
+  clearTimeout(link.retryTimer); clearTimeout(link.relayTimer);
+  link.relay = null; link.up = null;
   try { link.sock?.close(); } catch {}
   try { link.ctl?.close(); } catch {}
   try { link.img?.close(); } catch {}
@@ -175,6 +181,8 @@ async function dial(target, { quiet = false } = {}) {
     pc.onconnectionstatechange = () => {
       if (link.pc !== pc) return;
       if (pc.connectionState === 'connected') MaLink.route(pc).then(r => { link.route = r; for (const v of Object.values(conns)) v.render(); });
+      // No direct path while connecting: go through the room (startRelay) instead of failing.
+      if (pc.connectionState === 'failed' && key && link.state !== 'connected') { startRelay(); return; }
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') lost(c);
     };
     // Network addresses go as they're found (no waiting): sealed like the offer.
@@ -189,7 +197,7 @@ async function dial(target, { quiet = false } = {}) {
     pc.onicecandidate = e => { if (e.candidate && live()) signal({ type: 'ice', c: e.candidate.toJSON() }); };
     await pc.setLocalDescription(await pc.createOffer());
     const offer = { type: 'offer', sdp: pc.localDescription.sdp, device: deviceName() };
-    let remoteSet = false; const early = [];
+    let remoteSet = false, sawHost = false; const early = [];
     const sent = new Promise((resolve, reject) => {
       link.sock = MaLink.socket({
         room: c.hostId, role: 'phone', peer: 'p-' + MaLink.randomId(9),
@@ -199,24 +207,34 @@ async function dial(target, { quiet = false } = {}) {
           for (const m of out.splice(0)) link.sock.send(m);
           resolve();
         },
-        onclose: () => { if (live() && link.state === 'connecting' && !remoteSet) reject(new Error('signal')); },
+        onclose: () => {
+          if (live() && link.state === 'connecting' && !remoteSet) reject(new Error('signal'));
+          else if (live() && link.relay && link.state === 'connected') lost(c); // the relay itself is gone
+        },
         onmessage: async m => {
           if (!live()) return;
           if (m.type === 'host') {
+            // (The first one only says how the room was when this socket opened.)
+            const first = !sawHost; sawHost = true;
             // The computer isn't there (off, or the remote is off): wait here, it may come.
             if (!m.online && !remoteSet) setLinkState('offline');
             else if (m.online && link.state === 'offline') dial(target, { quiet: true });
             // Connected, and the computer's room has a new holder (the other app took the link
             // over, or the app restarted): the old connection is gone, connect to the new one now.
             // (Only if the connection really is gone: the same app may just have reconnected.)
-            else if (m.online && link.state === 'connected' && link.current && !link.current.temp) {
+            else if (!first && m.online && link.state === 'connected' && link.current && !link.current.temp) {
               const asked = Date.now();
               linkSend({ type: 'ping' });
-              setTimeout(() => { if (live() && link.lastHeard < asked) dial({ computer: link.current }, { quiet: true }); }, 1500);
+              setTimeout(() => { if (live() && link.state === 'connected' && link.lastHeard < asked) dial({ computer: link.current }, { quiet: true }); }, 1500);
             }
             return;
           }
           if (m.type === 'unknown') { setLinkState('unknown'); linkClose(); return; }
+          if (m.type === 'r') {
+            if (!key || !link.relay) return;
+            try { const b = await MaLink.unseal(key, m.box); if (typeof b.d === 'string') link.relay.onmessage?.({ data: b.d }); } catch {}
+            return;
+          }
           let body = m;
           if (key && m.box) { try { body = await MaLink.unseal(key, m.box); } catch { return; } }
           if (body.type === 'answer' && typeof body.sdp === 'string' && !remoteSet) {
@@ -235,9 +253,31 @@ async function dial(target, { quiet = false } = {}) {
         },
       });
     });
+    // Through the computer's room, when there's no direct path (see relayChannel in link.js).
+    const startRelay = async () => {
+      if (!live() || !key || link.relay || link.ctl?.readyState === 'open' || !link.sock?.open) return;
+      clearTimeout(link.relayTimer);
+      // The direct channels are let go quietly (their "closed" isn't a lost connection).
+      for (const ch of [ctl, link.img]) if (ch) { ch.onclose = null; ch.onmessage = null; }
+      pc.onconnectionstatechange = null; link.pc = null;
+      try { pc.close(); } catch {}
+      const send = async d => link.sock?.send({ type: 'r', box: await MaLink.seal(key, { d }) });
+      const rctl = MaLink.relayChannel(send), rimg = MaLink.relayChannel(send);
+      link.relay = rctl; link.ctl = rctl; link.img = rimg; link.route = 'relay';
+      wireChannels(rctl, rimg, c, target, my);
+      link.sock.send({ type: 'r', box: await MaLink.seal(key, { o: 1 }) });
+      link.up?.();
+    };
     await sent;
     // Nearby: as long as it takes to approve; else a few seconds is plenty.
-    await MaLink.waitOpen(ctl, target.nearby ? 120000 : 20000);
+    // Up: the direct channel opens; or, after 4 s without it, the room carries the messages.
+    await new Promise((ok, fail) => {
+      link.up = ok;
+      ctl.addEventListener('open', ok, { once: true });
+      // (Tests: localStorage 'relay-now' goes through the room at once, 'direct-only' never does.)
+      if (key && !store.get('direct-only', false)) link.relayTimer = setTimeout(startRelay, store.get('relay-now', false) ? 0 : 4000);
+      setTimeout(() => fail(new Error('no channel')), target.nearby ? 120000 : 20000);
+    });
   } catch (e) {
     if (!live()) return;
     if (link.state === 'offline') return; // waiting for the computer: it comes back by itself
@@ -452,7 +492,7 @@ function makeConn(kind, { onState, onThumb, failedText, pairTitle }) {
   q('forgetBtn').onclick = () => forgetComputer(computers.find(x => x.hostId === link.current?.hostId));
   c.resume = () => {
     if (kind !== 'play') return; // one connection: resume once
-    if (link.current && !link.current.temp && link.state !== 'connected' && link.state !== 'approve') dial({ computer: link.current }, { quiet: true });
+    if (link.current && !link.current.temp && !['connected', 'approve', 'unknown', 'denied'].includes(link.state)) dial({ computer: link.current }, { quiet: true });
     else if (link.state === 'connected' && Date.now() - link.lastHeard > 6000) dial({ computer: link.current }, { quiet: true });
   };
   return c;
@@ -492,7 +532,17 @@ function renderStatus() {
 
 // Back from the background (screen was off, another app was open), or back online: reconnect if needed.
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') conns.play.resume(); });
-addEventListener('online', () => conns.play.resume());
+// Another network (switched to a hotspot, or back to the Wi-Fi): check the connection at once
+// and, if it's gone, connect again within a couple of seconds.
+function recheck() {
+  if (LAN) return;
+  if (link.state !== 'connected') { conns.play.resume(); return; }
+  const asked = Date.now();
+  linkSend({ type: 'ping' });
+  setTimeout(() => { if (link.state === 'connected' && link.lastHeard < asked && link.current && !link.current.temp) dial({ computer: link.current }, { quiet: true }); }, 2000);
+}
+addEventListener('online', recheck);
+navigator.connection?.addEventListener?.('change', recheck);
 
 // ---------- Ma3madan Play: the video remote ----------
 let st = {}, at = 0;
@@ -786,14 +836,8 @@ addEventListener('popstate', () => { if (fullHistory) { fullHistory = false; set
 addEventListener('resize', applyTurn);
 $('pFullBtn').onclick = e => { e.stopPropagation(); setFull(true); };
 $('pFullClose').onclick = e => { e.stopPropagation(); setFull(false); };
-// Sideways while presenting: the slide fills the screen; upright again: back to the remote
-// (only when turning the phone opened it, not the button).
-matchMedia('(orientation: landscape)').addEventListener('change', e => {
-  if (currentTab !== 'ppt' || !showOf()) return;
-  if (e.matches) setFull(true, 'turn');
-  else if (fullBy === 'turn') setFull(false);
-  applyTurn();
-});
+// Turning the phone never opens or closes full screen (only the button does), and in full screen
+// the slide and its buttons stay together the same way round.
 $('pSlide').addEventListener('click', e => {
   if (!showOf() || Date.now() - swiped < 600 || e.target.closest('button')) return;
   // Where on the slide itself: full screen, the slide sits letterboxed in the phone's screen.

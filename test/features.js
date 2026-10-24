@@ -209,7 +209,7 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     const t0 = Date.now();
     while (Date.now() - t0 < 30000 && !(await pjs(`!document.getElementById('remoteUi').hidden`))) await wait(200);
     log('phone app connected in', Date.now() - t0, 'ms:', await pjs(`JSON.stringify({ui: !document.getElementById('remoteUi').hidden, title: document.getElementById('title').textContent, sub: document.getElementById('whoSub').textContent, route: link.route, saved: JSON.parse(localStorage.getItem('computers') || '[]').map(c => c.name + (c.key ? ' (own key)' : ''))})`));
-    log('host sees phones:', await js(`link.phones.length`), '| trusted:', await js(`link.devices.length`), '| QR code changed after use:', (await js('link.pairUrl')) !== pair);
+    log('host sees phones:', await js(`link.phones.length`), '| trusted:', await js(`link.devices.map(d => d.name).join(', ')`), '| QR code changed after use:', (await js('link.pairUrl')) !== pair);
     const before = await js('out.paused');
     await pjs(`document.getElementById('playBtn').click()`); await wait(800);
     log('phone app play/pause:', before, '→', await js('out.paused'));
@@ -258,8 +258,10 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     const devId = await js(`link.devices[0].id`);
     await js(`LinkPage.op({ op: 'forget', id: ${JSON.stringify(devId)} })`);
     const t3 = Date.now();
-    while (Date.now() - t3 < 20000 && (await pjs(`link.state`)) === 'connected') await wait(300);
-    await wait(2500);
+    const seq = [];
+    while (Date.now() - t3 < 12000) { const st = await pjs(`link.state`); if (seq[seq.length - 1] !== st) seq.push(st); if (st === 'unknown') break; await wait(150); }
+    log('after forget, the phone went:', seq.join(' → '));
+    await wait(1500);
     log('forgotten on the computer → phone:', await pjs(`link.state + ' | ' + document.getElementById('connTitle').textContent`), '| trusted left:', await js('link.devices.length'));
     // And on the phone: forget the computer.
     await pjs(`window.confirm = () => true; document.getElementById('forgetBtn').click()`); await wait(500);
