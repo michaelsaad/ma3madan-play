@@ -141,27 +141,76 @@
   .pfull-btn svg { width: 20px !important; height: 20px !important; }
   .pfull-btn svg { width: 22px; height: 22px; }
   .pfull-bar { display: none; }
-  /* Full screen: only the slide, with next and back under the thumb. Rotating the phone sideways does it too. */
+  /* Full screen: only the slide, and a column of controls on the right edge (right thumb).
+     Turning the phone sideways does it too; held upright, the slide is turned sideways. */
   body.pfull { overflow: hidden; }
   body.pfull > header, body.pfull .tabs, body.pfull #installCard { display: none !important; }
-  body.pfull #pSlide { position: fixed; inset: 0; z-index: 50; width: 100vw; height: 100dvh; max-height: none; margin: 0; aspect-ratio: auto !important; border-radius: 0; box-shadow: none; }
-  body.pfull .pstage-bar { display: none; }
-  body.pfull .pfull-btn { display: none; }
-  body.pfull .pfull-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; align-items: center; gap: 10px; direction: ltr;
-    padding: 10px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-    background: linear-gradient(transparent, rgba(0,0,0,.7)); opacity: .9; }
-  .pfull-bar button { min-height: 52px; min-width: 64px; border-radius: 16px; background: rgba(20,28,46,.85); }
-  .pfull-bar button.primary { background: var(--accent); margin-inline-start: auto; min-width: 96px; }
-  .pfull-bar #pFullClose { min-width: 52px; }
-  .pfull-pos { color: #fff; font-weight: 600; font-size: 15px; text-shadow: 0 1px 3px #000; }
-  @media (orientation: landscape) { body.pfull .pfull-bar { background: none; } }
-  .pfull-back { display: none; }
-  body.pfull .pfull-back { display: flex; position: absolute; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); z-index: 4;
-    width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.55); border: 0; }
-  body.pfull .pfull-back svg { width: 22px; height: 22px; }
-  /* Upright phone: the slide turned sideways, filling the screen the long way. */
-  body.pfull.rot #pSlide { inset: auto; top: 50%; left: 50%; width: 100dvh; height: 100vw; transform: translate(-50%, -50%) rotate(90deg); }
-  body.pfull.rot .pfull-back { top: 10px; left: 10px; }
+  body.pfull #pSlide { position: fixed; inset: 0 var(--fb) 0 0; z-index: 50; width: auto; height: auto; max-height: none; margin: 0; aspect-ratio: auto !important; border-radius: 0; box-shadow: none; }
+  body.pfull.rot #pSlide { inset: auto; top: 50%; left: calc((100vw - var(--fb)) / 2); width: 100dvh; height: calc(100vw - var(--fb)); transform: translate(-50%, -50%) rotate(90deg); }
+  body.pfull .pstage-bar, body.pfull .pfull-btn { display: none; }
+  :root { --fb: 84px; }
+  body.pfull .pfull-bar { position: fixed; top: 0; right: 0; bottom: 0; width: var(--fb); z-index: 60; display: flex; flex-direction: column; align-items: center; gap: 12px; direction: ltr;
+    padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) 10px;
+    background: #05080f; border-left: 1px solid #172033; }
+  .pfull-bar button { width: 64px; min-width: 64px; padding: 0; border-radius: 20px; background: #182235; border: 1px solid #26324a; }
+  .pfull-bar .fb-round { width: 48px; min-width: 48px; height: 48px; min-height: 48px; border-radius: 50%; background: #121a2a; color: #c9d2e3; }
+  .pfull-bar .fb-round svg { width: 22px; height: 22px; }
+  .fb-grow { flex: 1; }
+  .fb-prev { min-height: 72px; }
+  .fb-next { min-height: 132px; border: 0 !important; background: linear-gradient(180deg, #4d91fa, #2c6ad9) !important; box-shadow: 0 8px 22px rgba(59, 130, 246, .35); }
+  .fb-prev svg, .fb-next svg { width: 32px; height: 32px; transform: rotate(90deg); }
+  .pfull-pos { color: #fff; font-weight: 700; font-size: 13px; text-align: center; line-height: 1.25; }
+  /* The sections tree: tap a slide to go straight to it. */
+  .ptree { position: fixed; inset: 0; z-index: 90; background: rgba(3, 6, 12, .6); display: flex; align-items: flex-end; }
+  .ptree[hidden] { display: none; }
+  .ptree-sheet { width: 100%; max-height: 82dvh; display: flex; flex-direction: column; background: var(--panel); border-top: 1px solid var(--line); border-radius: 22px 22px 0 0; padding-bottom: env(safe-area-inset-bottom); animation: sheet .18s ease-out; }
+  @keyframes sheet { from { transform: translateY(30px); opacity: 0; } }
+  .ptree-head { display: flex; align-items: center; gap: 10px; padding: 14px 12px 10px 18px; border-bottom: 1px solid var(--line); }
+  .ptree-head b { font-size: 16px; }
+  .ptree-head span { flex: 1; min-width: 0; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptree-head button { width: 44px; min-width: 44px; min-height: 44px; height: 44px; padding: 0; border-radius: 50%; }
+  .ptree-head button svg { width: 20px; height: 20px; }
+  .ptree-list { overflow-y: auto; padding: 8px 10px 14px; }
+  .ptree-sec > button { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: transparent; justify-content: flex-start; gap: 8px; padding: 0 8px; font-weight: 600; }
+  .ptree-sec > button b { flex: 1; text-align: start; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptree-sec > button small { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .ptree-sec.here > button b { color: var(--gold); }
+  .ptree-sec.open > button .caret { transform: none; }
+  .ptree-slides { display: flex; flex-direction: column; gap: 2px; padding: 0 0 6px 22px; border-inline-start: 2px solid var(--line); margin-inline-start: 17px; }
+  .ptree-slide { width: 100%; min-height: 46px; justify-content: flex-start; gap: 12px; padding: 4px 8px; border: 0; border-radius: 12px; background: transparent; text-align: start; }
+  .ptree-slide i { font-style: normal; font: 600 12px ui-monospace, Consolas, monospace; color: var(--muted); min-width: 22px; text-align: end; }
+  .ptree-slide .th { width: 64px; flex: none; aspect-ratio: 16 / 9; border-radius: 6px; background: #000 center/contain no-repeat; }
+  .ptree-slide span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; }
+  .ptree-slide.cur { background: #16274a; }
+  .ptree-slide.cur i, .ptree-slide.cur span { color: #fff; font-weight: 600; }
+  .ptree-slide.hid { opacity: .5; }
+  /* Full screen: the sections like PowerPoint's presenter view (turned with the slide). */
+  .ptree.grid { align-items: stretch; background: #070a12; }
+  .ptree.grid .ptree-sheet { max-height: none; height: 100%; border: 0; border-radius: 0; animation: none; background: #070a12; padding: 0; }
+  body.rot .ptree.grid { inset: auto; top: 50%; left: 50%; width: 100dvh; height: 100vw; transform: translate(-50%, -50%) rotate(90deg); }
+  .ptree.grid .ptree-head { padding: 10px 12px 10px 18px; border-color: #1a2336; }
+  .ptree.grid .ptree-list { flex: 1; min-height: 0; display: flex; padding: 0; overflow: hidden; }
+  .pg-secs { width: 30%; max-width: 220px; flex: none; overflow-y: auto; padding: 10px 8px; border-inline-end: 1px solid #1a2336; display: flex; flex-direction: column; gap: 4px; }
+  .pg-secs button { width: 100%; min-height: 50px; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; text-align: start; }
+  .pg-secs button b { font-size: 14px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pg-secs button small { font-size: 11.5px; color: var(--muted); }
+  .pg-secs button.here { background: #16274a; box-shadow: inset 3px 0 0 var(--gold); }
+  .pg-secs button.here b { color: var(--gold); }
+  .pg-main { flex: 1; min-width: 0; overflow-y: auto; padding: 4px 14px 18px; }
+  .pg-sec h4 { margin: 14px 2px 8px; font-size: 13px; font-weight: 600; color: #c9d2e3; }
+  .pg-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; }
+  .pg-tile { flex-direction: column; align-items: stretch; gap: 5px; min-height: 0; min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .pg-pic { display: block; aspect-ratio: var(--r, 16/9); border-radius: 4px; background: #000 center/contain no-repeat; outline: 1px solid #26324a; }
+  .pg-num { font: 600 12px ui-monospace, Consolas, monospace; color: var(--muted); text-align: center; }
+  .pg-tile.cur .pg-pic { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .pg-tile.cur .pg-num { color: var(--gold); }
+  .pg-tile.hid .pg-pic { opacity: .45; }
+  .pg-tile:active { transform: scale(.97); }
+  /* The remote's own buttons */
+  .pctl { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .pctl button { min-height: 70px; border-radius: 18px; font-size: 12px; }
+  .pctl button svg { width: 24px; height: 24px; }
+  .pctl .pend svg { color: #ff8a8f; }
   .pslide-main img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   .pslide-main img:not([src]) { display: none; }
   .pslide-main.dark img { opacity: .15; }
@@ -176,7 +225,8 @@
   .phint { margin: -6px 0 0; font-size: 12px; color: var(--muted); }
   .prow { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; direction: ltr; }
   .prow:has(.wide) { grid-template-columns: 1fr; }
-  .pbig { min-height: 84px; border-radius: 20px; font-size: 16px; font-weight: 600; }
+  .pbig { min-height: 84px; border-radius: 22px; font-size: 17px; font-weight: 600; background: #182235; }
+  .pbig.primary { border: 0; background: linear-gradient(180deg, #4d91fa, #2c6ad9); box-shadow: 0 8px 22px rgba(59, 130, 246, .3); gap: 6px; }
   .pbig svg { width: 40px; height: 40px; }
   .pbig.primary svg { width: 46px; height: 46px; }
   .pbig.wide svg { width: 28px; height: 28px; }
@@ -287,6 +337,7 @@
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
   <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M2 19h20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-slides" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 16v4M8 20h8M7 8h6M7 11h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-tree" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="7" height="5" rx="1.2"/><path d="M6.5 8.5v10.5M6.5 13.5h4.5M6.5 19h4.5"/><path d="M14 13.5h7M14 19h7M13.5 6h7.5"/></g></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
   <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -482,13 +533,16 @@
     <div id="pStage" class="pstage">
       <div id="pSlide" class="pslide-main"><img id="pSlideImg" alt=""><p id="pEmpty" class="pempty" data-s="noDeck"></p>
         <button id="pFullBtn" class="pfull-btn" aria-label="Full screen"><svg><use href="#i-expand"/></svg></button>
-        <button id="pFullBack" class="pfull-back" aria-label="Back"><svg><use href="#i-x"/></svg></button>
-        <div id="pFullBar" class="pfull-bar">
-          <button data-p="prev" aria-label="Previous"><svg><use href="#i-left"/></svg></button>
-          <span id="pFullPos" class="pfull-pos"></span>
-          <button id="pFullClose" aria-label="Close"><svg><use href="#i-shrink"/></svg></button>
-          <button data-p="next" class="primary" aria-label="Next"><svg><use href="#i-right"/></svg></button>
-        </div></div>
+</div>
+      <!-- Full screen: every control in one column on the right edge, under the right thumb -->
+      <div id="pFullBar" class="pfull-bar">
+        <button id="pFullClose" class="fb-round" aria-label="Close"><svg><use href="#i-x"/></svg></button>
+        <button class="fb-round" data-tree aria-label="Sections"><svg><use href="#i-tree"/></svg></button>
+        <span class="fb-grow"></span>
+        <button data-p="prev" class="fb-prev" aria-label="Previous"><svg><use href="#i-left"/></svg></button>
+        <span id="pFullPos" class="pfull-pos"></span>
+        <button data-p="next" class="fb-next" aria-label="Next"><svg><use href="#i-right"/></svg></button>
+      </div>
       <div class="pstage-bar"><span id="pStatus" class="status"></span><b id="pStagePos"></b><span id="pStageSec" dir="auto"></span><span id="pDeck" class="pdeck" dir="auto"></span></div>
     </div>
     <section class="card">
@@ -496,17 +550,18 @@
       <p id="pHint" class="phint" data-s="tapHint"></p>
       <div id="pPlayRow" class="prow">
         <button data-p="prev" class="pbig" aria-label="Previous"><svg><use href="#i-left"/></svg></button>
-        <button data-p="next" class="pbig primary" aria-label="Next"><svg><use href="#i-right"/></svg></button>
+        <button data-p="next" class="pbig primary" aria-label="Next"><svg><use href="#i-right"/></svg><span data-s="nextSlide"></span></button>
       </div>
       <div id="pStartRow" class="prow" hidden>
         <button id="pStartBtn" class="pbig primary wide"><svg><use href="#i-play"/></svg><span data-s="fromStart"></span></button>
       </div>
     </section>
 
-    <div id="pControls" class="grid">
+    <div id="pControls" class="grid pctl">
+      <button data-tree><svg><use href="#i-tree"/></svg><span data-s="sections"></span></button>
       <button data-p="black" id="pBlackBtn"><svg><use href="#i-black"/></svg><span data-s="black"></span></button>
       <button data-p="white" id="pWhiteBtn" class="white"><svg><use href="#i-white"/></svg><span data-s="white"></span></button>
-      <button data-p="end"><svg><use href="#i-stop"/></svg><span data-s="end"></span></button>
+      <button data-p="end" class="pend"><svg><use href="#i-stop"/></svg><span data-s="end"></span></button>
     </div>
 
     <section id="pNotesBox" class="card pnotes-card">
@@ -521,6 +576,12 @@
   </div>
 </main>
 
+<div id="pTree" class="ptree" hidden>
+  <div class="ptree-sheet" role="dialog" aria-modal="true">
+    <div class="ptree-head"><b data-s="sections"></b><span id="pTreeDeck" dir="auto"></span><button id="pTreeClose" aria-label="Close"><svg><use href="#i-x"/></svg></button></div>
+    <div id="pTreeList" class="ptree-list"></div>
+  </div>
+</div>
 <nav class="tabs">
   <button data-tab="play" class="on"><svg><use href="#i-play"/></svg><span>Ma3madan Play</span></button>
   <button data-tab="ppt"><svg><use href="#i-slides"/></svg><span data-s="slidesTab"></span></button>

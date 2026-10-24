@@ -46,7 +46,7 @@ const S = {
     noDeck: 'Open a presentation on the computer, or pick one below.',
     slideOf: 'Slide {n} of {c}', black: 'Black', white: 'White', end: 'End show', startShow: 'Start', fromStart: 'From the beginning',
     notes: 'Notes', noNotes: 'No notes on this slide', sections: 'Sections', slides: '{n} slides', oneSlide: '1 slide',
-    presentations: 'Presentations', openNow: 'Open', untitled: 'Untitled section', tapHint: 'Tap the slide to click on it',
+    presentations: 'Presentations', nextSlide: 'Next', openNow: 'Open', untitled: 'Untitled section', tapHint: 'Tap the slide to click on it',
     animStep: 'Animation {a} of {b}', endOfShow: 'End of the show',
   },
   ar: {
@@ -86,7 +86,7 @@ const S = {
     noDeck: 'افتح عرضًا على الكمبيوتر، أو اختر واحدًا بالأسفل.',
     slideOf: 'شريحة {n} من {c}', black: 'أسود', white: 'أبيض', end: 'إنهاء العرض', startShow: 'ابدأ', fromStart: 'من البداية',
     notes: 'الملاحظات', noNotes: 'لا توجد ملاحظات لهذه الشريحة', sections: 'الأقسام', slides: '{n} شريحة', oneSlide: 'شريحة واحدة',
-    presentations: 'العروض', openNow: 'فتح', untitled: 'قسم بدون اسم', tapHint: 'اضغط على الشريحة للضغط عليها',
+    presentations: 'العروض', nextSlide: 'التالي', openNow: 'فتح', untitled: 'قسم بدون اسم', tapHint: 'اضغط على الشريحة للضغط عليها',
     animStep: 'حركة {a} من {b}', endOfShow: 'نهاية العرض',
   },
 };
@@ -658,7 +658,7 @@ function renderPpt() {
   }
   // The next slide's big picture comes ahead, so moving on shows it at once.
   if (live && n < d.slides.length) pthumb(n + 1, 'big');
-  $('pFullPos').textContent = live ? t('slideOf', { n: s.slide, c: s.count }) : '';
+  $('pFullPos').textContent = live ? `${s.slide} / ${s.count}` : '';
   $('pStagePos').textContent = live ? t('slideOf', { n: s.slide, c: s.count }) : '';
   $('pStageSec').textContent = sec?.name || '';
   if (!live && document.body.classList.contains('pfull')) setFull(false);
@@ -763,8 +763,7 @@ let fullBy = null, fullHistory = false;
 const isFull = () => document.body.classList.contains('pfull');
 const portrait = () => matchMedia('(orientation: portrait)').matches;
 function applyTurn() {
-  // Upright phone: turn the slide sideways so it's wide and readable (when the phone can't turn
-  // the screen itself; Android in full screen can).
+  // Upright phone: turn the slide sideways so it's wide and readable.
   document.body.classList.toggle('rot', isFull() && portrait());
 }
 function setFull(on, by = 'button') {
@@ -773,26 +772,20 @@ function setFull(on, by = 'button') {
   if (on) {
     fullBy = by;
     // An entry in the history, so Back closes full screen instead of leaving the app.
+    // (The page fills the screen by itself: asking the browser for full screen would bring its
+    // "drag to exit full screen" message every time.)
     if (!fullHistory) { history.pushState({ pfull: 1 }, ''); fullHistory = true; }
-    const root = document.documentElement;
-    if (root.requestFullscreen && !document.fullscreenElement) {
-      root.requestFullscreen().then(() => screen.orientation?.lock?.('landscape')).then(applyTurn, applyTurn).catch(applyTurn);
-    }
   } else {
     fullBy = null;
-    try { screen.orientation?.unlock?.(); } catch {}
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    closeTree();
     if (fullHistory) { fullHistory = false; if (history.state?.pfull) history.back(); }
   }
   applyTurn();
 }
 addEventListener('popstate', () => { if (fullHistory) { fullHistory = false; setFull(false); } });
-// The system left full screen by itself (Back on Android, a swipe): leave ours too.
-document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && isFull()) setFull(false); });
 addEventListener('resize', applyTurn);
 $('pFullBtn').onclick = e => { e.stopPropagation(); setFull(true); };
 $('pFullClose').onclick = e => { e.stopPropagation(); setFull(false); };
-$('pFullBack').onclick = e => { e.stopPropagation(); setFull(false); };
 // Sideways while presenting: the slide fills the screen; upright again: back to the remote
 // (only when turning the phone opened it, not the button).
 matchMedia('(orientation: landscape)').addEventListener('change', e => {
@@ -822,6 +815,71 @@ document.addEventListener('click', e => {
   if (b) psend({ action: b.dataset.p });
 });
 $('pStartBtn').onclick = () => pst.deck && psend({ action: 'start', path: pst.deck.path, n: 1 });
+
+// ---------- the sections tree: every section with its slides, tap one to go there ----------
+const treeOpen = new Set();
+function openTree() {
+  const d = pst.deck;
+  if (!d) return;
+  if (isFull()) { openGrid(d); return; }
+  $('pTree').classList.remove('grid');
+  const s = showOf(), live = s && s.path === d.path, cur = live ? s.slide : 0;
+  const secs = d.sections.length ? d.sections : [{ name: '', first: 1, count: d.slides.length }];
+  const here = secs.findIndex(x => cur >= x.first && cur < x.first + x.count);
+  if (here >= 0) treeOpen.add(d.path + '|' + here);
+  if (secs.length === 1) treeOpen.add(d.path + '|0');
+  $('pTreeDeck').textContent = d.name;
+  $('pTreeList').innerHTML = secs.map((sec, i) => {
+    const k = d.path + '|' + i, open = treeOpen.has(k);
+    let rows = '';
+    if (open) for (let n = sec.first; n < sec.first + sec.count; n++) {
+      const sl = d.slides[n - 1] || {}, pic = pthumb(n, 'small', d);
+      rows += `<button class="ptree-slide ${n === cur ? 'cur' : ''} ${sl.h ? 'hid' : ''}" data-n="${n}"><i>${n}</i><b class="th" ${pic ? `style="background-image:url('${pic}')"` : ''}></b><span dir="auto">${esc(sl.t || '')}</span></button>`;
+    }
+    return `<div class="ptree-sec ${open ? 'open' : ''} ${i === here ? 'here' : ''}">${secs.length > 1 || sec.name ? `<button data-k="${esc(k)}"><svg class="caret"><use href="#i-caret"/></svg><b dir="auto">${esc(sec.name || t('untitled'))}</b><small>${sec.count}</small></button>` : ''}${open ? `<div class="ptree-slides">${rows}</div>` : ''}</div>`;
+  }).join('');
+  for (const b of $('pTreeList').querySelectorAll('[data-k]')) b.onclick = () => { treeOpen.has(b.dataset.k) ? treeOpen.delete(b.dataset.k) : treeOpen.add(b.dataset.k); openTree(); };
+  for (const b of $('pTreeList').querySelectorAll('[data-n]')) b.onclick = () => {
+    psend(live ? { action: 'go', n: Number(b.dataset.n) } : { action: 'go', n: Number(b.dataset.n), path: d.path });
+    closeTree();
+  };
+  const wasHidden = $('pTree').hidden;
+  $('pTree').hidden = false;
+  if (wasHidden) $('pTreeList').querySelector('.cur')?.scrollIntoView({ block: 'center' });
+}
+function closeTree() { $('pTree').hidden = true; }
+function openGrid(d) {
+  const s = showOf(), live = s && s.path === d.path, cur = live ? s.slide : 0;
+  const secs = d.sections.length ? d.sections : [{ name: '', first: 1, count: d.slides.length }];
+  const here = Math.max(0, secs.findIndex(x => cur >= x.first && cur < x.first + x.count));
+  $('pTree').classList.add('grid');
+  $('pTreeDeck').textContent = d.name;
+  const named = secs.length > 1 || secs[0].name;
+  $('pTreeList').innerHTML = (named ? `<nav class="pg-secs">${secs.map((sec, i) => `<button data-sec="${i}" class="${i === here ? 'here' : ''}"><b dir="auto">${esc(sec.name || t('untitled'))}</b><small>${esc(sec.count === 1 ? t('oneSlide') : t('slides', { n: sec.count }))}</small></button>`).join('')}</nav>` : '')
+    + `<div class="pg-main" style="--r:${d.ratio}">${secs.map((sec, i) => {
+      let tiles = '';
+      for (let n = sec.first; n < sec.first + sec.count; n++) {
+        const sl = d.slides[n - 1] || {}, pic = pthumb(n, 'small', d);
+        tiles += `<button class="pg-tile ${n === cur ? 'cur' : ''} ${sl.h ? 'hid' : ''}" data-n="${n}"><span class="pg-pic" ${pic ? `style="background-image:url('${pic}')"` : ''}></span><span class="pg-num">${n}</span></button>`;
+      }
+      return `<section class="pg-sec" id="pg-sec-${i}">${named ? `<h4 dir="auto">${esc(sec.name || t('untitled'))}</h4>` : ''}<div class="pg-tiles">${tiles}</div></section>`;
+    }).join('')}</div>`;
+  const main = $('pTreeList').querySelector('.pg-main');
+  for (const b of $('pTreeList').querySelectorAll('[data-sec]')) b.onclick = () => {
+    for (const x of $('pTreeList').querySelectorAll('[data-sec]')) x.classList.toggle('here', x === b);
+    main.scrollTo({ top: $('pg-sec-' + b.dataset.sec).offsetTop - main.offsetTop, behavior: 'smooth' });
+  };
+  for (const b of $('pTreeList').querySelectorAll('[data-n]')) b.onclick = () => {
+    psend(live ? { action: 'go', n: Number(b.dataset.n) } : { action: 'go', n: Number(b.dataset.n), path: d.path });
+    closeTree();
+  };
+  $('pTree').hidden = false;
+  const c = main.querySelector('.cur');
+  if (c) main.scrollTop = c.offsetTop - main.offsetTop - 40;
+}
+document.addEventListener('click', e => { if (e.target.closest('[data-tree]')) { e.stopPropagation(); openTree(); } });
+$('pTreeClose').onclick = closeTree;
+$('pTree').addEventListener('click', e => { if (e.target === $('pTree')) closeTree(); });
 
 // ---------- more of the app on the phone ----------
 let query = '';
