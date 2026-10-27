@@ -55,7 +55,7 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 - **Subtitles.** A `.srt` or `.vtt` file with the same name as the video is used by itself, or pick one in **Video settings…**. `C` turns them on and off.
 - **Checkpoints.** Mark the moments you jump to ("Verse 1", "Chorus") with **Here** (`Ctrl + D`) while a video plays. They list under Recents and show as gold ticks on the seek bar; click one to jump there, or `Alt + ←` / `Alt + →` to step between them. The phone remote has them too.
 - **Lyrics on screen.** Write a song's lyrics in its **Video settings…**, one slide per paragraph. While it plays, the slides line up under the controls: click one (or `Shift + N` / `Shift + P`) to show it over the video, or full screen over the standby screen for a song with no picture.
-- **Countdown** (`T`): a big "We start in 5:00" on the audience's screen before the meeting.
+- **Countdown** (`T`): a big "We start in 5:00" on the audience's screen before the meeting, inside a ring that runs down; the last 10 seconds turn gold, and at zero it fades away.
 - **Phone remote.** Turn it on, then on the phone either scan the QR code once (the [Ma3madan Remote](https://github.com/michaelsaad/ma3madan-remote) app opens; add it to the home screen), or pick this computer from **Computers on this Wi-Fi** in the [app](https://ma3madan-remote.pages.dev) and approve it here (**Trust this device** or **Just this time**, after checking the same 4-digit code shows on both). From then on it connects by itself, in about a second. Change videos, pause, seek, put up the standby screen, jump to checkpoints or show lyrics while you walk around; paste a YouTube link to play or download it, switch lists, start a countdown, turn karaoke on, or change the speed.
   - **One connection with Ma3madan PPT.** When both apps are open, the phone has one connection to the computer and a tab for each: one QR code, one approval.
   - **Trusted phones.** Each phone gets a key of its own: see them in the remote's window and **Forget** any one of them, or all. Only phones you trusted can connect, and the connection is encrypted.
@@ -74,6 +74,7 @@ It plays your own video files and YouTube links, streamed directly or downloaded
 - **Light and dark themes** that follow Windows, or pick one in **Settings**.
 - **A welcome tour** the first time, and every shortcut one `?` away.
 - **A flexible window.** Resize it or snap it to half the screen. Drag the side panel's edge to make it wider or narrower, or hide it with `Ctrl + B`.
+- **Always ready, in the tray.** The window's ✕ keeps the app running next to the clock, so the phone remote stays connected; click the icon to open it, right-click it to quit. It also starts with Windows, hidden there (turn that off in Task Manager → Startup apps).
 - **Opens videos from Explorer** and can be set as the default video player.
 
 ## Install

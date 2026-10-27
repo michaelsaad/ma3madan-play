@@ -85,8 +85,8 @@ let mode = 'player';    // 'player' | 'presenter'
 let modeChosen = false; // the operator picked a mode this session: don't switch on screen changes
 let playerRect = null;  // where the preview box is in the control window (Player mode)
 let playerFullscreen = false;
-let hiddenForAudio = false, hideTimer = null;
-let tray = null, inTray = false; // the window closed to the tray (tray.js): no video, no projector // projector stepped aside (standby Off, or sound only)
+let hiddenForAudio = false, hideTimer = null; // projector stepped aside (standby Off, or sound only)
+let tray = null, inTray = false; // the window closed to the tray (tray.js): no video, no projector
 
 // ---------- persistence ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');

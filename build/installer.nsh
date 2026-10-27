@@ -35,4 +35,6 @@
   DeleteRegKey SHCTX "Software\Clients\Media\Ma3madan Play"
   DeleteRegValue SHCTX "Software\RegisteredApplications" "Ma3madan Play"
   nsExec::Exec 'netsh advfirewall firewall delete rule name="Ma3madan Play"'
+  ; It started with Windows (tray.js): not any more.
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Ma3madan Play"
 !macroend

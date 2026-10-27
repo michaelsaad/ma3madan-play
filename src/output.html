@@ -29,11 +29,25 @@
   #countdown {
     position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 2vh; z-index: 5;
     background: rgba(0, 0, 0, .78); color: #fff; font-family: "Segoe UI", Tahoma, sans-serif; text-align: center;
-    opacity: 0; transition: opacity .5s ease; pointer-events: none;
+    opacity: 0; transition: opacity 1s ease; pointer-events: none;
   }
   #countdown.on { opacity: 1; }
   #countdown .msg { font-size: 5vh; font-weight: 600; max-width: 80vw; white-space: pre-line; opacity: .9; }
-  #countdown .time { font: 700 22vh/1 "Segoe UI", Tahoma, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .02em; direction: ltr; }
+  /* A ring around the time that empties as it runs out; gold with a pulse for the last 10 seconds */
+  #countdown .dial { position: relative; width: 58vh; height: 58vh; display: grid; place-items: center; }
+  #countdown .dial svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+  #countdown .dial circle { fill: none; stroke-width: 3.2; }
+  #countdown .dial .track { stroke: rgba(255, 255, 255, .14); }
+  #countdown .dial .arc { stroke: #fff; stroke-linecap: round; transition: stroke-dashoffset .25s linear, stroke .4s; }
+  #countdown .time {
+    font: 700 16vh/1 "Segoe UI", Tahoma, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .02em; direction: ltr;
+    transition: color .4s;
+  }
+  #countdown .time.long { font-size: 11vh; }
+  #countdown.final .time { color: #f5b82e; }
+  #countdown.final .arc { stroke: #f5b82e; }
+  #countdown .time.pulse { animation: cdPulse .7s ease-out; }
+  @keyframes cdPulse { from { transform: scale(1.14); } to { transform: scale(1); } }
   /* Lyrics: a band at the bottom over the video; centred and large over standby */
   #lyrics {
     position: absolute; left: 0; right: 0; bottom: 5vh; display: flex; justify-content: center; pointer-events: none; z-index: 4;
@@ -56,7 +70,7 @@
 <canvas id="freeze" hidden></canvas>
 <div id="standby"><img id="standbyImg" alt="" hidden><video id="standbyVid" muted loop playsinline hidden></video><div id="standbyText" class="text" dir="auto" hidden></div></div>
 <div id="lyrics"><div dir="auto"></div></div>
-<div id="countdown"><div class="msg" dir="auto"></div><div class="time"></div></div>
+<div id="countdown"><div class="msg" dir="auto"></div><div class="dial"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="47"/><circle class="arc" cx="50" cy="50" r="47" pathLength="1000" stroke-dasharray="1000"/></svg><div class="time"></div></div></div>
 <script>
   // Two video elements: `v` is the one on screen; `vNext` loads a higher stream quality behind it
   // and takes over at the same frame, so stepping up never interrupts the picture.
@@ -482,21 +496,36 @@
   }
 
   const cdBox = document.getElementById('countdown');
-  let countdown = null, cdTimer = null; // { until, text }
+  let countdown = null, cdTimer = null, cdLast = -1; // { until, text, total }
   function setCountdown(c) {
     clearInterval(cdTimer);
-    countdown = c && c.until > Date.now() ? { until: c.until, text: c.text || '' } : null;
+    // The ring's full length is the time left when the countdown starts.
+    const keep = countdown && c && c.until === countdown.until;
+    countdown = c && c.until > Date.now() ? { until: c.until, text: c.text || '', total: keep ? countdown.total : c.until - Date.now() } : null;
+    cdLast = -1;
+    cdBox.classList.remove('final');
     cdBox.querySelector('.msg').textContent = countdown?.text || '';
     cdBox.classList.toggle('on', !!countdown);
-    if (countdown) { drawCountdown(); cdTimer = setInterval(drawCountdown, 250); }
+    if (countdown) { drawCountdown(); cdTimer = setInterval(drawCountdown, 100); }
     push();
   }
   function drawCountdown() {
-    const left = Math.max(0, Math.ceil((countdown.until - Date.now()) / 1000));
+    const ms = Math.max(0, countdown.until - Date.now());
+    const left = Math.ceil(ms / 1000);
     const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
-    cdBox.querySelector('.time').textContent = (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
-    // At zero: hold "0:00" a moment, then give the screen back.
-    if (left === 0) { clearInterval(cdTimer); setTimeout(() => { if (countdown && Date.now() >= countdown.until) setCountdown(null); }, 2500); }
+    const time = cdBox.querySelector('.time');
+    cdBox.querySelector('.arc').style.strokeDashoffset = String(Math.round(1000 * (1 - ms / Math.max(1, countdown.total))));
+    if (left !== cdLast) {
+      cdLast = left;
+      time.textContent = (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+      time.classList.toggle('long', h > 0);
+      // The last 10 seconds: gold, with a small pulse on each second.
+      const final = left > 0 && left <= 10;
+      cdBox.classList.toggle('final', final || (left === 0 && countdown.total > 10000));
+      if (final) { time.classList.remove('pulse'); void time.offsetWidth; time.classList.add('pulse'); }
+    }
+    // At zero: hold "0:00" a moment, then fade into whatever is underneath (standby or the video).
+    if (left === 0) { clearInterval(cdTimer); setTimeout(() => { if (countdown && Date.now() >= countdown.until) setCountdown(null); }, 1200); }
   }
 
   const lyricsBox = document.getElementById('lyrics');

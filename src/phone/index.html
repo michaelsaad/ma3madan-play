@@ -470,6 +470,14 @@
       <button id="cdBtn" class="cd"><svg><use href="#i-timer"/></svg><span id="cdLabel"></span></button>
       <button data-a="karaoke" id="karaokeBtn" class="karaoke"><svg><use href="#i-mic"/></svg><span id="karaokeLabel"></span></button>
     </div>
+    <!-- The minutes open right under the Countdown button, where the finger is -->
+    <div id="cdPanel" class="card cd-panel" hidden>
+      <b data-s="cdTitle"></b>
+      <div class="cd-chips">
+        <button data-min="1">1</button><button data-min="2">2</button><button data-min="5">5</button><button data-min="10">10</button><button data-min="15">15</button>
+      </div>
+      <button id="cdStop" class="cd-stop" data-s="cdStop" hidden></button>
+    </div>
     <section id="mixCard" class="card mix-card" hidden>
       <b class="card-title"><svg><use href="#i-mic"/></svg><span data-s="vocalRemover"></span></b>
       <div id="mixPresets" class="seg wide">
@@ -487,13 +495,6 @@
       <button id="audioStandbyBtn" class="tog" data-s="audioStandby"></button>
     </section>
 
-    <div id="cdPanel" class="card cd-panel" hidden>
-      <b data-s="cdTitle"></b>
-      <div class="cd-chips">
-        <button data-min="1">1</button><button data-min="2">2</button><button data-min="5">5</button><button data-min="10">10</button><button data-min="15">15</button>
-      </div>
-      <button id="cdStop" class="cd-stop" data-s="cdStop" hidden></button>
-    </div>
     
     <div class="vol card">
       <button data-a="mute" id="muteBtn"><svg><use href="#i-vol"/></svg></button>

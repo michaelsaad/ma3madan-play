@@ -60,6 +60,17 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
   await shot('35-countdown');
   await js(`cmd('countdown', { until: 0 })`); await wait(400);
   log('countdown stopped:', await ojs(`document.getElementById('countdown').classList.contains('on')`));
+  // The ring empties; the last 10 seconds turn gold and pulse; at zero it fades away.
+  log('ring at the start:', await (async () => { await js(`cmd('countdown', { until: Date.now() + 30000, text: 'We start in' })`); await wait(600); return ojs(`document.querySelector('#countdown .arc').style.strokeDashoffset`); })());
+  await wait(2000);
+  log('ring 2 s later (of 30):', await ojs(`document.querySelector('#countdown .arc').style.strokeDashoffset`), '| gold:', await ojs(`document.getElementById('countdown').classList.contains('final')`));
+  await js(`cmd('countdown', { until: Date.now() + 8000, text: 'We start in' })`); await wait(1500);
+  log('last 10 s:', await ojs(`JSON.stringify({ gold: document.getElementById('countdown').classList.contains('final'), pulse: document.querySelector('#countdown .time').classList.contains('pulse'), color: getComputedStyle(document.querySelector('#countdown .time')).color, time: document.querySelector('#countdown .time').textContent })`));
+  await shot('35b-countdown-final');
+  await wait(6800);
+  log('at zero:', await ojs(`document.querySelector('#countdown .time').textContent + ' on=' + document.getElementById('countdown').classList.contains('on')`));
+  await wait(1800);
+  log('after the fade:', await ojs(`'on=' + document.getElementById('countdown').classList.contains('on') + ' opacity=' + getComputedStyle(document.getElementById('countdown')).opacity`), '| status pill:', await js(`$('statusPill').textContent`));
 
   // ---------- lyrics ----------
   await js(`items[3].lyrics = 'First line\\nSecond line\\n\\nالمقطع الثاني\\nسطر آخر\\n\\nThird slide'; save(); playItem(items[3])`); await wait(1500);

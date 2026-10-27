@@ -1016,7 +1016,10 @@ for (const [id, mode] of [['linkPlay', 'stream'], ['linkVideo', 'video'], ['link
 }
 
 // Countdown: pick the minutes; tap again to stop it.
-$('cdBtn').onclick = () => { $('cdPanel').hidden = !$('cdPanel').hidden; };
+$('cdBtn').onclick = () => {
+  $('cdPanel').hidden = !$('cdPanel').hidden;
+  if (!$('cdPanel').hidden) $('cdPanel').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+};
 for (const b of document.querySelectorAll('#cdPanel [data-min]')) b.onclick = () => { send({ action: 'countdown', minutes: Number(b.dataset.min) }); $('cdPanel').hidden = true; };
 $('cdStop').onclick = () => { send({ action: 'countdown', minutes: 0 }); $('cdPanel').hidden = true; };
 
