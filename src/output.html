@@ -747,7 +747,7 @@
   // Keyboard media keys (and Windows' media overlay) talk to this window's media session, not to
   // our controls; left alone they would pause the <video> behind our back and playback would carry
   // straight on. Route them to the control window like any other shortcut. The keys aren't
-  // reserved: Windows sends them to whichever player played last (this app, Spotify, a browser).
+  // reserved: Windows sends them to whichever media player played last (main.js adds the window in use).
   const mediaKeys = { play: 'MediaPlay', pause: 'MediaPause', stop: 'MediaStop', nexttrack: 'MediaTrackNext', previoustrack: 'MediaTrackPrevious' };
   window.mediaKeyHandlers = {};
   for (const [action, code] of Object.entries(mediaKeys)) {

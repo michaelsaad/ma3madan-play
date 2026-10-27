@@ -4,7 +4,7 @@
 // - Presenter mode: a full-screen window on the second screen (the projector).
 // - Player mode: inside the control window, over its preview box, like a normal video player.
 // Moving the view doesn't reload it, so switching modes doesn't interrupt the video.
-const { app, BrowserWindow, BaseWindow, WebContentsView, ipcMain, screen, dialog, shell, nativeTheme, clipboard, safeStorage } = require('electron');
+const { app, BrowserWindow, BaseWindow, WebContentsView, ipcMain, screen, dialog, shell, globalShortcut, nativeTheme, clipboard, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -430,6 +430,8 @@ function createControl() {
   for (const ev of ['resize', 'move', 'maximize', 'unmaximize']) controlWin.on(ev, () => { if (!mini) rememberBounds(); });
   // Coming back to the app with a YouTube link copied (from WhatsApp, a browser…): offer to play it.
   controlWin.on('focus', checkClipboard);
+  controlWin.on('focus', () => holdMediaKeys(true));
+  controlWin.on('blur', () => holdMediaKeys(false));
   controlWin.on('resize', () => { fitControlView(); fitViewToPlayer(); });
   controlWin.on('maximize', fitControlView);
   controlWin.on('unmaximize', fitControlView);
@@ -582,14 +584,23 @@ function filesFromArgv(argv) {
 }
 let pendingOpen = filesFromArgv(process.argv);
 
-// Keyboard media keys are not reserved: like any Windows player, the app gets them through its
-// media session (output.html) when it played last, and Spotify or a browser gets them otherwise.
+// Keyboard media keys take turns with other media players. Windows gives them to the player
+// that started playing last (this app through its media session, output.html). On top of that,
+// while this app's window is the one in use it takes them, and it lets go as soon as another
+// window is clicked. (A press that arrives both ways acts once: control.js de-duplicates.)
+const MEDIA_KEYS = { MediaPlayPause: 'MediaPlayPause', MediaNextTrack: 'MediaTrackNext', MediaPreviousTrack: 'MediaTrackPrevious', MediaStop: 'MediaStop' };
+function holdMediaKeys(on) {
+  for (const [accelerator, code] of Object.entries(MEDIA_KEYS)) {
+    if (on && !globalShortcut.isRegistered(accelerator)) globalShortcut.register(accelerator, () => controlWin?.webContents.send('output-key', { code }));
+    else if (!on && globalShortcut.isRegistered(accelerator)) globalShortcut.unregister(accelerator);
+  }
+}
 // No window ever goes to another site or opens a new one: links go to the browser (open-external).
 app.on('web-contents-created', (_e, wc) => {
   wc.setWindowOpenHandler(() => ({ action: 'deny' }));
   wc.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) e.preventDefault(); });
 });
-app.on('will-quit', () => { hub?.stop(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); hub?.stop(); });
 
 app.on('second-instance', (_e, argv) => {
   if (!controlWin) return;

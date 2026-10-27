@@ -181,7 +181,7 @@ Online, the song's sound is uploaded to MVSEP, separated on their servers, downl
 | `Ctrl + ,` | Settings |
 | `?` | All shortcuts |
 
-Shortcuts also work while the video has focus. The keyboard media keys (play/pause, next, previous) work like in any Windows player: they control whichever app played last, so Spotify or a browser can still use them while Ma3madan Play is open.
+Shortcuts also work while the video has focus. The keyboard media keys (play/pause, next, previous) take turns with other media players: they control Ma3madan Play while its window is in use or when it played last, and the other player otherwise.
 
 ## Make it your default video player
 

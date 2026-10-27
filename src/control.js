@@ -1240,7 +1240,7 @@ function renderDownloads() {
 }
 
 // ---------- keyboard ----------
-// A media-key press can arrive twice (Windows' media overlay and the phone remote, say); act once.
+// A media-key press can arrive twice (the window's own shortcut and Windows' media session); act once.
 let lastMediaKeyAt = 0;
 function handleKey(k) {
   if (k.code.startsWith('Media')) {
