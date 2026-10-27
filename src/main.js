@@ -4,7 +4,7 @@
 // - Presenter mode: a full-screen window on the second screen (the projector).
 // - Player mode: inside the control window, over its preview box, like a normal video player.
 // Moving the view doesn't reload it, so switching modes doesn't interrupt the video.
-const { app, BrowserWindow, BaseWindow, WebContentsView, ipcMain, screen, dialog, shell, globalShortcut, nativeTheme, clipboard, safeStorage } = require('electron');
+const { app, BrowserWindow, BaseWindow, WebContentsView, ipcMain, screen, dialog, shell, nativeTheme, clipboard, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -14,6 +14,7 @@ const updater = require('./updater');
 const vocals = require('./vocals');
 const { qrSvg } = require('./lan');
 const { createHub } = require('./hub');
+const { createTray } = require('./tray');
 
 const APP_NAME = 'Ma3madan Play';
 const OLD_APP_NAME = 'Ma3madan Video Presenter'; // the name before 1.4.0
@@ -84,7 +85,8 @@ let mode = 'player';    // 'player' | 'presenter'
 let modeChosen = false; // the operator picked a mode this session: don't switch on screen changes
 let playerRect = null;  // where the preview box is in the control window (Player mode)
 let playerFullscreen = false;
-let hiddenForAudio = false, hideTimer = null; // projector stepped aside (standby Off, or sound only)
+let hiddenForAudio = false, hideTimer = null;
+let tray = null, inTray = false; // the window closed to the tray (tray.js): no video, no projector // projector stepped aside (standby Off, or sound only)
 
 // ---------- persistence ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
@@ -407,7 +409,7 @@ function createControl() {
   controlWin.on('restore', fitControlView);
   if (settings.controlMaximized ?? true) controlWin.maximize();
   controlView.webContents.once('did-finish-load', () => {
-    controlWin.show();
+    if (!inTray) controlWin.show(); // started with Windows: stays in the tray
     fitControlView();
     setTimeout(fitControlView, 300);
     controlView.webContents.focus();
@@ -512,9 +514,26 @@ if (app.isPackaged && !process.env.VP_SELFTEST) app.setAsDefaultProtocolClient('
 app.whenReady().then(async () => {
   unlockSecrets();
   await streamProxy.start();
+  // ✕ keeps the app running in the tray; started with Windows, it opens there.
+  tray = createTray({
+    title: APP_NAME, icon: path.join(__dirname, 'assets', 'app-256.png'), settings, save: saveSettings,
+    window: () => controlWin,
+    hide: () => {
+      // Like closing a player: the video stops and the screens are given back.
+      inTray = true;
+      if (mini) setMini(false);
+      if (playerFullscreen) togglePlayerFullscreen(false);
+      outputView?.webContents.send('cmd', { type: 'stop' });
+      hiddenForAudio = true;
+      outputWin?.hide();
+      for (const w of mirrors.values()) w.hide();
+    },
+    show: () => { inTray = false; placeOutput(); syncMirrors(); },
+  });
+  inTray = tray.startHidden;
   createControl();
   createOutput();
-  registerMediaKeys();
+  tray.attach(controlWin);
   // The phone link, shared with Ma3madan PPT when both are open (hub.js).
   hub = createHub({ app: 'play', title: APP_NAME, version: app.getVersion(), window: () => controlWin, computerName: () => require('os').hostname(), phoneDir: path.join(__dirname, 'phone') });
   controlWin.webContents.on('did-finish-load', () => hub.pageReady());
@@ -563,26 +582,18 @@ function filesFromArgv(argv) {
 }
 let pendingOpen = filesFromArgv(process.argv);
 
-// Keyboard media keys belong to the presenter while it's open, even when another window is in
-// front or a browser is playing. (The engine's media session also routes them; the control
-// window's handlers are written so a press arriving both ways still acts once.)
-const MEDIA_KEYS = { MediaPlayPause: 'MediaPlayPause', MediaNextTrack: 'MediaTrackNext', MediaPreviousTrack: 'MediaTrackPrevious', MediaStop: 'MediaStop' };
-function registerMediaKeys() {
-  for (const [accelerator, code] of Object.entries(MEDIA_KEYS)) {
-    globalShortcut.register(accelerator, () => controlWin?.webContents.send('output-key', { code }));
-  }
-}
+// Keyboard media keys are not reserved: like any Windows player, the app gets them through its
+// media session (output.html) when it played last, and Spotify or a browser gets them otherwise.
 // No window ever goes to another site or opens a new one: links go to the browser (open-external).
 app.on('web-contents-created', (_e, wc) => {
   wc.setWindowOpenHandler(() => ({ action: 'deny' }));
   wc.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) e.preventDefault(); });
 });
-app.on('will-quit', () => { globalShortcut.unregisterAll(); hub?.stop(); });
+app.on('will-quit', () => { hub?.stop(); });
 
 app.on('second-instance', (_e, argv) => {
   if (!controlWin) return;
-  if (controlWin.isMinimized()) controlWin.restore();
-  controlWin.focus();
+  tray?.show(); // opened again (or from the tray, Start menu, a file): back from the tray
   const link = argv.map(linkFromProtocol).find(Boolean);
   if (link) controlWin.webContents.send('open-link', link);
   const files = filesFromArgv(argv);
@@ -604,6 +615,7 @@ ipcMain.on('state', (_e, state) => { lastState = state; controlWin?.webContents.
 // else is on those screens (slides, the desktop) stays in view. Lyrics or a countdown bring it back.
 // Standby "Off" does the same whenever standby would show: the screens look as if the app is closed.
 function screensShouldHide(state) {
+  if (inTray) return true;
   const quiet = mode === 'presenter' && !state.lyrics && !state.countdown;
   const forAudio = settings.audioStandby === false && state.loaded && state.audioOnly;
   const standbyOff = settings.standby?.kind === 'off' && (!state.loaded || state.black);

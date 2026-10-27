@@ -647,7 +647,7 @@ async function playItem(it, { autoplay = true, force = false, startAt = null } =
   }
   cmd('lyrics', { text: null });
   currentLyric = -1; // features.js
-  cmd('load', { ...src, audio: isAudio(it), autoplay, startAt, trim: it.trim || null, itemVolume: it.volume || 1, volume: settings.volume ?? 1, muted: !!settings.muted });
+  cmd('load', { ...src, title: it.title || '', audio: isAudio(it), autoplay, startAt, trim: it.trim || null, itemVolume: it.volume || 1, volume: settings.volume ?? 1, muted: !!settings.muted });
   cmd('rate', { r: rate });
   cmd('loop', { on: $('loopChk').checked });
   cmd('subs', { on: settings.subsOn !== false });
@@ -1240,7 +1240,7 @@ function renderDownloads() {
 }
 
 // ---------- keyboard ----------
-// One media-key press can arrive twice (system-wide shortcut + the projector's media session); act once.
+// A media-key press can arrive twice (Windows' media overlay and the phone remote, say); act once.
 let lastMediaKeyAt = 0;
 function handleKey(k) {
   if (k.code.startsWith('Media')) {

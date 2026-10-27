@@ -370,8 +370,10 @@ module.exports = async ({ getControl, getOutput, getOutputWin, getMode, setMode,
       await ojs(`window.mediaKeyHandlers.nexttrack()`); await wait(1200);
       log('media next →', await js(`$('nowTitle').textContent`));
       const { globalShortcut } = require('electron');
-      log('media keys reserved system-wide:', ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'MediaStop'].map(k => `${k}=${globalShortcut.isRegistered(k)}`).join(' '));
-      // The same press arriving twice (shortcut + media session) must act once.
+      // Not reserved: other players (Spotify, a browser) get the keys when they played last.
+      log('media keys left free for other players:', ['MediaPlayPause', 'MediaNextTrack', 'MediaPreviousTrack', 'MediaStop'].every(k => !globalShortcut.isRegistered(k)),
+        '| Windows overlay title:', await ojs('navigator.mediaSession.metadata?.title'), '/', await ojs('navigator.mediaSession.metadata?.artist'));
+      // The same press arriving twice (overlay + phone remote, say) must act once.
       const before = await ojs('wantPlay');
       getControl().webContents.send('output-key', { code: 'MediaPlayPause' });
       await ojs(`window.mediaKeyHandlers.${before ? 'pause' : 'play'}()`);

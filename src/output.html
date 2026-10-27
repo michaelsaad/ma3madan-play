@@ -589,11 +589,13 @@
       }
       handlers.loadNow(opts);
     },
-    loadNow({ path, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt, audio, stems, mix: m, trim: tr, itemVolume, subs, speed: sp }) {
+    loadNow({ path, title, url, audioUrl, ladder: lad, quality, autoplay, volume, muted, startAt, audio, stems, mix: m, trim: tr, itemVolume, subs, speed: sp }) {
       pendingLoad = null;
       cancelPauseFade();
       audioOnly = !!audio;
       current = { path };
+      // The name Windows shows in its media overlay (instead of this page's title).
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: title || '', artist: 'Ma3madan Play' }); } catch {}
       stemsMode = !!stems;
       endedFlag = false; endFading = false;
       trim = { start: tr?.start || 0, end: tr?.end || 0 };
@@ -715,7 +717,8 @@
 
   // Keyboard media keys (and Windows' media overlay) talk to this window's media session, not to
   // our controls; left alone they would pause the <video> behind our back and playback would carry
-  // straight on. Route them to the control window like any other shortcut.
+  // straight on. Route them to the control window like any other shortcut. The keys aren't
+  // reserved: Windows sends them to whichever player played last (this app, Spotify, a browser).
   const mediaKeys = { play: 'MediaPlay', pause: 'MediaPause', stop: 'MediaStop', nexttrack: 'MediaTrackNext', previoustrack: 'MediaTrackPrevious' };
   window.mediaKeyHandlers = {};
   for (const [action, code] of Object.entries(mediaKeys)) {
