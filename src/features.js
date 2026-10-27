@@ -299,38 +299,69 @@ async function applyStandby() {
 }
 
 // ---------- countdown ----------
+const CD_STYLE_ICONS = {
+  ring: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="40 14" transform="rotate(-90 12 12)"/>',
+  sand: '<path d="M6 3h12M6 21h12M7 3c0 5 4 6.5 4 9s-4 4-4 9M17 3c0 5-4 6.5-4 9s4 4 4 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9 18.5h6l-3-3z" fill="currentColor"/>',
+  flip: '<rect x="2.5" y="5" width="8" height="14" rx="1.6" fill="currentColor"/><rect x="13.5" y="5" width="8" height="14" rx="1.6" fill="currentColor"/><path d="M2.5 12h19" stroke="var(--panel)" stroke-width="1.2"/>',
+  big: '<text x="12" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">5:00</text><rect x="2" y="18" width="20" height="2.4" rx="1.2" fill="currentColor" opacity=".35"/><rect x="2" y="18" width="13" height="2.4" rx="1.2" fill="currentColor"/>',
+  corner: '<rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="13" width="7" height="5" rx="1" fill="currentColor"/>',
+};
+// The look, the sounds and what happens at zero (from the countdown window, also used by the phone).
+function countdownOpts() {
+  return {
+    style: settings.countdownStyle || 'ring',
+    soundBefore: settings.countdownSoundBefore || 'none',
+    soundEnd: settings.countdownSoundEnd || 'none',
+    end: settings.countdownEnd || 'fade',
+  };
+}
+function startCountdown(seconds, text, opts = {}) {
+  cmd('countdown', { until: Date.now() + seconds * 1000, text, ...countdownOpts(), ...opts });
+}
 function showCountdown() {
   const running = !!out.countdown;
   const msg = settings.countdownText ?? t('cdDefaultMsg');
+  const o = countdownOpts();
+  const seg = (k, opts, cur) => `<div class="seg wrap" data-k="${k}">${opts.map(([v, label, icon]) => `<button data-v="${v}" class="${v === cur ? 'on' : ''}">${icon ? `<svg viewBox="0 0 24 24">${icon}</svg>` : ''}${escapeHtml(label)}</button>`).join('')}</div>`;
   openModal(`
     <h2><svg class="h-ico"><use href="#i-timer"/></svg>${escapeHtml(t('cdTitle'))}</h2>
-    <p class="muted">${escapeHtml(t('cdIntro'))}</p>
-    <div class="seg big" id="cdQuick">${[1, 2, 3, 5, 10, 15].map(m => `<button data-m="${m}">${escapeHtml(t('cdMin', { n: m }))}</button>`).join('')}</div>
+    <div class="seg big" id="cdQuick">${[30, 60, 120, 180, 300, 600, 900].map(s => `<button data-s="${s}">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</button>`).join('')}</div>
     <div class="f-times cd-custom">
-      <label><small>${escapeHtml(t('cdMinutes'))}</small><input id="cdMinutes" type="number" min="1" max="600" dir="ltr" placeholder="5"></label>
+      <label><small>${escapeHtml(t('cdMinutes'))}</small><input id="cdMinutes" type="number" min="0" max="600" dir="ltr" placeholder="5"></label>
+      <label><small>${escapeHtml(t('cdSeconds'))}</small><input id="cdSeconds" type="number" min="0" max="59" dir="ltr" placeholder="0"></label>
       <label><small>${escapeHtml(t('cdUntil'))}</small><input id="cdUntil" type="time" dir="ltr"></label>
     </div>
     <label class="f-col"><span>${escapeHtml(t('cdMessage'))}</span><input id="cdMsg" type="text" dir="auto" value="${escapeHtml(msg)}"></label>
+    <div class="cd-opts">
+      <span>${escapeHtml(t('cdStyle'))}</span>${seg('countdownStyle', [['ring', t('cdRing'), CD_STYLE_ICONS.ring], ['sand', t('cdSand'), CD_STYLE_ICONS.sand], ['flip', t('cdFlip'), CD_STYLE_ICONS.flip], ['big', t('cdBig'), CD_STYLE_ICONS.big], ['corner', t('cdCorner'), CD_STYLE_ICONS.corner]], o.style)}
+      <span>${escapeHtml(t('cdSoundBefore'))}</span>${seg('countdownSoundBefore', [['none', t('cdNone')], ['tick', t('cdTick')], ['beep', t('cdBeep')]], o.soundBefore)}
+      <span>${escapeHtml(t('cdSoundEnd'))}</span>${seg('countdownSoundEnd', [['none', t('cdNone')], ['bell', t('cdBell')], ['alarm', t('cdAlarm')]], o.soundEnd)}
+      <span>${escapeHtml(t('cdThen'))}</span>${seg('countdownEnd', [['fade', t('cdFade')], ['play', t('cdPlay')]], o.end)}
+    </div>
     <div class="modal-actions">
       ${running ? `<button id="cdStop" class="danger-btn">${escapeHtml(t('cdStop'))}</button><span class="spacer"></span>` : ''}
       <button class="ghost" data-close>${escapeHtml(t('cancel'))}</button>
       <button id="cdStart" class="primary" data-primary>${escapeHtml(t('cdStart'))}</button>
-    </div>`, { cls: 'narrow' });
+    </div>`, { cls: 'wide countdown' });
+  for (const g of document.querySelectorAll('.cd-opts .seg')) for (const b of g.querySelectorAll('button')) b.onclick = () => {
+    for (const x of g.querySelectorAll('button')) x.classList.toggle('on', x === b);
+    settings[g.dataset.k] = b.dataset.v; api.setSetting(g.dataset.k, b.dataset.v);
+  };
   const start = until => {
     const text = $('cdMsg').value.trim();
     settings.countdownText = text; api.setSetting('countdownText', text);
-    cmd('countdown', { until, text });
+    cmd('countdown', { until, text, ...countdownOpts() });
     closeModal();
   };
-  for (const b of document.querySelectorAll('#cdQuick button')) b.onclick = () => start(Date.now() + Number(b.dataset.m) * 60000);
+  for (const b of document.querySelectorAll('#cdQuick button')) b.onclick = () => start(Date.now() + Number(b.dataset.s) * 1000);
   $('cdStart').onclick = () => {
-    const m = Number($('cdMinutes').value), until = $('cdUntil').value;
+    const sec = (Number($('cdMinutes').value) || 0) * 60 + (Number($('cdSeconds').value) || 0), until = $('cdUntil').value;
     if (until) {
       const [h, mi] = until.split(':').map(Number);
       const d = new Date(); d.setHours(h, mi, 0, 0);
       if (d < Date.now()) d.setDate(d.getDate() + 1);
       start(d.getTime());
-    } else if (m > 0) start(Date.now() + m * 60000);
+    } else if (sec > 0 && sec <= 36000) start(Date.now() + sec * 1000);
     else $('cdMinutes').focus();
   };
   $('cdStop')?.addEventListener('click', () => { cmd('countdown', { until: 0 }); closeModal(); });
@@ -631,10 +662,19 @@ async function remoteCommand(c) {
     }
     case 'cancelDownload': if (downloads.has(c.id)) api.downloadCancel(c.id); break;
     case 'openList': if (c.id == null || lists.some(l => l.id === c.id)) openList(c.id ?? null); break;
+    // Seconds, a message, a look and sound on/off from the phone (older phone apps send minutes only).
     case 'countdown': {
-      const m = Number(c.minutes);
-      if (m > 0 && m <= 600) cmd('countdown', { until: Date.now() + m * 60000, text: settings.countdownText ?? t('cdDefaultMsg') });
-      else cmd('countdown', { until: 0 });
+      const sec = c.seconds != null ? Number(c.seconds) : Number(c.minutes) * 60;
+      if (!(sec >= 5 && sec <= 36000)) { cmd('countdown', { until: 0 }); break; }
+      let text = settings.countdownText ?? t('cdDefaultMsg');
+      if (typeof c.text === 'string') { text = c.text.trim().slice(0, 120); settings.countdownText = text; api.setSetting('countdownText', text); }
+      const opts = {};
+      if (['ring', 'sand', 'flip', 'big', 'corner'].includes(c.style)) { opts.style = c.style; settings.countdownStyle = c.style; api.setSetting('countdownStyle', c.style); }
+      // Sound on from the phone uses the sounds chosen here, or a beep and a bell if none are.
+      const o = countdownOpts();
+      if (c.sound === false) Object.assign(opts, { soundBefore: 'none', soundEnd: 'none' });
+      else if (c.sound === true && o.soundBefore === 'none' && o.soundEnd === 'none') Object.assign(opts, { soundBefore: 'beep', soundEnd: 'bell' });
+      startCountdown(Math.round(sec), text, opts);
       break;
     }
     case 'karaoke': $('karaokeBtn').click(); break;

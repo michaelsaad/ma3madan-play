@@ -71,6 +71,34 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
   log('at zero:', await ojs(`document.querySelector('#countdown .time').textContent + ' on=' + document.getElementById('countdown').classList.contains('on')`));
   await wait(1800);
   log('after the fade:', await ojs(`'on=' + document.getElementById('countdown').classList.contains('on') + ' opacity=' + getComputedStyle(document.getElementById('countdown')).opacity`), '| status pill:', await js(`$('statusPill').textContent`));
+  // The other looks, each at 40 s and in its last 10 s; the dialog's 30 s button; the sounds; play at zero.
+  for (const style of ['sand', 'flip', 'big', 'corner']) {
+    await js(`cmd('countdown', { until: Date.now() + 40000, text: 'We start in', style: '${style}' })`); await wait(1300);
+    log(`look ${style}:`, await ojs(`JSON.stringify({ on: document.getElementById('countdown').classList.contains('on'), time: document.querySelector('#countdown .time').textContent, cards: document.querySelectorAll('#countdown .card').length, corner: document.getElementById('countdown').classList.contains('corner') })`));
+    await shot(`35c-countdown-${style}`);
+    await js(`cmd('countdown', { until: Date.now() + 7000, text: 'We start in', style: '${style}' })`); await wait(1300);
+    await shot(`35d-countdown-${style}-final`);
+  }
+  await js(`cmd('countdown', { until: 0 })`); await wait(1200);
+  await js(`showCountdown()`); await wait(300);
+  await js(`document.querySelector('.cd-opts [data-k="countdownStyle"] [data-v="flip"]').click()`);
+  await shot('34b-countdown-dialog-looks');
+  await js(`document.querySelector('#cdQuick [data-s="30"]').click()`); await wait(700);
+  log('30 s button:', await js(`out.countdown ? Math.round((out.countdown.until - Date.now()) / 1000) + ' s ' + out.countdown.style : 'none'`), '| look kept:', await js(`settings.countdownStyle`));
+  await js(`showCountdown()`); await wait(300);
+  await js(`$('cdMinutes').value = ''; $('cdSeconds').value = '45'; $('cdStart').click()`); await wait(700);
+  log('custom 0:45:', await js(`out.countdown ? Math.round((out.countdown.until - Date.now()) / 1000) + ' s' : 'none'`));
+  await ojs(`window.cdSounds = []`);
+  await js(`cmd('countdown', { until: Date.now() + 6000, style: 'ring', soundBefore: 'beep', soundEnd: 'bell' })`); await wait(7500);
+  log('sounds (beep, last 5 s, then bell):', await ojs(`window.cdSounds.join(' ')`));
+  await ojs(`window.cdSounds = []`);
+  await js(`cmd('countdown', { until: Date.now() + 12000, style: 'ring', soundBefore: 'tick', soundEnd: 'alarm' })`); await wait(13500);
+  log('sounds (tick, last 10 s, then alarm):', await ojs(`window.cdSounds.join(' ')`));
+  await js(`cmd('pause'); cmd('black', { on: true }); selectedId = items.find(x => x.title === 'sample-1').id; renderList()`); await wait(600);
+  await js(`cmd('countdown', { until: Date.now() + 3000, style: 'big', end: 'play' })`); await wait(4500);
+  log('play at zero:', await js(`JSON.stringify({ playing: items.find(x => x.id === playingId)?.title, paused: out.paused, black: out.black, cd: !!out.countdown })`));
+  await shot('35e-countdown-then-play');
+  await js(`settings.countdownStyle = 'ring'; settings.countdownEnd = 'fade'`);
 
   // ---------- lyrics ----------
   await js(`items[3].lyrics = 'First line\\nSecond line\\n\\nالمقطع الثاني\\nسطر آخر\\n\\nThird slide'; save(); playItem(items[3])`); await wait(1500);
@@ -167,6 +195,23 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     log('Wi-Fi page thumbnails:', await wjs(`[...document.querySelectorAll('#list .th')].filter(e => e.style.backgroundImage).length`));
     log('remote button:', await js(`$('remoteBtn').className`), '| clients in dialog:', await js(`document.querySelector('.r-count')?.textContent`));
     fs.writeFileSync(path.join(dir, '47-remote-phone.png'), (await w.webContents.capturePage()).toPNG());
+    // The countdown panel: message, look, seconds and sound (this app's own copy of the phone app).
+    await js(`closeModal()`);
+    await wjs(`document.getElementById('cdBtn').click()`); await wait(600);
+    log('phone countdown panel:', await wjs(`JSON.stringify({ text: document.getElementById('cdText').value, look: document.querySelector('#cdLooks .on')?.dataset.look, sound: document.getElementById('cdSound').classList.contains('on') })`));
+    await wjs(`document.getElementById('cdText').value = 'Starting soon'; document.querySelector('#cdLooks [data-look="sand"]').click(); document.getElementById('cdSound').classList.contains('on') || document.getElementById('cdSound').click()`);
+    await wait(300);
+    fs.writeFileSync(path.join(dir, '47b-phone-countdown.png'), (await w.webContents.capturePage()).toPNG());
+    await wjs(`document.querySelector('#cdPanel [data-sec="30"]').click()`); await wait(1200);
+    log('phone countdown:', await js(`out.countdown ? Math.round((out.countdown.until - Date.now()) / 1000) + ' s ' + out.countdown.style + ' "' + out.countdown.text + '"' : 'none'`), '| sounds:', await ojs(`window.cdSounds.length`), '| phone shows:', await wjs(`document.getElementById('cdLabel').textContent`));
+    await shot('47c-countdown-from-phone');
+    await wjs(`document.getElementById('cdBtn').click(); document.getElementById('cdMin').value = '1'; document.getElementById('cdSec').value = '15'; document.getElementById('cdGo').click()`); await wait(1200);
+    log('phone countdown 1:15:', await js(`out.countdown ? Math.round((out.countdown.until - Date.now()) / 1000) + ' s' : 'none'`));
+    await wjs(`send({ action: 'countdown', minutes: 2 })`); await wait(1200);
+    log('older phone app (minutes only):', await js(`out.countdown ? Math.round((out.countdown.until - Date.now()) / 1000) + ' s' : 'none'`));
+    await wjs(`document.getElementById('cdBtn').click(); document.getElementById('cdStop').click()`); await wait(800);
+    log('phone stopped it:', await js(`!!out.countdown`));
+    await js(`settings.countdownStyle = 'ring'; settings.countdownText = 'We start in'`);
     w.destroy();
     await js(`closeModal(); api.remoteStop().then(r => { remote = r; renderRemoteBtn(); })`);
   }
@@ -230,7 +275,7 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
     log('thumbnails over the link:', await pjs(`[...document.querySelectorAll('#list .th')].filter(e => e.style.backgroundImage).length`));
     fs.writeFileSync(path.join(dir, '52-phone-app.png'), (await phone.webContents.capturePage()).toPNG());
     // More of the app from the phone: lists, countdown, speed, options, a YouTube link.
-    await pjs(`document.getElementById('cdBtn').click(); document.querySelector('#cdPanel [data-min="2"]').click()`); await wait(1200);
+    await pjs(`document.getElementById('cdBtn').click(); document.querySelector('#cdPanel [data-min="2"], #cdPanel [data-sec="120"]').click()`); await wait(1200);
     log('phone countdown:', await js(`out.countdown ? Math.round((out.countdown.until - Date.now()) / 1000) + ' s' : 'none'`), '| phone shows:', await pjs(`document.getElementById('cdLabel').textContent`));
     await pjs(`document.getElementById('cdBtn').click(); document.getElementById('cdStop').click()`); await wait(1000);
     await pjs(`document.querySelector('#speedSeg [data-r="1.25"]').click()`); await wait(800);
@@ -250,9 +295,9 @@ module.exports = async ({ js, ojs, log, wait, shot, dir, getControl, getMode, ge
       log('phone pasted a YouTube link → playing on the computer:', await js(`items.find(x => x.id === playingId)?.title`), 'in', Date.now() - tl, 'ms');
     }
     // The PPT tab: Ma3madan PPT isn't open here, on the same connection.
-    await pjs(`document.querySelector('.tabs [data-tab="ppt"]').click()`); await wait(400);
-    log('PPT tab without Ma3madan PPT:', await pjs(`document.getElementById('p-connTitle').textContent`));
-    await pjs(`document.querySelector('.tabs [data-tab="play"]').click()`);
+    await pjs(`document.querySelector('.tabs [data-tab="ppt"]')?.click()`); await wait(400);
+    log('PPT tab without Ma3madan PPT:', await pjs(`document.getElementById('p-connTitle')?.textContent`));
+    await pjs(`document.querySelector('.tabs [data-tab="play"]')?.click()`);
     // Reopen the app without the QR link: it must find the laptop by itself.
     await phone.loadURL(SITE + '/');
     const t1 = Date.now();

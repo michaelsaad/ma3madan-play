@@ -28,7 +28,8 @@ const S = {
     screensTitle: 'Screens', thisWindow: 'This window', allScreens: 'All screens', screenN: 'Screen {n}', fullscreen: 'Full screen',
     audioStandby: 'Standby screen for sound only',
     linkPh: 'Paste a YouTube link', paste: 'Paste', playNow: 'Play now', dlVideo: 'Download', sent: 'Sent ✓',
-    countdown: 'Countdown', cdTitle: 'Countdown on the screen (minutes)', cdStop: 'Stop the countdown',
+    countdown: 'Countdown', cdStop: 'Stop the countdown', cdMsgPh: 'Message above the time', cdStart: 'Start', cdSound: 'Sound',
+    cdLook_ring: 'Ring', cdLook_sand: 'Hourglass', cdLook_flip: 'Flip', cdLook_big: 'Bar', cdLook_corner: 'Corner',
     karaoke: 'Karaoke', removeVocals: 'No vocals', separating: 'Separating… {n}%',
     speed: 'Speed', autoNext: 'Auto-play next', loop: 'Loop', subtitles: 'Subtitles', searchPh: 'Search videos',
     adding: 'Adding…', online: 'YouTube · online', dlFailed: 'Download failed', preparing: 'Preparing…',
@@ -69,7 +70,8 @@ const S = {
     screensTitle: 'الشاشات', thisWindow: 'هذه النافذة', allScreens: 'كل الشاشات', screenN: 'شاشة {n}', fullscreen: 'ملء الشاشة',
     audioStandby: 'شاشة الانتظار مع الصوت فقط',
     linkPh: 'الصق رابط يوتيوب', paste: 'لصق', playNow: 'تشغيل الآن', dlVideo: 'تحميل', sent: 'تم ✓',
-    countdown: 'عدّ تنازلي', cdTitle: 'عدّ تنازلي على الشاشة (بالدقائق)', cdStop: 'إيقاف العدّ',
+    countdown: 'عدّ تنازلي', cdStop: 'إيقاف العدّ', cdMsgPh: 'رسالة فوق الوقت', cdStart: 'ابدأ', cdSound: 'صوت',
+    cdLook_ring: 'دائرة', cdLook_sand: 'ساعة رملية', cdLook_flip: 'أرقام', cdLook_big: 'شريط', cdLook_corner: 'الركن',
     karaoke: 'كاريوكي', removeVocals: 'إزالة الصوت', separating: 'جارٍ الفصل… {n}%',
     speed: 'السرعة', autoNext: 'تشغيل التالي تلقائيًا', loop: 'تكرار', subtitles: 'الترجمة', searchPh: 'ابحث في الفيديوهات',
     adding: 'جارٍ الإضافة…', online: 'يوتيوب · أونلاين', dlFailed: 'فشل التحميل', preparing: 'جارٍ التجهيز…',
@@ -1015,12 +1017,32 @@ for (const [id, mode] of [['linkPlay', 'stream'], ['linkVideo', 'video'], ['link
   };
 }
 
-// Countdown: pick the minutes; tap again to stop it.
+// Countdown: a message, a look, the time (seconds too) and sound on or off; tap again to stop it.
+// The message, look and sound start as the computer has them.
+let cdLook = 'ring', cdSoundOn = false;
+function drawCdPanel() {
+  for (const b of document.querySelectorAll('#cdLooks button')) b.classList.toggle('on', b.dataset.look === cdLook);
+  $('cdSound').classList.toggle('on', cdSoundOn);
+}
+function startCd(sec) {
+  if (!(sec >= 5 && sec <= 36000)) return;
+  // `minutes` too, for computers with an older Ma3madan Play.
+  send({ action: 'countdown', seconds: sec, minutes: sec / 60, text: $('cdText').value.trim(), style: cdLook, sound: cdSoundOn });
+  $('cdPanel').hidden = true;
+}
 $('cdBtn').onclick = () => {
   $('cdPanel').hidden = !$('cdPanel').hidden;
-  if (!$('cdPanel').hidden) $('cdPanel').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (!$('cdPanel').hidden) {
+    const o = st.countdownOpts;
+    if (o) { $('cdText').value = o.text || ''; cdLook = o.style || 'ring'; cdSoundOn = !!o.sound; }
+    drawCdPanel();
+    $('cdPanel').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 };
-for (const b of document.querySelectorAll('#cdPanel [data-min]')) b.onclick = () => { send({ action: 'countdown', minutes: Number(b.dataset.min) }); $('cdPanel').hidden = true; };
+for (const b of document.querySelectorAll('#cdLooks button')) b.onclick = () => { cdLook = b.dataset.look; drawCdPanel(); };
+$('cdSound').onclick = () => { cdSoundOn = !cdSoundOn; drawCdPanel(); };
+for (const b of document.querySelectorAll('#cdPanel [data-sec]')) b.onclick = () => startCd(Number(b.dataset.sec));
+$('cdGo').onclick = () => startCd((Number($('cdMin').value) || 0) * 60 + Math.min(59, Number($('cdSec').value) || 0));
 $('cdStop').onclick = () => { send({ action: 'countdown', minutes: 0 }); $('cdPanel').hidden = true; };
 
 for (const b of document.querySelectorAll('#speedSeg button')) b.onclick = () => send({ action: 'speed', r: Number(b.dataset.r) });

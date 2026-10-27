@@ -982,7 +982,16 @@ api.onState(s => {
   }
   renderState();
   if (s.ended && !wasEnded && !s.loop && $('autoNext').checked) nextItem();
+  if (s.countdownDone === 'play') playAfterCountdown();
 });
+// A countdown set to play at zero: the selected video, else the first in the open list.
+function playAfterCountdown() {
+  if (out.loaded && !out.paused) return;
+  const view = viewItems();
+  const it = view.find(x => x.id === selectedId && !x.missing) || view.find(x => !x.missing);
+  if (!it) return;
+  if (out.loaded && it.id === playingId) cmd('toggle'); else playItem(it);
+}
 
 // ---------- seek bar: hover shows the time and, for files on this PC, the picture there ----------
 {
@@ -1381,6 +1390,7 @@ function pushRemote() {
       lists: lists.map(l => ({ id: l.id, name: l.name, count: l.itemIds.length })), activeList: activeList()?.id || null,
       downloads: [...downloads].map(([id, d]) => ({ id, title: d.title, kind: d.kind, status: d.status, percent: Math.round(d.percent || 0), error: d.error || '' })),
       countdown: out.countdown ? out.countdown.until : 0,
+      countdownOpts: (() => { const o = countdownOpts(); return { text: settings.countdownText ?? t('cdDefaultMsg'), style: o.style, sound: o.soundBefore !== 'none' || o.soundEnd !== 'none' }; })(),
       karaoke: (() => { const k = karaokeState(); return { kind: k.kind, on: !!k.it?.stemsOn, progress: k.job ? Math.round((k.job.progress || 0) * 100) : null }; })(),
       speed: rate, subs: !!out.subs, subsOn: !!out.subsOn, autoNext: $('autoNext').checked, loop: $('loopChk').checked,
       // Where the video shows, full screen, and the vocal remover's mix.

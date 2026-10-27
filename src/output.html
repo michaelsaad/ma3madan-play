@@ -33,21 +33,59 @@
   }
   #countdown.on { opacity: 1; }
   #countdown .msg { font-size: 5vh; font-weight: 600; max-width: 80vw; white-space: pre-line; opacity: .9; }
-  /* A ring around the time that empties as it runs out; gold with a pulse for the last 10 seconds */
-  #countdown .dial { position: relative; width: 58vh; height: 58vh; display: grid; place-items: center; }
-  #countdown .dial svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-  #countdown .dial circle { fill: none; stroke-width: 3.2; }
-  #countdown .dial .track { stroke: rgba(255, 255, 255, .14); }
-  #countdown .dial .arc { stroke: #fff; stroke-linecap: round; transition: stroke-dashoffset .25s linear, stroke .4s; }
+  /* Styles: a ring that empties, an hourglass, flip digits, a big number over a bar, or small in a
+     corner over the video. Gold with a pulse on each of the last 10 seconds. */
+  #countdown .face { position: relative; display: grid; place-items: center; }
   #countdown .time {
     font: 700 16vh/1 "Segoe UI", Tahoma, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .02em; direction: ltr;
     transition: color .4s;
   }
   #countdown .time.long { font-size: 11vh; }
   #countdown.final .time { color: #f5b82e; }
-  #countdown.final .arc { stroke: #f5b82e; }
   #countdown .time.pulse { animation: cdPulse .7s ease-out; }
   @keyframes cdPulse { from { transform: scale(1.14); } to { transform: scale(1); } }
+  #countdown .dial { width: 58vh; height: 58vh; }
+  #countdown .dial svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+  #countdown .dial circle { fill: none; stroke-width: 3.2; }
+  #countdown .dial .track { stroke: rgba(255, 255, 255, .14); }
+  #countdown .dial .arc { stroke: #fff; stroke-linecap: round; transition: stroke-dashoffset .25s linear, stroke .4s; }
+  #countdown.final .arc { stroke: #f5b82e; }
+  #countdown .sand { gap: 3vh; }
+  #countdown .sand svg { height: 46vh; overflow: visible; }
+  #countdown .sand .glass { fill: none; stroke: rgba(255, 255, 255, .55); stroke-width: 1.6; stroke-linejoin: round; }
+  #countdown .sand .grains { fill: #e9d9b0; transition: fill .4s; }
+  #countdown .sand .stream { stroke: #e9d9b0; stroke-width: 1.4; stroke-dasharray: 2 2; animation: cdFall .5s linear infinite; transition: stroke .4s; }
+  #countdown.final .sand .grains { fill: #f5b82e; }
+  #countdown.final .sand .stream { stroke: #f5b82e; }
+  @keyframes cdFall { to { stroke-dashoffset: -4; } }
+  #countdown .sand .time { font-size: 11vh; }
+  #countdown .flip .time { display: flex; gap: 1.2vh; align-items: center; perspective: 80vh; }
+  #countdown .flip .card {
+    position: relative; width: 15vh; padding: 2.4vh 0; border-radius: 1.6vh; background: #1d1f24; color: inherit;
+    box-shadow: 0 1.2vh 3vh rgba(0, 0, 0, .5), inset 0 -0.3vh 0 rgba(255, 255, 255, .05); font-size: 18vh;
+  }
+  #countdown .flip .card::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: .35vh; background: rgba(0, 0, 0, .55); }
+  #countdown .flip .card.turn { animation: cdFlip .45s cubic-bezier(.3, .7, .4, 1); transform-origin: 50% 50%; }
+  @keyframes cdFlip { from { transform: rotateX(80deg); filter: brightness(.5); } to { transform: none; filter: none; } }
+  #countdown .flip .sep { font-size: 14vh; opacity: .7; }
+  #countdown .flip .time.long .card { width: 11vh; font-size: 13vh; }
+  #countdown .flip .time.pulse { animation: none; }
+  #countdown .big .time { font-size: 30vh; }
+  #countdown .big .time.long { font-size: 21vh; }
+  #countdown .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 1.6vh; background: rgba(255, 255, 255, .12); }
+  #countdown .bar div { height: 100%; background: #fff; transform-origin: left; transition: transform .25s linear, background .4s; }
+  #countdown.final .bar div { background: #f5b82e; }
+  /* In a corner, over the video: no dark screen behind it */
+  #countdown.corner { background: none; place-items: end; align-content: end; justify-content: end; padding: 4vh 4vw; box-sizing: border-box; }
+  #countdown.corner .box {
+    display: grid; gap: .6vh; padding: 1.6vh 2.6vh 2vh; border-radius: 1.6vh; background: rgba(0, 0, 0, .7); text-align: center; min-width: 22vh;
+  }
+  #countdown.corner .msg { font-size: 2.6vh; max-width: 40vw; }
+  #countdown.corner .time { font-size: 8vh; }
+  #countdown.corner .time.long { font-size: 6vh; }
+  #countdown.corner .line { height: .6vh; border-radius: .3vh; background: rgba(255, 255, 255, .15); overflow: hidden; }
+  #countdown.corner .line div { height: 100%; background: #fff; transform-origin: left; transition: transform .25s linear, background .4s; }
+  #countdown.corner.final .line div { background: #f5b82e; }
   /* Lyrics: a band at the bottom over the video; centred and large over standby */
   #lyrics {
     position: absolute; left: 0; right: 0; bottom: 5vh; display: flex; justify-content: center; pointer-events: none; z-index: 4;
@@ -70,7 +108,7 @@
 <canvas id="freeze" hidden></canvas>
 <div id="standby"><img id="standbyImg" alt="" hidden><video id="standbyVid" muted loop playsinline hidden></video><div id="standbyText" class="text" dir="auto" hidden></div></div>
 <div id="lyrics"><div dir="auto"></div></div>
-<div id="countdown"><div class="msg" dir="auto"></div><div class="dial"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="47"/><circle class="arc" cx="50" cy="50" r="47" pathLength="1000" stroke-dasharray="1000"/></svg><div class="time"></div></div></div>
+<div id="countdown"></div>
 <script>
   // Two video elements: `v` is the one on screen; `vNext` loads a higher stream quality behind it
   // and takes over at the same frame, so stepping up never interrupts the picture.
@@ -496,36 +534,120 @@
   }
 
   const cdBox = document.getElementById('countdown');
-  let countdown = null, cdTimer = null, cdLast = -1; // { until, text, total }
+  const CD_STYLES = ['ring', 'sand', 'flip', 'big', 'corner'];
+  const CD_FACES = {
+    ring: '<div class="msg" dir="auto"></div><div class="face dial"><svg viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="47"/><circle class="arc" cx="50" cy="50" r="47" pathLength="1000" stroke-dasharray="1000"/></svg><div class="time"></div></div>',
+    sand: '<div class="msg" dir="auto"></div><div class="face sand"><svg viewBox="0 0 100 140">' +
+      '<clipPath id="cdTop"><path d="M16 14 H84 Q84 40 52 68 H48 Q16 40 16 14 Z"/></clipPath><clipPath id="cdBottom"><path d="M48 72 H52 Q84 100 84 126 H16 Q16 100 48 72 Z"/></clipPath>' +
+      '<rect class="grains top" clip-path="url(#cdTop)" x="0" width="100"/><rect class="grains bottom" clip-path="url(#cdBottom)" x="0" width="100"/><line class="stream" x1="50" x2="50" y1="68"/>' +
+      '<path class="glass" d="M12 8 H88 M12 132 H88 M16 8 Q16 42 46 70 Q16 98 16 132 M84 8 Q84 42 54 70 Q84 98 84 132"/></svg><div class="time"></div></div>',
+    flip: '<div class="msg" dir="auto"></div><div class="face flip"><div class="time"></div></div>',
+    big: '<div class="msg" dir="auto"></div><div class="face big"><div class="time"></div></div><div class="bar"><div></div></div>',
+    corner: '<div class="box"><div class="msg" dir="auto"></div><div class="time"></div><div class="line"><div></div></div></div>',
+  };
+  // { until, text, total, style, soundBefore: none|tick|beep, soundEnd: none|bell|alarm, end: fade|play }
+  let countdown = null, cdTimer = null, cdLast = -1, cdFace = null;
   function setCountdown(c) {
     clearInterval(cdTimer);
-    // The ring's full length is the time left when the countdown starts.
+    // The full length (ring, sand, bar) is the time left when the countdown starts.
     const keep = countdown && c && c.until === countdown.until;
-    countdown = c && c.until > Date.now() ? { until: c.until, text: c.text || '', total: keep ? countdown.total : c.until - Date.now() } : null;
+    countdown = c && c.until > Date.now() ? {
+      until: c.until, text: c.text || '', total: keep ? countdown.total : c.until - Date.now(),
+      style: CD_STYLES.includes(c.style) ? c.style : 'ring',
+      soundBefore: ['tick', 'beep'].includes(c.soundBefore) ? c.soundBefore : 'none',
+      soundEnd: ['bell', 'alarm'].includes(c.soundEnd) ? c.soundEnd : 'none',
+      end: c.end === 'play' ? 'play' : 'fade',
+    } : null;
     cdLast = -1;
     cdBox.classList.remove('final');
-    cdBox.querySelector('.msg').textContent = countdown?.text || '';
-    cdBox.classList.toggle('on', !!countdown);
-    if (countdown) { drawCountdown(); cdTimer = setInterval(drawCountdown, 100); }
+    if (countdown) {
+      // While fading out, the old face stays as it was.
+      if (cdFace !== countdown.style) { cdBox.innerHTML = CD_FACES[countdown.style]; cdFace = countdown.style; }
+      cdBox.className = 'on' + (countdown.style === 'corner' ? ' corner' : '');
+      cdBox.querySelector('.msg').textContent = countdown.text;
+      drawCountdown(); cdTimer = setInterval(drawCountdown, 100);
+    } else cdBox.classList.remove('on');
     push();
   }
   function drawCountdown() {
     const ms = Math.max(0, countdown.until - Date.now());
-    const left = Math.ceil(ms / 1000);
+    const left = Math.ceil(ms / 1000), p = ms / Math.max(1, countdown.total);
     const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
     const time = cdBox.querySelector('.time');
-    cdBox.querySelector('.arc').style.strokeDashoffset = String(Math.round(1000 * (1 - ms / Math.max(1, countdown.total))));
+    drawProgress(p);
     if (left !== cdLast) {
+      const first = cdLast === -1;
       cdLast = left;
-      time.textContent = (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+      const text = (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+      if (countdown.style === 'flip') drawFlip(time, text); else time.textContent = text;
       time.classList.toggle('long', h > 0);
       // The last 10 seconds: gold, with a small pulse on each second.
       const final = left > 0 && left <= 10;
       cdBox.classList.toggle('final', final || (left === 0 && countdown.total > 10000));
       if (final) { time.classList.remove('pulse'); void time.offsetWidth; time.classList.add('pulse'); }
+      if (left > 0 && (countdown.soundBefore === 'tick' ? left <= 10 : countdown.soundBefore === 'beep' && left <= 5)) cdSound(countdown.soundBefore);
+      if (left === 0 && !first) cdSound(countdown.soundEnd);
     }
     // At zero: hold "0:00" a moment, then fade into whatever is underneath (standby or the video).
-    if (left === 0) { clearInterval(cdTimer); setTimeout(() => { if (countdown && Date.now() >= countdown.until) setCountdown(null); }, 1200); }
+    // "Play" starts the video right away (control.js) and fades sooner, over it.
+    if (left === 0) {
+      clearInterval(cdTimer);
+      if (countdown.end === 'play') push({ countdownDone: 'play' });
+      setTimeout(() => { if (countdown && Date.now() >= countdown.until) setCountdown(null); }, countdown.end === 'play' ? 500 : 1200);
+    }
+  }
+  function drawProgress(p) {
+    const st = countdown.style, q = sel => cdBox.querySelector(sel);
+    if (st === 'ring') q('.arc').style.strokeDashoffset = String(Math.round(1000 * (1 - p)));
+    else if (st === 'big') q('.bar div').style.transform = `scaleX(${p})`;
+    else if (st === 'corner') q('.line div').style.transform = `scaleX(${p})`;
+    else if (st === 'sand') {
+      // Each bulb is about a cone, so the level goes with the square root of what is in it.
+      const r = Math.sqrt(Math.max(0, Math.min(1, p)));
+      const top = 68 - 54 * r, bottom = 126 - 54 * (1 - r);
+      const t = q('.grains.top'), b = q('.grains.bottom'), line = q('.stream');
+      t.setAttribute('y', top); t.setAttribute('height', 68 - top);
+      b.setAttribute('y', bottom); b.setAttribute('height', 126 - bottom);
+      line.setAttribute('y2', bottom); line.style.display = p > 0 && p < 1 ? '' : 'none';
+    }
+  }
+  // One card per digit; a card turns over when its digit changes.
+  function drawFlip(time, text) {
+    const shape = text.replace(/\d/g, '0');
+    if (time.dataset.shape !== shape) {
+      time.dataset.shape = shape;
+      time.innerHTML = [...text].map(ch => ch === ':' ? '<span class="sep">:</span>' : '<span class="card"></span>').join('');
+    }
+    [...time.children].forEach((el, i) => {
+      if (el.textContent === text[i]) return;
+      el.textContent = text[i];
+      if (el.classList.contains('card')) { el.classList.remove('turn'); void el.offsetWidth; el.classList.add('turn'); }
+    });
+  }
+  // Sounds made on the spot (no files), through the chosen speakers, following the volume and mute.
+  window.cdSounds = [];
+  function cdSound(kind) {
+    if (!kind || kind === 'none') return;
+    window.cdSounds.push(kind);
+    if (v.muted) return;
+    resumeAudio();
+    const out = ctx.createGain();
+    out.gain.value = Math.min(1, level) * 0.6;
+    out.connect(ctx.destination);
+    const tone = (freq, at, len, { type = 'sine', vol = 1, decay = false } = {}) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(), t0 = ctx.currentTime + at;
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + 0.005);
+      if (decay) g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+      else { g.gain.setValueAtTime(vol, t0 + len - 0.02); g.gain.linearRampToValueAtTime(0, t0 + len); }
+      o.connect(g).connect(out); o.start(t0); o.stop(t0 + len + 0.05);
+    };
+    if (kind === 'tick') tone(1800, 0, 0.03, { type: 'square', vol: 0.25, decay: true });
+    else if (kind === 'beep') tone(880, 0, 0.16, { vol: 0.7 });
+    else if (kind === 'bell') for (const [f, vol] of [[660, 0.6], [1320, 0.3], [1990, 0.18], [2640, 0.08]]) tone(f, 0, 2.6, { vol, decay: true });
+    else if (kind === 'alarm') for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) tone(1000, i * 0.6 + j * 0.13, 0.08, { type: 'square', vol: 0.35 });
+    setTimeout(() => out.disconnect(), 4000);
   }
 
   const lyricsBox = document.getElementById('lyrics');
@@ -586,7 +708,7 @@
       speedMbps: ladder && speed.bps ? +(speed.bps / 1e6).toFixed(1) : null,
       stems: stemsMode,
       mix,
-      countdown: countdown ? { until: countdown.until, text: countdown.text } : null,
+      countdown: countdown ? { until: countdown.until, text: countdown.text, style: countdown.style } : null,
       lyrics: lyricsText || null,
       subs: !!subsUrl,
       subsOn,

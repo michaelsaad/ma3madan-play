@@ -313,9 +313,21 @@
   .grid button.on.karaoke { background: var(--accent); border-color: var(--accent); color: #fff; }
   .grid button span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .cd-panel { gap: 10px; padding: 12px; }
-  .cd-panel b { font-size: 14px; color: var(--muted); }
-  .cd-chips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-  .cd-chips button { min-height: 48px; min-width: 0; padding: 0; font-weight: 700; }
+  .cd-panel input { min-width: 0; font: inherit; font-size: 15px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; }
+  .cd-panel input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  .cd-looks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .cd-looks button { min-height: 58px; min-width: 0; padding: 4px 2px; display: grid; justify-items: center; gap: 3px; font-size: 11.5px; color: var(--muted); }
+  .cd-looks svg { width: 22px; height: 22px; }
+  .cd-looks span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .cd-looks button.on { background: #16274a; border-color: var(--accent); color: var(--text); }
+  .cd-chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .cd-chips button { min-height: 48px; min-width: 0; padding: 0; font-weight: 700; font-variant-numeric: tabular-nums; direction: ltr; }
+  .cd-custom { display: flex; align-items: center; gap: 6px; direction: ltr; }
+  .cd-custom input { width: 0; flex: 1; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cd-custom b { color: var(--muted); }
+  .cd-custom button { min-height: 46px; padding: 0 16px; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .cd-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cd-row .cd-stop { flex: 1; }
   .cd-stop { min-height: 44px; color: #ff7a7a; border-color: #5a2a2a; }
   /* playback options */
   .opts { gap: 12px; padding: 12px; }
@@ -470,13 +482,13 @@
       <button id="cdBtn" class="cd"><svg><use href="#i-timer"/></svg><span id="cdLabel"></span></button>
       <button data-a="karaoke" id="karaokeBtn" class="karaoke"><svg><use href="#i-mic"/></svg><span id="karaokeLabel"></span></button>
     </div>
-    <!-- The minutes open right under the Countdown button, where the finger is -->
+    <!-- The countdown opens right under its button, where the finger is -->
     <div id="cdPanel" class="card cd-panel" hidden>
-      <b data-s="cdTitle"></b>
-      <div class="cd-chips">
-        <button data-min="1">1</button><button data-min="2">2</button><button data-min="5">5</button><button data-min="10">10</button><button data-min="15">15</button>
-      </div>
-      <button id="cdStop" class="cd-stop" data-s="cdStop" hidden></button>
+      <input id="cdText" type="text" dir="auto" maxlength="120" autocomplete="off" data-ph="cdMsgPh">
+      <div id="cdLooks" class="cd-looks"><button data-look="ring"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="40 14" transform="rotate(-90 12 12)"/></svg><span data-s="cdLook_ring"></span></button><button data-look="sand"><svg viewBox="0 0 24 24"><path d="M6 3h12M6 21h12M7 3c0 5 4 6.5 4 9s-4 4-4 9M17 3c0 5-4 6.5-4 9s4 4 4 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9 18.5h6l-3-3z" fill="currentColor"/></svg><span data-s="cdLook_sand"></span></button><button data-look="flip"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="8" height="14" rx="1.6" fill="currentColor"/><rect x="13.5" y="5" width="8" height="14" rx="1.6" fill="currentColor"/></svg><span data-s="cdLook_flip"></span></button><button data-look="big"><svg viewBox="0 0 24 24"><text x="12" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">5:00</text><rect x="2" y="18" width="13" height="2.4" rx="1.2" fill="currentColor"/></svg><span data-s="cdLook_big"></span></button><button data-look="corner"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="13" width="7" height="5" rx="1" fill="currentColor"/></svg><span data-s="cdLook_corner"></span></button></div>
+      <div class="cd-chips"><button data-sec="30">0:30</button><button data-sec="60">1:00</button><button data-sec="120">2:00</button><button data-sec="300">5:00</button><button data-sec="600">10:00</button><button data-sec="900">15:00</button></div>
+      <div class="cd-custom"><input id="cdMin" type="number" inputmode="numeric" min="0" max="600" placeholder="0"><b>:</b><input id="cdSec" type="number" inputmode="numeric" min="0" max="59" placeholder="00"><button id="cdGo" data-s="cdStart"></button></div>
+      <div class="cd-row"><button id="cdSound" class="tog"><span data-s="cdSound"></span></button><button id="cdStop" class="cd-stop" data-s="cdStop" hidden></button></div>
     </div>
     <section id="mixCard" class="card mix-card" hidden>
       <b class="card-title"><svg><use href="#i-mic"/></svg><span data-s="vocalRemover"></span></b>
